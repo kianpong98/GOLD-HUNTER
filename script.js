@@ -146,9 +146,9 @@ async function discoverAdditionalMedia(folder,prefix,items,allowedExtensions=MED
 
 function updateGalleryButtons(){
   const rb=document.querySelector('[data-gallery="results"]');
-  if(rb) rb.textContent = galleryState.results.length>6 ? `View All Swing Trades (${galleryState.results.length}) →` : 'View All Swing Trades →';
+  if(rb) rb.textContent = galleryState.results.length ? `View All Swing Trades (${galleryState.results.length}) →` : 'View All Swing Trades →';
   const vb=document.querySelector('[data-gallery="reviews"]');
-  if(vb) vb.textContent = galleryState.reviews.length>6 ? `View All Reviews (${galleryState.reviews.length}) →` : 'View All Reviews →';
+  if(vb) vb.textContent = galleryState.reviews.length ? `View All Reviews (${galleryState.reviews.length}) →` : 'View All Reviews →';
 }
 
 function buildMediaMarkup(item,alt){
@@ -264,24 +264,9 @@ async function initDynamicGalleries(){
   renderPreview('resultsGallery',results,'results');
   renderPreview('reviewsGallery',reviews,'reviews');
 
+  // V11: counts and gallery items come from manifest.json only.
+  // This prevents Cloudflare/SPA fallback from over-counting missing files.
   updateGalleryButtons();
-
-  // After the first paint, quietly scan for newly-added files beyond the manifest.
-  setTimeout(async()=>{
-    const [moreResults,moreReviews]=await Promise.all([
-      discoverAdditionalMedia('assets/results','result',galleryState.results,MEDIA_EXTENSIONS,80),
-      discoverAdditionalMedia('assets/reviews','review',galleryState.reviews,IMAGE_EXTENSIONS,80)
-    ]);
-    if(moreResults.length){
-      galleryState.results.push(...moreResults);
-      if(galleryState.results.length<=6) renderPreview('resultsGallery',galleryState.results,'results');
-    }
-    if(moreReviews.length){
-      galleryState.reviews.push(...moreReviews);
-      if(galleryState.reviews.length<=6) renderPreview('reviewsGallery',galleryState.reviews,'reviews');
-    }
-    updateGalleryButtons();
-  },900);
 }
 
 /* Lightbox: image + video support */
