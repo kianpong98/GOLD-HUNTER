@@ -1,0 +1,21 @@
+{
+  "meeting": {
+    "src": "assets/meeting.mp4",
+    "type": "video",
+    "poster": "assets/meeting-poster.jpg"
+  },
+  "analysis": {
+    "src": "assets/analysis.mp4",
+    "type": "video",
+    "poster": "assets/analysis-poster.jpg"
+  },
+  "group": {
+    "src": "assets/group.mp4",
+    "type": "video",
+    "poster": "assets/group-poster.jpg"
+  },
+  "indicator": {
+    "src": "assets/indicator.jpeg",
+    "type": "image"
+  }
+}
