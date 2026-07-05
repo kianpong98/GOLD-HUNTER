@@ -404,3 +404,21 @@ body.gallery-browser-active{overflow:hidden}
   .gallery-browser-item{border-radius:16px;margin-bottom:10px}
   .gallery-browser-head p{font-size:13px}
 }
+
+/* V19: smaller Apple Photos-style mobile gallery grid */
+@media(max-width:720px){
+  .gallery-browser{padding:8px;background:rgba(0,0,0,.92)}
+  .gallery-browser-panel{padding-top:2px}
+  .gallery-browser-head{padding:10px 2px 12px;margin-bottom:4px}
+  .gallery-browser-head h2{font-size:30px;letter-spacing:-.04em;margin:4px 0 5px}
+  .gallery-browser-head p{font-size:12px;line-height:1.35}
+  .gallery-browser-close{width:38px;height:38px;font-size:24px}
+  .gallery-browser-grid{columns:3 96px;column-gap:6px}
+  .gallery-browser-item{border-radius:10px;margin-bottom:6px;border-color:rgba(255,255,255,.06);box-shadow:none}
+  .gallery-browser-item img,.gallery-browser-item video{min-height:74px}
+  .gallery-browser-item::after{font-size:9px;padding:4px 6px;left:5px;top:5px}
+  .gallery-browser-item .video-badge{right:5px;top:5px;font-size:9px;padding:4px 6px}
+}
+@media(max-width:380px){
+  .gallery-browser-grid{columns:3 88px;column-gap:5px}
+}
