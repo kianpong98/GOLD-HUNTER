@@ -276,3 +276,38 @@
   background:linear-gradient(135deg,#f58529,#dd2a7b,#8134af,#515bd4);
   color:#fff;
 }
+
+
+/* VNext: mobile photo-style viewer */
+body.lightbox-active{overflow:hidden;touch-action:none;}
+.lightbox{touch-action:none;overscroll-behavior:contain;}
+.lightbox-counter{
+  position:fixed;
+  top:26px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:3020;
+  color:#f7d56c;
+  background:rgba(8,8,8,.72);
+  border:1px solid rgba(212,175,55,.24);
+  border-radius:999px;
+  padding:10px 14px;
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:.08em;
+  backdrop-filter:blur(14px);
+}
+.lightbox img,.lightbox video{
+  transition:transform .18s ease;
+  will-change:transform;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
+}
+@media(max-width:720px){
+  .lightbox{padding:14px;}
+  .lightbox img,.lightbox video{max-width:100vw;max-height:88vh;border-radius:14px;}
+  .lightbox-nav{display:none!important;}
+  .lightbox button#closeLightbox{width:42px;height:42px;right:14px;top:16px;font-size:26px;}
+  .lightbox-counter{top:18px;font-size:12px;padding:8px 12px;}
+}

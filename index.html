@@ -14,12 +14,16 @@
 <link rel="canonical" href="https://goldhunter.site/"/>
 <link rel="icon" href="/favicon.ico" sizes="any"/>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+<link rel="icon" type="image/png" sizes="512x512" href="/assets/google-logo.png"/>
+<meta name="msapplication-TileImage" content="https://goldhunter.site/assets/google-logo.png"/>
 <link rel="preload" href="assets/logo.png" as="image"/>
 <meta name="robots" content="index, follow"/>
 <meta name="keywords" content="Gold Hunter, gold trading, XAUUSD, swing gold trading, trading community Malaysia, gold trading community"/>
 <meta property="og:title" content="Gold Hunter | Premium Swing Gold Trading Community"/>
 <meta property="og:description" content="Malaysia's premium swing gold trading community focused on discipline, structure and high-pip opportunities."/>
 <meta property="og:image" content="https://goldhunter.site/assets/og-image.jpg"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
 <meta property="og:url" content="https://goldhunter.site/"/>
 <meta property="og:type" content="website"/>
 <meta name="twitter:card" content="summary_large_image"/>
@@ -33,6 +37,74 @@
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
   gtag('config', 'G-RMTE7H8TP1');
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": [
+        "Organization",
+        "EducationalOrganization"
+      ],
+      "@id": "https://goldhunter.site/#organization",
+      "name": "Gold Hunter",
+      "alternateName": [
+        "Gold Hunter Trading",
+        "GH Group"
+      ],
+      "url": "https://goldhunter.site/",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://goldhunter.site/assets/google-logo.png",
+        "width": 512,
+        "height": 512
+      },
+      "image": {
+        "@type": "ImageObject",
+        "url": "https://goldhunter.site/assets/og-image.jpg",
+        "width": 1200,
+        "height": 630
+      },
+      "description": "Gold Hunter is a premium swing gold trading community focused on discipline, structure and high-pip opportunities in the gold market.",
+      "sameAs": [
+        "https://www.instagram.com/gh.group_00"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://goldhunter.site/#website",
+      "url": "https://goldhunter.site/",
+      "name": "Gold Hunter",
+      "alternateName": "Gold Hunter Trading",
+      "publisher": {
+        "@id": "https://goldhunter.site/#organization"
+      },
+      "inLanguage": "en"
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://goldhunter.site/#webpage",
+      "url": "https://goldhunter.site/",
+      "name": "Gold Hunter | Malaysia Premium Swing Gold Trading Community",
+      "isPartOf": {
+        "@id": "https://goldhunter.site/#website"
+      },
+      "about": {
+        "@id": "https://goldhunter.site/#organization"
+      },
+      "primaryImageOfPage": {
+        "@type": "ImageObject",
+        "url": "https://goldhunter.site/assets/og-image.jpg",
+        "width": 1200,
+        "height": 630
+      },
+      "description": "Gold Hunter is Malaysia's premium swing gold trading community focused on discipline, structure and capturing high-pip opportunities in the gold market.",
+      "inLanguage": "en"
+    }
+  ]
+}
 </script>
 <link href="style.css" rel="stylesheet">
 </link></head>
@@ -50,7 +122,7 @@
 <div><b>Gold Hunter</b><small>Built for disciplined traders.</small></div>
 </a>
 <button aria-label="Open menu" class="menu-toggle" id="menuToggle">☰</button>
-<div class="nav-links" id="navLinks"><a href="#examples">Results</a><a href="#stories">Reviews</a><a href="#inside">Inside</a><a href="#framework">Membership</a><a href="#ecosystem">Partners</a><a href="#faq">FAQ</a><a class="nav-cta" href="https://wa.me/60133954958?text=Hi%20Gold%20Hunter,%20I%20would%20like%20to%20learn%20more%20about%20your%20membership." rel="noopener" target="_blank">Apply for Membership</a></div>
+<div class="nav-links" id="navLinks"><a href="#examples">Results</a><a href="#stories">Reviews</a><a href="#inside">Inside</a><a href="#framework">Membership</a><a href="#ecosystem">Partners</a><a class="nav-cta" href="https://wa.me/60133954958?text=Hi%20Gold%20Hunter,%20I%20would%20like%20to%20learn%20more%20about%20your%20membership." rel="noopener" target="_blank">Apply for Membership</a></div>
 </nav>
 <main>
 <section class="hero" id="home">
@@ -189,19 +261,6 @@
 </div>
 </div>
 </section>
-<section class="section faq-section" id="faq">
-<div class="section-head reveal compact-head">
-<span class="eyebrow">FAQ</span>
-<h2>Before you apply.</h2>
-<p>Simple answers for serious traders who want to understand Gold Hunter first.</p>
-</div>
-<div class="faq-grid reveal">
-  <details open><summary>Is Gold Hunter a signal group?</summary><p>No. Gold Hunter is built around education, structure, community support and disciplined execution.</p></details>
-  <details><summary>Is the indicator free?</summary><p>No. Member-exclusive resources are part of the membership framework and are not positioned as free public tools.</p></details>
-  <details><summary>What makes Gold Hunter different?</summary><p>We focus on swing gold opportunities, patience and capturing bigger pip moves instead of chasing every small move.</p></details>
-  <details><summary>How do I apply?</summary><p>Click Apply for Membership and message us on WhatsApp. We will explain the current access details.</p></details>
-</div>
-</section>
 <section class="risk section-small" id="risk">
 <div class="risk-card reveal">
 <span class="eyebrow">RISK DISCLOSURE</span>
@@ -240,6 +299,7 @@
 <div aria-hidden="true" class="lightbox" id="lightbox">
 <button aria-label="Close image" id="closeLightbox">×</button>
 <button class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Previous image">‹</button>
+<div class="lightbox-counter" id="lightboxCounter">1 / 1</div>
 <img alt="Expanded preview" id="lightboxImg"/>
 <video id="lightboxVideo" controls playsinline></video>
 <button class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Next image">›</button>
