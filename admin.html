@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gold Hunter Gallery Manager</title>
+  <style>
+    body{margin:0;background:#050505;color:#f7f0df;font-family:Inter,Arial,sans-serif;padding:36px;line-height:1.7}
+    main{max-width:880px;margin:auto}
+    h1{font-size:42px;line-height:1.05;margin:0 0 18px;color:#f8df8b}
+    h2{margin-top:34px;color:#fff}
+    code,pre{background:#111;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:3px 7px;color:#f8df8b}
+    pre{padding:18px;overflow:auto}
+    .card{border:1px solid rgba(212,175,55,.25);background:rgba(255,255,255,.04);border-radius:20px;padding:22px;margin:18px 0}
+    a{color:#f8df8b}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Gold Hunter Gallery Manager</h1>
+  <p>This page is only a guide for maintaining the static GitHub + Cloudflare website.</p>
+
+  <div class="card">
+    <h2>Add a new Result</h2>
+    <ol>
+      <li>Upload your file to <code>assets/results/</code>.</li>
+      <li>Name it like <code>result-013.png</code> or <code>result-014.mp4</code>.</li>
+      <li>Commit to GitHub.</li>
+      <li>GitHub Actions will update <code>assets/results/manifest.json</code> automatically.</li>
+      <li>Cloudflare Pages will deploy the updated site.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Add a new Review</h2>
+    <ol>
+      <li>Upload your file to <code>assets/reviews/</code>.</li>
+      <li>Name it like <code>review-011.png</code> or <code>review-012.jpg</code>.</li>
+      <li>Commit to GitHub.</li>
+      <li>The manifest will update automatically.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Video Posters</h2>
+    <p>If you upload a video, you can add a poster image with the same number:</p>
+    <pre>assets/results/result-014.mp4
+assets/results/result-014-poster.jpg</pre>
+  </div>
+
+  <p><a href="/">← Back to website</a></p>
+</main>
+</body>
+</html>

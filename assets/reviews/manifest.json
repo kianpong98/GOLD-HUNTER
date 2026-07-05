@@ -1,34 +1,6 @@
 [
   {
-    "src": "assets/reviews/review-001.png",
-    "type": "image"
-  },
-  {
-    "src": "assets/reviews/review-002.png",
-    "type": "image"
-  },
-  {
-    "src": "assets/reviews/review-003.png",
-    "type": "image"
-  },
-  {
-    "src": "assets/reviews/review-004.jpeg",
-    "type": "image"
-  },
-  {
-    "src": "assets/reviews/review-005.jpeg",
-    "type": "image"
-  },
-  {
-    "src": "assets/reviews/review-006.png",
-    "type": "image"
-  },
-  {
-    "src": "assets/reviews/review-007.jpeg",
-    "type": "image"
-  },
-  {
-    "src": "assets/reviews/review-008.jpeg",
+    "src": "assets/reviews/review-010.jpeg",
     "type": "image"
   },
   {
@@ -36,7 +8,35 @@
     "type": "image"
   },
   {
-    "src": "assets/reviews/review-010.jpeg",
+    "src": "assets/reviews/review-008.jpeg",
+    "type": "image"
+  },
+  {
+    "src": "assets/reviews/review-007.jpeg",
+    "type": "image"
+  },
+  {
+    "src": "assets/reviews/review-006.png",
+    "type": "image"
+  },
+  {
+    "src": "assets/reviews/review-005.jpeg",
+    "type": "image"
+  },
+  {
+    "src": "assets/reviews/review-004.jpeg",
+    "type": "image"
+  },
+  {
+    "src": "assets/reviews/review-003.png",
+    "type": "image"
+  },
+  {
+    "src": "assets/reviews/review-002.png",
+    "type": "image"
+  },
+  {
+    "src": "assets/reviews/review-001.png",
     "type": "image"
   }
 ]

@@ -1,45 +1,6 @@
 [
   {
-    "src": "assets/results/result-001.mp4",
-    "type": "video",
-    "poster": "assets/results/result-001-poster.jpg"
-  },
-  {
-    "src": "assets/results/result-002.mp4",
-    "type": "video",
-    "poster": "assets/results/result-002-poster.jpg"
-  },
-  {
-    "src": "assets/results/result-003.mp4",
-    "type": "video",
-    "poster": "assets/results/result-003-poster.jpg"
-  },
-  {
-    "src": "assets/results/result-004.jpeg",
-    "type": "image"
-  },
-  {
-    "src": "assets/results/result-005.jpeg",
-    "type": "image"
-  },
-  {
-    "src": "assets/results/result-006.png",
-    "type": "image"
-  },
-  {
-    "src": "assets/results/result-007.jpeg",
-    "type": "image"
-  },
-  {
-    "src": "assets/results/result-008.png",
-    "type": "image"
-  },
-  {
-    "src": "assets/results/result-009.png",
-    "type": "image"
-  },
-  {
-    "src": "assets/results/result-010.jpeg",
+    "src": "assets/results/result-012.jpeg",
     "type": "image"
   },
   {
@@ -47,7 +8,46 @@
     "type": "image"
   },
   {
-    "src": "assets/results/result-012.jpeg",
+    "src": "assets/results/result-010.jpeg",
     "type": "image"
+  },
+  {
+    "src": "assets/results/result-009.png",
+    "type": "image"
+  },
+  {
+    "src": "assets/results/result-008.png",
+    "type": "image"
+  },
+  {
+    "src": "assets/results/result-007.jpeg",
+    "type": "image"
+  },
+  {
+    "src": "assets/results/result-006.png",
+    "type": "image"
+  },
+  {
+    "src": "assets/results/result-005.jpeg",
+    "type": "image"
+  },
+  {
+    "src": "assets/results/result-004.jpeg",
+    "type": "image"
+  },
+  {
+    "src": "assets/results/result-003.mp4",
+    "type": "video",
+    "poster": "assets/results/result-003-poster.jpg"
+  },
+  {
+    "src": "assets/results/result-002.mp4",
+    "type": "video",
+    "poster": "assets/results/result-002-poster.jpg"
+  },
+  {
+    "src": "assets/results/result-001.mp4",
+    "type": "video",
+    "poster": "assets/results/result-001-poster.jpg"
   }
 ]
