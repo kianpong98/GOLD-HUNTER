@@ -612,3 +612,173 @@ body.gallery-browser-active{overflow:hidden}
 @media (max-width: 380px){
   .hero h1{font-size:34px!important}.hero-brand img{width:min(230px,70vw)!important}.section-head h2,.split-copy h2,.risk-card h2{font-size:29px!important}.inside-card img,.inside-card video,.inside-media-slot img,.inside-media-slot video{height:94px!important}.gallery-browser-grid{columns:3 80px!important;column-gap:4px!important}
 }
+
+/* V24: mobile membership access 2-column + Apple-style home mosaic previews */
+@media (max-width: 720px){
+  /* Membership Access: Most Focused + Support stay side-by-side on mobile */
+  .membership-options .package-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+    align-items:stretch!important;
+  }
+  .membership-options .package-card{
+    padding:13px 10px!important;
+    border-radius:16px!important;
+    min-height:0!important;
+    display:flex!important;
+    flex-direction:column!important;
+  }
+  .membership-options .package-card span{
+    font-size:7px!important;
+    letter-spacing:.08em!important;
+    margin-bottom:6px!important;
+  }
+  .membership-options .package-card h3{
+    font-size:16px!important;
+    line-height:1!important;
+    margin:0 0 7px!important;
+    letter-spacing:-.035em!important;
+  }
+  .membership-options .package-card p{
+    font-size:10.5px!important;
+    line-height:1.35!important;
+    margin:0 0 8px!important;
+  }
+  .membership-options .package-card ul{
+    font-size:9.5px!important;
+    line-height:1.35!important;
+    padding-left:13px!important;
+    margin:0 0 10px!important;
+  }
+  .membership-options .package-card li{margin:4px 0!important;}
+  .membership-options .package-cta{
+    margin-top:auto!important;
+    padding:9px 8px!important;
+    font-size:9px!important;
+    border-radius:999px!important;
+    text-align:center!important;
+    white-space:normal!important;
+  }
+
+  /* Homepage Results: Apple Photos-style mosaic, compact, not equal-height rows */
+  #resultsGallery.featured-mosaic,
+  .conversion-results .featured-mosaic{
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    grid-auto-rows:70px!important;
+    gap:6px!important;
+    margin-top:20px!important;
+  }
+  #resultsGallery .result-tile,
+  .conversion-results .result-tile{
+    aspect-ratio:auto!important;
+    min-height:0!important;
+    height:auto!important;
+    border-radius:12px!important;
+    overflow:hidden!important;
+    box-shadow:none!important;
+  }
+  #resultsGallery .result-tile:nth-child(1),
+  .conversion-results .result-tile:nth-child(1){
+    grid-column:span 2!important;
+    grid-row:span 2!important;
+  }
+  #resultsGallery .result-tile:nth-child(2),
+  .conversion-results .result-tile:nth-child(2){grid-column:span 2!important;}
+  #resultsGallery .result-tile:nth-child(5),
+  .conversion-results .result-tile:nth-child(5){grid-column:span 2!important;}
+  #resultsGallery .result-tile img,
+  #resultsGallery .result-tile video,
+  .conversion-results .result-tile img,
+  .conversion-results .result-tile video{
+    width:100%!important;
+    height:100%!important;
+    object-fit:cover!important;
+    border-radius:12px!important;
+  }
+  #resultsGallery .result-tile div,
+  .conversion-results .result-tile div{
+    padding:4px 5px!important;
+    left:5px!important;
+    right:5px!important;
+    bottom:5px!important;
+    border-radius:8px!important;
+    background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.68))!important;
+  }
+  #resultsGallery .result-tile span,
+  .conversion-results .result-tile span{font-size:6.5px!important;letter-spacing:.04em!important;}
+  #resultsGallery .result-tile h3,
+  .conversion-results .result-tile h3{font-size:9px!important;line-height:1!important;margin:1px 0 0!important;}
+  #resultsGallery .result-tile h3:after,
+  .conversion-results .result-tile h3:after{display:none!important;}
+
+  /* Homepage Reviews: same compact Apple mosaic feel */
+  #reviewsGallery.review-mosaic,
+  .conversion-reviews .review-mosaic{
+    columns:unset!important;
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    grid-auto-rows:72px!important;
+    gap:6px!important;
+    margin-top:20px!important;
+  }
+  #reviewsGallery .review-tile,
+  .conversion-reviews .review-tile{
+    display:block!important;
+    width:auto!important;
+    margin:0!important;
+    padding:0!important;
+    aspect-ratio:auto!important;
+    height:auto!important;
+    border-radius:12px!important;
+    overflow:hidden!important;
+    box-shadow:none!important;
+    position:relative!important;
+  }
+  #reviewsGallery .review-tile:nth-child(1),
+  .conversion-reviews .review-tile:nth-child(1){
+    grid-column:span 2!important;
+    grid-row:span 2!important;
+  }
+  #reviewsGallery .review-tile:nth-child(3),
+  .conversion-reviews .review-tile:nth-child(3){grid-row:span 2!important;}
+  #reviewsGallery .review-tile:nth-child(5),
+  .conversion-reviews .review-tile:nth-child(5){grid-column:span 2!important;}
+  #reviewsGallery .review-tile img,
+  .conversion-reviews .review-tile img{
+    width:100%!important;
+    height:100%!important;
+    object-fit:cover!important;
+    max-height:none!important;
+    border-radius:12px!important;
+    background:#080808!important;
+  }
+  #reviewsGallery .review-tile span,
+  .conversion-reviews .review-tile span{
+    position:absolute!important;
+    left:5px!important;
+    right:5px!important;
+    bottom:5px!important;
+    margin:0!important;
+    padding:4px 5px!important;
+    border-radius:8px!important;
+    background:rgba(0,0,0,.58)!important;
+    font-size:7px!important;
+    line-height:1.1!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    color:#f2f2f2!important;
+    text-align:left!important;
+  }
+}
+
+@media (max-width: 380px){
+  #resultsGallery.featured-mosaic,
+  .conversion-results .featured-mosaic{grid-auto-rows:64px!important;gap:5px!important;}
+  #reviewsGallery.review-mosaic,
+  .conversion-reviews .review-mosaic{grid-auto-rows:66px!important;gap:5px!important;}
+  .membership-options .package-card h3{font-size:14px!important;}
+  .membership-options .package-card p{font-size:9.5px!important;}
+  .membership-options .package-card ul{font-size:8.8px!important;}
+}
