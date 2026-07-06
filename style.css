@@ -422,3 +422,153 @@ body.gallery-browser-active{overflow:hidden}
 @media(max-width:380px){
   .gallery-browser-grid{columns:3 88px;column-gap:5px}
 }
+
+/* Final mobile compact preview update: Results, Reviews and Inside stay short on phones */
+@media (max-width: 720px){
+  /* Homepage latest 6 results: Apple Photos-like small grid */
+  #resultsGallery.featured-mosaic,
+  .featured-mosaic{
+    display:grid!important;
+    grid-template-columns:repeat(3,1fr)!important;
+    grid-auto-rows:auto!important;
+    gap:7px!important;
+  }
+  #resultsGallery .result-tile,
+  .featured-mosaic .result-tile{
+    aspect-ratio:1/1!important;
+    min-height:0!important;
+    border-radius:13px!important;
+    grid-row:auto!important;
+    box-shadow:none!important;
+  }
+  #resultsGallery .result-tile.featured,
+  .featured-mosaic .result-tile.featured{
+    grid-row:auto!important;
+  }
+  #resultsGallery .result-tile div,
+  .featured-mosaic .result-tile div{
+    left:5px!important;
+    right:5px!important;
+    bottom:5px!important;
+    padding:5px 6px!important;
+    border-radius:9px!important;
+    backdrop-filter:blur(8px)!important;
+  }
+  #resultsGallery .result-tile span,
+  .featured-mosaic .result-tile span{
+    font-size:7.5px!important;
+    letter-spacing:.08em!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+  #resultsGallery .result-tile h3,
+  .featured-mosaic .result-tile h3{
+    font-size:10px!important;
+    line-height:1.05!important;
+    margin-top:2px!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+  #resultsGallery .result-tile h3:after,
+  .featured-mosaic .result-tile h3:after{
+    display:none!important;
+  }
+  #resultsGallery .result-tile img,
+  #resultsGallery .result-tile video,
+  .featured-mosaic .result-tile img,
+  .featured-mosaic .result-tile video{
+    object-fit:cover!important;
+    width:100%!important;
+    height:100%!important;
+  }
+
+  /* Homepage latest 6 reviews: compact Apple Photos grid */
+  #reviewsGallery.review-mosaic,
+  .review-mosaic{
+    columns:unset!important;
+    display:grid!important;
+    grid-template-columns:repeat(3,1fr)!important;
+    gap:7px!important;
+  }
+  #reviewsGallery .review-tile,
+  .review-mosaic .review-tile{
+    display:block!important;
+    width:100%!important;
+    margin:0!important;
+    aspect-ratio:1/1.2!important;
+    border-radius:13px!important;
+    box-shadow:none!important;
+    overflow:hidden!important;
+  }
+  #reviewsGallery .review-tile.featured,
+  .review-mosaic .review-tile.featured{
+    grid-row:auto!important;
+  }
+  #reviewsGallery .review-tile img,
+  .review-mosaic .review-tile img{
+    width:100%!important;
+    height:100%!important;
+    object-fit:cover!important;
+    max-height:none!important;
+  }
+  #reviewsGallery .review-tile span,
+  .review-mosaic .review-tile span{
+    position:absolute!important;
+    left:5px!important;
+    right:5px!important;
+    bottom:5px!important;
+    padding:4px 6px!important;
+    border-radius:8px!important;
+    background:rgba(0,0,0,.58)!important;
+    backdrop-filter:blur(8px)!important;
+    font-size:7.5px!important;
+    letter-spacing:.08em!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+
+  /* Inside Gold Hunter mobile: compact 2x2 grid like desktop, not long single column */
+  .inside-grid{
+    display:grid!important;
+    grid-template-columns:repeat(2,1fr)!important;
+    gap:10px!important;
+  }
+  .inside-card{
+    padding:8px!important;
+    border-radius:18px!important;
+    min-height:0!important;
+  }
+  .inside-card img,
+  .inside-card video,
+  .inside-media-slot img,
+  .inside-media-slot video{
+    width:100%!important;
+    height:118px!important;
+    object-fit:cover!important;
+    border-radius:12px!important;
+    background:#050505!important;
+  }
+  .inside-card h3{
+    font-size:13px!important;
+    line-height:1.15!important;
+    margin:9px 0 2px!important;
+  }
+}
+
+@media (max-width: 380px){
+  #resultsGallery.featured-mosaic,
+  .featured-mosaic,
+  #reviewsGallery.review-mosaic,
+  .review-mosaic{
+    gap:6px!important;
+  }
+  .inside-card img,
+  .inside-card video,
+  .inside-media-slot img,
+  .inside-media-slot video{
+    height:104px!important;
+  }
+}

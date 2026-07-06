@@ -1,25 +1,28 @@
-# Gold Hunter Gallery Auto Update
+# Gold Hunter Auto Gallery
 
-## How to add a new Result
-1. Upload the file into `assets/results/`.
-2. Use this naming style:
-   - `result-013.png`
-   - `result-014.jpg`
-   - `result-015.mp4`
+## Add a new Result
+1. Upload your file into `assets/results/`.
+2. Use a filename like `result-013.png`, `result-014.mp4`, or `result-015.webp`.
 3. Commit the change.
 4. GitHub Actions will automatically update `assets/results/manifest.json`.
-5. Cloudflare Pages will deploy the updated site.
+5. Cloudflare Pages will deploy the updated gallery.
 
-For videos, optional poster image:
-- `result-015.mp4`
-- `result-015-poster.jpg`
+For videos, you may also add a poster image with the same number:
 
-## How to add a new Review
-1. Upload the file into `assets/reviews/`.
-2. Use this naming style:
-   - `review-011.png`
-   - `review-012.jpg`
+```text
+assets/results/result-014.mp4
+assets/results/result-014-poster.jpg
+```
+
+## Add a new Review
+1. Upload your file into `assets/reviews/`.
+2. Use a filename like `review-011.png`, `review-012.jpeg`, or `review-013.webp`.
 3. Commit the change.
 4. GitHub Actions will automatically update `assets/reviews/manifest.json`.
 
-Latest numbered files show first on the homepage.
+## Important
+The site reads the `manifest.json` files. If new media does not show, check GitHub → Actions. The workflow must show green Success.
+
+If GitHub Actions cannot commit, go to:
+
+Settings → Actions → General → Workflow permissions → Read and write permissions → Save.
