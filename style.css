@@ -782,3 +782,35 @@ body.gallery-browser-active{overflow:hidden}
   .membership-options .package-card p{font-size:9.5px!important;}
   .membership-options .package-card ul{font-size:8.8px!important;}
 }
+
+/* Fix: Membership Access buttons clickable on mobile */
+.membership-options .package-card{
+  position: relative !important;
+  isolation: isolate;
+}
+.membership-options .package-card::before,
+.membership-options .package-card::after{
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+.membership-options .package-card > *{
+  position: relative !important;
+  z-index: 2 !important;
+}
+.membership-options .package-cta,
+.membership-options .package-card a{
+  position: relative !important;
+  z-index: 30 !important;
+  pointer-events: auto !important;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+@media (max-width:720px){
+  .membership-options .package-cta{
+    min-height: 38px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+}
