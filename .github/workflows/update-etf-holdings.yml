@@ -62,7 +62,7 @@ jobs:
             echo "No changes"
             exit 0
           fi
-          git commit -m "Update SPDR GLD holdings [skip ci]"
+          git commit -m "Update SPDR GLD holdings 
           BRANCH="${{ github.ref_name }}"
           for attempt in 1 2 3; do
             git fetch origin "$BRANCH"
