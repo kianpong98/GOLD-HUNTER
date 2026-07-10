@@ -2,19 +2,25 @@ const EVENTS_KEY = 'gold-market-events-v3';
 const BLS_CACHE_KEY = 'official-bls-cache-v1';
 
 const SEED_EVENTS = [
-  {id:'cpi-2026-07',releasePeriod:'2026-06',type:'cpi_yoy',name:'Consumer Price Index',nameZh:'消费者物价指数',datetime:'2026-07-14T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/cpi.htm',impact:5,whyZh:'衡量美国整体通胀，通常会明显影响美元与黄金。'},
-  {id:'core-cpi-2026-07',releasePeriod:'2026-06',type:'core_cpi_yoy',name:'Core Consumer Price Index',nameZh:'核心消费者物价指数',datetime:'2026-07-14T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/cpi.htm',impact:5,whyZh:'剔除食品与能源，更能反映基础通胀趋势。'},
-  {id:'ppi-2026-07',releasePeriod:'2026-06',type:'ppi_yoy',name:'Producer Price Index',nameZh:'生产者物价指数',datetime:'2026-07-15T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/ppi.htm',impact:4,whyZh:'反映生产端通胀压力，可影响市场对利率的预期。'},
-  {id:'core-ppi-2026-07',releasePeriod:'2026-06',type:'core_ppi_yoy',name:'Core Producer Price Index',nameZh:'核心生产者物价指数',datetime:'2026-07-15T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/ppi.htm',impact:4,whyZh:'剔除波动较大的项目，用于观察持续性生产通胀。'},
-  {id:'retail-sales-2026-07',releasePeriod:'2026-06',type:'retail_sales',name:'Retail Sales',nameZh:'零售销售',datetime:'2026-07-16T20:30:00+08:00',forecast:'',sourceName:'U.S. Census Bureau',sourceUrl:'https://www.census.gov/retail/release_schedule.html',impact:4,whyZh:'反映消费强弱，可能改变经济与利率预期。'},
-  {id:'gdp-advance-2026-q2',releasePeriod:'2026-Q2',type:'gdp',name:'GDP — Advance Estimate',nameZh:'国内生产总值初值',datetime:'2026-07-30T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/news/schedule',impact:4,whyZh:'衡量美国经济增长，是影响利率预期的重要数据。'},
-  {id:'fomc-2026-07',type:'fomc',name:'FOMC Interest Rate Decision',nameZh:'美联储利率决议',datetime:'2026-07-30T02:00:00+08:00',forecast:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:5,whyZh:'利率与政策措辞会直接改变美元、收益率和黄金定价。'},
-  {id:'pce-2026-07',type:'pce',name:'PCE Price Index',nameZh:'PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'美联储重点关注的通胀指标之一。'},
-  {id:'core-pce-2026-07',type:'core_pce',name:'Core PCE Price Index',nameZh:'核心PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'剔除食品与能源，是美联储观察基础通胀的重要指标。'},
-  {id:'nfp-2026-08',releasePeriod:'2026-07',type:'nfp',name:'Nonfarm Payrolls',nameZh:'非农就业人数',datetime:'2026-08-07T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/empsit.htm',impact:5,whyZh:'反映美国就业增长，公布时黄金通常波动较大。'},
-  {id:'unemployment-2026-08',releasePeriod:'2026-07',type:'unemployment',name:'Unemployment Rate',nameZh:'失业率',datetime:'2026-08-07T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/empsit.htm',impact:5,whyZh:'反映劳动力市场强弱，并影响利率预期。'},
-  {id:'avg-hourly-earnings-2026-08',releasePeriod:'2026-07',type:'avg_hourly_earnings',name:'Average Hourly Earnings',nameZh:'平均每小时工资',datetime:'2026-08-07T20:30:00+08:00',forecast:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/empsit.htm',impact:4,whyZh:'工资增长会影响通胀与利率预期，并可能带动黄金波动。'}
+  {id:'cpi-2026-07',releasePeriod:'2026-06',type:'cpi_yoy',name:'Consumer Price Index',nameZh:'消费者物价指数',datetime:'2026-07-14T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/cpi.htm',impact:5,whyZh:'衡量美国整体通胀，通常会明显影响美元与黄金。'},
+  {id:'core-cpi-2026-07',releasePeriod:'2026-06',type:'core_cpi_yoy',name:'Core Consumer Price Index',nameZh:'核心消费者物价指数',datetime:'2026-07-14T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/cpi.htm',impact:5,whyZh:'剔除食品与能源，更能反映基础通胀趋势。'},
+  {id:'ppi-2026-07',releasePeriod:'2026-06',type:'ppi_yoy',name:'Producer Price Index',nameZh:'生产者物价指数',datetime:'2026-07-15T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/ppi.htm',impact:4,whyZh:'反映生产端通胀压力，可影响市场对利率的预期。'},
+  {id:'core-ppi-2026-07',releasePeriod:'2026-06',type:'core_ppi_yoy',name:'Core Producer Price Index',nameZh:'核心生产者物价指数',datetime:'2026-07-15T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/ppi.htm',impact:4,whyZh:'剔除波动较大的项目，用于观察持续性生产通胀。'},
+  {id:'retail-sales-2026-07',releasePeriod:'2026-06',type:'retail_sales',name:'Retail Sales',nameZh:'零售销售',datetime:'2026-07-16T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Census Bureau',sourceUrl:'https://www.census.gov/retail/release_schedule.html',impact:4,whyZh:'反映消费强弱，可能改变经济与利率预期。'},
+  {id:'jobless-claims-2026-07-16',type:'jobless_claims',name:'Initial Jobless Claims',nameZh:'初请失业金人数',datetime:'2026-07-16T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Department of Labor',sourceUrl:'https://www.dol.gov/ui/data.pdf',impact:4,whyZh:'反映就业市场短期变化，可能影响美元与黄金。'},
+  {id:'fomc-2026-07',type:'fomc',name:'FOMC Interest Rate Decision',nameZh:'美联储利率决议',datetime:'2026-07-30T02:00:00+08:00',forecast:'',previous:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:5,whyZh:'利率与政策措辞会直接改变美元、收益率和黄金定价。'},
+  {id:'gdp-advance-2026-q2',releasePeriod:'2026-Q2',type:'gdp',name:'GDP — Advance Estimate',nameZh:'国内生产总值初值',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/news/schedule',impact:4,whyZh:'衡量美国经济增长，是影响利率预期的重要数据。'},
+  {id:'pce-2026-07',type:'pce',name:'PCE Price Index',nameZh:'PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'美联储重点关注的通胀指标之一。'},
+  {id:'core-pce-2026-07',type:'core_pce',name:'Core PCE Price Index',nameZh:'核心PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'剔除食品与能源，是美联储观察基础通胀的重要指标。'},
+  {id:'nfp-2026-08',releasePeriod:'2026-07',type:'nfp',name:'Nonfarm Payrolls',nameZh:'非农就业人数',datetime:'2026-08-07T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/empsit.htm',impact:5,whyZh:'反映美国就业增长，公布时黄金通常波动较大。'},
+  {id:'unemployment-2026-08',releasePeriod:'2026-07',type:'unemployment',name:'Unemployment Rate',nameZh:'失业率',datetime:'2026-08-07T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/empsit.htm',impact:5,whyZh:'反映劳动力市场强弱，并影响利率预期。'},
+  {id:'avg-hourly-earnings-2026-08',releasePeriod:'2026-07',type:'avg_hourly_earnings',name:'Average Hourly Earnings',nameZh:'平均每小时工资',datetime:'2026-08-07T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/empsit.htm',impact:4,whyZh:'工资增长会影响通胀与利率预期，并可能带动黄金波动。'},
+  {id:'ism-manufacturing-2026-08',type:'ism_manufacturing',name:'ISM Manufacturing PMI',nameZh:'ISM制造业PMI',datetime:'2026-08-03T22:00:00+08:00',forecast:'',previous:'',sourceName:'Institute for Supply Management',sourceUrl:'https://www.ismworld.org/supply-management-news-and-reports/reports/ism-report-on-business/',impact:4,whyZh:'反映制造业景气度，可能改变经济与利率预期。'},
+  {id:'ism-services-2026-08',type:'ism_services',name:'ISM Services PMI',nameZh:'ISM服务业PMI',datetime:'2026-08-05T22:00:00+08:00',forecast:'',previous:'',sourceName:'Institute for Supply Management',sourceUrl:'https://www.ismworld.org/supply-management-news-and-reports/reports/ism-report-on-business/',impact:4,whyZh:'服务业占美国经济比重大，数据可影响美元与黄金。'},
+  {id:'fomc-minutes-2026-08',type:'fomc_minutes',name:'FOMC Meeting Minutes',nameZh:'美联储会议纪要',datetime:'2026-08-20T02:00:00+08:00',forecast:'',previous:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:4,whyZh:'披露政策讨论细节，可能改变市场对未来利率路径的判断。'}
 ];
+
+const AUTO_TYPES = new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment']);
 
 const SERIES = {
   cpi_yoy: {id:'CUUR0000SA0', mode:'yoy', suffix:'%'},
@@ -39,7 +45,7 @@ function sanitizeEvents(input){
   return input.slice(0,100).map((e,i)=>({
     id:clean(e?.id,80)||`event-${Date.now()}-${i}`,
     type:clean(e?.type,60), releasePeriod:clean(e?.releasePeriod,10), name:clean(e?.name,120), nameZh:clean(e?.nameZh,120),
-    datetime:clean(e?.datetime,50), forecast:clean(e?.forecast,80),
+    datetime:clean(e?.datetime,50), forecast:clean(e?.forecast,80), previous:clean(e?.previous,80), actual:clean(e?.actual,80),
     sourceName:clean(e?.sourceName,160), sourceUrl:/^https:\/\//i.test(clean(e?.sourceUrl,500))?clean(e?.sourceUrl,500):'',
     impact:Math.min(5,Math.max(4,Number(e?.impact)||4)), whyZh:clean(e?.whyZh,180)
   })).filter(e=>e.name&&e.datetime&&e.impact>=4);
@@ -132,19 +138,22 @@ export async function onRequestGet({request,env}){
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
     let actual='';
-    let previous='';
+    let previous=e.previous||'';
     if(m){
       if(released && e.releasePeriod && m.period===e.releasePeriod){
         actual=m.actual||'';
-        previous=m.previous||'';
+        previous=m.previous||e.previous||'';
       }else{
         // Before the release (or while the official source has not published the new period),
         // the latest official reading is the Previous value and Actual stays blank.
-        previous=m.actual||m.previous||'';
+        previous=m.actual||m.previous||e.previous||'';
       }
+    }else if(released){
+      actual=e.actual||'';
     }
     const history=(official.histories?.[e.type]||[]).slice(0,10).map(row=>({...row,forecast:row.period===e.releasePeriod?(e.forecast||''):''}));
-    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released};
+    const previousStatus = previous ? 'ready' : (AUTO_TYPES.has(e.type) ? 'awaiting_official' : 'manual_required');
+    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus};
   });
   return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
 }
@@ -153,6 +162,11 @@ export async function onRequestPost({request,env}){
   if(!env.GH_MARKET_DATA)return json({error:'GH_MARKET_DATA KV binding is not configured in Cloudflare.'},503,{'cache-control':'no-store'});
   let body;try{body=await request.json();}catch{return json({error:'Invalid request.'},400);}
   const events=sanitizeEvents(body?.events); if(!events.length)return json({error:'No valid 4-star or 5-star events.'},400);
-  events.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime)); await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(events));
+  const missingPrevious = events.filter(e=>!AUTO_TYPES.has(e.type) && !e.previous).map(e=>e.name);
+  if(missingPrevious.length){
+    return json({error:`Previous is required for events without an automatic official connector: ${missingPrevious.join(', ')}`},400);
+  }
+  events.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
+  await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(events));
   return json({ok:true,count:events.length,events,updatedAt:new Date().toISOString()},200,{'cache-control':'no-store'});
 }
