@@ -1,0 +1,61 @@
+name: Update official calendar data
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feature/news-engine
+    paths:
+      - '.github/workflows/update-calendar-data.yml'
+      - 'scripts/update_official_data.py'
+      - 'data/official-data.json'
+  schedule:
+    - cron: '7 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: official-data-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependency
+        run: pip install requests
+
+      - name: Download official economic data
+        run: python scripts/update_official_data.py
+
+      - name: Validate coverage
+        run: |
+          python - <<'PY'
+          import json
+          path='data/official-data.json'
+          data=json.load(open(path,encoding='utf-8'))
+          required=['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','retail_sales','jobless_claims','gdp','pce','core_pce','fomc']
+          missing=[k for k in required if not data.get('metrics',{}).get(k,{}).get('actual')]
+          assert not missing, f'Missing official metrics: {missing}'
+          print('Official-data coverage OK:', ', '.join(required))
+          PY
+
+      - name: Commit official data cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/official-data.json
+          git diff --cached --quiet || git commit -m "Update official calendar data"
+          git push origin HEAD:${{ github.ref_name }}
