@@ -1,7 +1,7 @@
 (()=>{
   const EVENTS_API='/api/market-events';
   const SNAPSHOT_API='/api/market-snapshot';
-  const ETF_DATA='/assets/data/spdr-gld-holdings.json?v=2';
+  const ETF_DATA='/api/etf-engine';
   const sessions=[
     {name:'Sydney',short:'SYD',tz:'Australia/Sydney',open:8,close:17},
     {name:'Tokyo',short:'TKY',tz:'Asia/Tokyo',open:8,close:17},
@@ -61,7 +61,7 @@
   function historyTable(e){const rows=Array.isArray(e.history)?e.history.slice(0,10):[];if(!rows.length)return'';return `<details class="release-history"><summary>Past releases (${rows.length})</summary><div class="history-scroll"><table><thead><tr><th>Date / Period</th><th>Actual</th><th>Forecast</th><th>Previous</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.dateTime||r.period||'—')}</td><td>${esc(r.actual||'—')}</td><td>${esc(r.forecast||'—')}</td><td>${esc(r.previous||'—')}</td></tr>`).join('')}</tbody></table></div></details>`;}
   function card(e,full=false){const stars='★'.repeat(Number(e.impact)||4);const source=e.sourceUrl?`<a class="event-source" href="${esc(e.sourceUrl)}" target="_blank" rel="noopener">${esc(e.sourceName||'Official source')} ↗</a>`:'';return `<article class="${full?'calendar-item':'market-event-row'}"><div class="${full?'calendar-date':'market-event-main'}"><span class="impact-badge impact-${e.impact}">${stars}</span><div><h3>${esc(e.name)}</h3><p class="event-zh">${esc(e.nameZh||'')}</p><p>${esc(fmt(e.datetime))}</p><strong class="event-countdown" data-date="${esc(e.datetime)}">${esc(countdown(e.datetime))}</strong></div></div>${full?`<div class="calendar-copy"><details><summary>为什么重要？</summary><p>${esc(e.whyZh||'此数据可能影响美元、利率预期与黄金波动。')}</p></details>${source}${historyTable(e)}</div>`:''}${values(e)}</article>`;}
   function updateCountdowns(){document.querySelectorAll('.event-countdown[data-date]').forEach(el=>el.textContent=countdown(el.dataset.date));}
-  async function loadEvents(){const home=document.getElementById('homeMarketEvents'),full=document.getElementById('calendarList');if(!home&&!full)return;try{const r=await fetch(EVENTS_API,{cache:'no-store'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Calendar unavailable');const events=(d.events||[]).filter(e=>Number(e.impact)>=4).sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));const relevant=events.filter(e=>new Date(e.datetime).getTime()>Date.now()-172800000);if(home)home.innerHTML=relevant.slice(0,3).map(e=>card(e,false)).join('')||'<div class="market-empty">No upcoming events.</div>';if(full)full.innerHTML=events.map(e=>card(e,true)).join('')||'<div class="market-empty">No events.</div>';const stamp=document.getElementById('calendarUpdated');if(stamp)stamp.textContent=`Last updated: ${new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'medium',timeStyle:'medium'}).format(new Date(d.updatedAt))} MYT`;updateCountdowns();}catch(e){const msg=`<div class="market-empty"><b>Calendar unavailable.</b><span>${esc(e.message)}</span></div>`;if(home)home.innerHTML=msg;if(full)full.innerHTML=msg;}}
+  async function loadEvents(){const home=document.getElementById('homeMarketEvents'),full=document.getElementById('calendarList');if(!home&&!full)return;try{const r=await fetch(EVENTS_API,{cache:'no-store'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Calendar unavailable');const events=(d.events||[]).filter(e=>Number(e.impact)>=4&&!/ism/i.test(String(e.type||''))&&!/ISM/i.test(String(e.name||''))).sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));const relevant=events.filter(e=>new Date(e.datetime).getTime()>Date.now()-172800000);if(home)home.innerHTML=relevant.slice(0,3).map(e=>card(e,false)).join('')||'<div class="market-empty">No upcoming events.</div>';if(full)full.innerHTML=events.map(e=>card(e,true)).join('')||'<div class="market-empty">No events.</div>';const stamp=document.getElementById('calendarUpdated');if(stamp)stamp.textContent=`Last updated: ${new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'medium',timeStyle:'medium'}).format(new Date(d.updatedAt))} MYT`;updateCountdowns();}catch(e){const msg=`<div class="market-empty"><b>Calendar unavailable.</b><span>${esc(e.message)}</span></div>`;if(home)home.innerHTML=msg;if(full)full.innerHTML=msg;}}
 
   function setQuote(id,value,change,updatedAt){
     const valid=Number.isFinite(Number(value));
@@ -88,6 +88,6 @@
   setupEtfToggle();
   setInterval(renderSessions,1000);
   setInterval(updateCountdowns,1000);
-  setInterval(loadSnapshot,2000);
+  setInterval(loadSnapshot,2500);
   setInterval(loadEvents,300000);
 })();
