@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: official-data-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   update:
@@ -52,10 +52,25 @@ jobs:
           print('Official-data coverage OK:', ', '.join(required))
           PY
 
-      - name: Commit official data cache
+      - name: Commit updated data
+        shell: bash
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/official-data.json
-          git diff --cached --quiet || git commit -m "Update official calendar data"
-          git push origin HEAD:${{ github.ref_name }}
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Update official calendar data [skip ci]"
+          BRANCH="${{ github.ref_name }}"
+          for attempt in 1 2 3; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH" || (git rebase --abort || true)
+            if git push origin "HEAD:$BRANCH"; then
+              exit 0
+            fi
+            sleep 3
+          done
+          exit 1
