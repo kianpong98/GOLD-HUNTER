@@ -88,6 +88,6 @@
   setupEtfToggle();
   setInterval(renderSessions,1000);
   setInterval(updateCountdowns,1000);
-  setInterval(loadSnapshot,5000);
+  setInterval(loadSnapshot,3000);
   setInterval(loadEvents,300000);
 })();

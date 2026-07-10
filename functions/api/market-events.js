@@ -7,11 +7,11 @@ const SEED_EVENTS = [
   {id:'ppi-2026-07',releasePeriod:'2026-06',type:'ppi_yoy',name:'Producer Price Index',nameZh:'生产者物价指数',datetime:'2026-07-15T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/ppi.htm',impact:4,whyZh:'反映生产端通胀压力，可影响市场对利率的预期。'},
   {id:'core-ppi-2026-07',releasePeriod:'2026-06',type:'core_ppi_yoy',name:'Core Producer Price Index',nameZh:'核心生产者物价指数',datetime:'2026-07-15T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/ppi.htm',impact:4,whyZh:'剔除波动较大的项目，用于观察持续性生产通胀。'},
   {id:'retail-sales-2026-07',releasePeriod:'2026-06',type:'retail_sales',name:'Retail Sales',nameZh:'零售销售',datetime:'2026-07-16T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Census Bureau',sourceUrl:'https://www.census.gov/retail/release_schedule.html',impact:4,whyZh:'反映消费强弱，可能改变经济与利率预期。'},
-  {id:'jobless-claims-2026-07-16',type:'jobless_claims',name:'Initial Jobless Claims',nameZh:'初请失业金人数',datetime:'2026-07-16T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Department of Labor',sourceUrl:'https://www.dol.gov/ui/data.pdf',impact:4,whyZh:'反映就业市场短期变化，可能影响美元与黄金。'},
-  {id:'fomc-2026-07',type:'fomc',name:'FOMC Interest Rate Decision',nameZh:'美联储利率决议',datetime:'2026-07-30T02:00:00+08:00',forecast:'',previous:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:5,whyZh:'利率与政策措辞会直接改变美元、收益率和黄金定价。'},
+  {id:'jobless-claims-2026-07-16',releasePeriod:'2026-07-11',type:'jobless_claims',name:'Initial Jobless Claims',nameZh:'初请失业金人数',datetime:'2026-07-16T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Department of Labor',sourceUrl:'https://www.dol.gov/ui/data.pdf',impact:4,whyZh:'反映就业市场短期变化，可能影响美元与黄金。'},
+  {id:'fomc-2026-07',releasePeriod:'2026-07-30',type:'fomc',name:'FOMC Interest Rate Decision',nameZh:'美联储利率决议',datetime:'2026-07-30T02:00:00+08:00',forecast:'',previous:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:5,whyZh:'利率与政策措辞会直接改变美元、收益率和黄金定价。'},
   {id:'gdp-advance-2026-q2',releasePeriod:'2026-Q2',type:'gdp',name:'GDP — Advance Estimate',nameZh:'国内生产总值初值',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/news/schedule',impact:4,whyZh:'衡量美国经济增长，是影响利率预期的重要数据。'},
-  {id:'pce-2026-07',type:'pce',name:'PCE Price Index',nameZh:'PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'美联储重点关注的通胀指标之一。'},
-  {id:'core-pce-2026-07',type:'core_pce',name:'Core PCE Price Index',nameZh:'核心PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'剔除食品与能源，是美联储观察基础通胀的重要指标。'},
+  {id:'pce-2026-07',releasePeriod:'2026-06',type:'pce',name:'PCE Price Index',nameZh:'PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'美联储重点关注的通胀指标之一。'},
+  {id:'core-pce-2026-07',releasePeriod:'2026-06',type:'core_pce',name:'Core PCE Price Index',nameZh:'核心PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'剔除食品与能源，是美联储观察基础通胀的重要指标。'},
   {id:'nfp-2026-08',releasePeriod:'2026-07',type:'nfp',name:'Nonfarm Payrolls',nameZh:'非农就业人数',datetime:'2026-08-07T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/empsit.htm',impact:5,whyZh:'反映美国就业增长，公布时黄金通常波动较大。'},
   {id:'unemployment-2026-08',releasePeriod:'2026-07',type:'unemployment',name:'Unemployment Rate',nameZh:'失业率',datetime:'2026-08-07T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/empsit.htm',impact:5,whyZh:'反映劳动力市场强弱，并影响利率预期。'},
   {id:'avg-hourly-earnings-2026-08',releasePeriod:'2026-07',type:'avg_hourly_earnings',name:'Average Hourly Earnings',nameZh:'平均每小时工资',datetime:'2026-08-07T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/empsit.htm',impact:4,whyZh:'工资增长会影响通胀与利率预期，并可能带动黄金波动。'},
@@ -20,7 +20,8 @@ const SEED_EVENTS = [
   {id:'fomc-minutes-2026-08',type:'fomc_minutes',name:'FOMC Meeting Minutes',nameZh:'美联储会议纪要',datetime:'2026-08-20T02:00:00+08:00',forecast:'',previous:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:4,whyZh:'披露政策讨论细节，可能改变市场对未来利率路径的判断。'}
 ];
 
-const AUTO_TYPES = new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment']);
+const AUTO_TYPES = new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc']);
+const EVENT_ONLY_TYPES = new Set(['fomc_minutes','fed_speech']);
 
 const SERIES = {
   cpi_yoy: {id:'CUUR0000SA0', mode:'yoy', suffix:'%'},
@@ -30,6 +31,58 @@ const SERIES = {
   nfp: {id:'CES0000000001', mode:'change', suffix:'K'},
   unemployment: {id:'LNS14000000', mode:'level', suffix:'%'}
 };
+
+
+
+const FRED_CACHE_KEY='official-fred-cache-v2';
+const FRED_CONFIG={
+  avg_hourly_earnings:{series:'CES0500000003',mode:'mom',suffix:'%',decimals:1},
+  retail_sales:{series:'RSAFS',mode:'mom',suffix:'%',decimals:1},
+  jobless_claims:{series:'ICSA',mode:'level',suffix:'K',decimals:0,scale:0.001},
+  gdp:{series:'A191RL1Q225SBEA',mode:'level',suffix:'%',decimals:1},
+  pce:{series:'PCEPI',mode:'yoy',suffix:'%',decimals:1},
+  core_pce:{series:'PCEPILFE',mode:'yoy',suffix:'%',decimals:1},
+  fomc:{series:'DFEDTARU',lowerSeries:'DFEDTARL',mode:'range',suffix:'%',decimals:2}
+};
+function csvRows(text){
+  const lines=String(text||'').trim().split(/\r?\n/);if(lines.length<2)return[];
+  return lines.slice(1).map(line=>{const i=line.indexOf(',');if(i<0)return null;const date=line.slice(0,i).trim();const raw=line.slice(i+1).trim();const value=Number(raw);return date&&Number.isFinite(value)?{date,value}:null}).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date));
+}
+async function fetchFredCsv(series){
+  const r=await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`,{headers:{accept:'text/csv','user-agent':'GoldHunter/1.0'}});
+  if(!r.ok)throw new Error(`FRED ${series} ${r.status}`);
+  const rows=csvRows(await r.text());if(!rows.length)throw new Error(`FRED ${series} empty`);return rows;
+}
+function fredPeriod(date){return String(date||'').slice(0,7)}
+function fredFmt(v,cfg){if(!Number.isFinite(v))return'';const scaled=v*(cfg.scale||1);return `${scaled.toFixed(cfg.decimals??1).replace(/\.0+$/,'')}${cfg.suffix||''}`}
+function fredMetric(rows,cfg,lowerRows){
+  if(!rows?.length)return null;
+  if(cfg.mode==='range'){
+    const upper=rows[0],lower=lowerRows?.[0];if(!lower)return null;
+    const prevUpper=rows.find((x,i)=>i>0&&x.value!==upper.value)||rows[1];
+    const prevLower=lowerRows.find((x,i)=>i>0&&x.value!==lower.value)||lowerRows[1];
+    const range=(l,u)=>`${Number(l).toFixed(2).replace(/\.00$/,'')}–${Number(u).toFixed(2).replace(/\.00$/,'')}%`;
+    return {actual:range(lower.value,upper.value),previous:prevLower&&prevUpper?range(prevLower.value,prevUpper.value):range(lower.value,upper.value),period:upper.date,history:rows.slice(0,10).map((u,i)=>({period:u.date,actual:range(lowerRows?.[i]?.value??lower.value,u.value),previous:i+1<rows.length?range(lowerRows?.[i+1]?.value??lower.value,rows[i+1].value):''}))};
+  }
+  const r=rows;
+  let calc;
+  if(cfg.mode==='level')calc=i=>r[i]?r[i].value:null;
+  if(cfg.mode==='mom')calc=i=>r[i+1]&&r[i+1].value!==0?((r[i].value/r[i+1].value)-1)*100:null;
+  if(cfg.mode==='yoy')calc=i=>{const target=new Date(r[i].date+'T00:00:00Z');target.setUTCFullYear(target.getUTCFullYear()-1);const key=target.toISOString().slice(0,7);const base=r.find(x=>x.date.slice(0,7)===key);return base&&base.value!==0?((r[i].value/base.value)-1)*100:null};
+  const a=calc?.(0),pr=calc?.(1);
+  const history=[];for(let i=0;i<r.length&&history.length<10;i++){const v=calc?.(i);if(v===null||v===undefined)continue;const pv=calc?.(i+1);history.push({period:r[i].date,actual:fredFmt(v,cfg),previous:fredFmt(pv,cfg)})}
+  return {actual:fredFmt(a,cfg),previous:fredFmt(pr,cfg),period:cfg.mode==='level'?r[0].date:fredPeriod(r[0].date),history};
+}
+async function fetchFred(env){
+  if(env.GH_MARKET_DATA){const cached=await env.GH_MARKET_DATA.get(FRED_CACHE_KEY,{type:'json'});if(cached&&Date.now()-cached.savedAt<15*60*1000)return cached;}
+  const metrics={},histories={},errors={};
+  await Promise.all(Object.entries(FRED_CONFIG).map(async([type,cfg])=>{
+    try{const [rows,lower]=await Promise.all([fetchFredCsv(cfg.series),cfg.lowerSeries?fetchFredCsv(cfg.lowerSeries):Promise.resolve(null)]);const m=fredMetric(rows,cfg,lower);metrics[type]=m;histories[type]=m?.history||[];}catch(e){errors[type]=e.message;}
+  }));
+  const result={savedAt:Date.now(),metrics,histories,errors,source:'FRED / official source series'};
+  if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(FRED_CACHE_KEY,JSON.stringify(result),{expirationTtl:3600});
+  return result;
+}
 
 const headers={
   'content-type':'application/json; charset=utf-8',
@@ -130,8 +183,10 @@ export async function onRequestOptions(){return new Response(null,{status:204,he
 export async function onRequestGet({request,env}){
   const wantsAdmin=request.headers.has('x-admin-pin');
   if(wantsAdmin&&!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
-  const stored=await readStored(env); let official={metrics:{},histories:{},savedAt:null};
-  try{official=await fetchBls(env);}catch(e){official.error=e.message;}
+  const stored=await readStored(env); let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null};
+  try{bls=await fetchBls(env);}catch(e){bls.error=e.message;}
+  try{fred=await fetchFred(env);}catch(e){fred.error=e.message;}
+  const official={metrics:{...(bls.metrics||{}),...(fred.metrics||{})},histories:{...(bls.histories||{}),...(fred.histories||{})},savedAt:Math.max(bls.savedAt||0,fred.savedAt||0),error:[bls.error,fred.error].filter(Boolean).join(' | ')};
   const now=Date.now();
   const events=stored.filter(e=>Number(e.impact)>=4).map(e=>{
     const m=official.metrics?.[e.type];
@@ -139,6 +194,7 @@ export async function onRequestGet({request,env}){
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
     let actual='';
     let previous=e.previous||'';
+    if(EVENT_ONLY_TYPES.has(e.type)) previous='Not applicable';
     if(m){
       if(released && e.releasePeriod && m.period===e.releasePeriod){
         actual=m.actual||'';
@@ -151,11 +207,12 @@ export async function onRequestGet({request,env}){
     }else if(released){
       actual=e.actual||'';
     }
+    if(!previous) previous=AUTO_TYPES.has(e.type)?'Syncing official data':'Manual update required';
     const history=(official.histories?.[e.type]||[]).slice(0,10).map(row=>({...row,forecast:row.period===e.releasePeriod?(e.forecast||''):''}));
-    const previousStatus = previous ? 'ready' : (AUTO_TYPES.has(e.type) ? 'awaiting_official' : 'manual_required');
+    const previousStatus = previous && !/Syncing|Manual/.test(previous) ? 'ready' : (AUTO_TYPES.has(e.type) ? 'awaiting_official' : 'manual_required');
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus};
   });
-  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
+  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null,officialSources:{bls:!bls.error,fred:!fred.error,fredErrors:fred.errors||{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
 }
 export async function onRequestPost({request,env}){
   if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
