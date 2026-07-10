@@ -86,6 +86,26 @@ async function fetchFred(env){
   }catch(error){if(stale)return {...stale,stale:true,refreshError:error.message};throw error;}
 }
 
+
+async function fetchStaticOfficial(request){
+  try{
+    const url=new URL('/data/official-data.json',new URL(request.url).origin);
+    url.searchParams.set('v',String(Date.now()).slice(0,-5));
+    const response=await fetch(url.toString(),{headers:{accept:'application/json'},cf:{cacheTtl:60,cacheEverything:true}});
+    if(!response.ok)throw new Error(`Static official data ${response.status}`);
+    const data=await response.json();
+    return {
+      metrics:data?.metrics||{},
+      histories:Object.fromEntries(Object.entries(data?.metrics||{}).map(([key,value])=>[key,Array.isArray(value?.history)?value.history:[]])),
+      savedAt:data?.updatedAt?new Date(data.updatedAt).getTime():0,
+      errors:data?.errors||{},
+      source:'GitHub Actions official-data cache'
+    };
+  }catch(error){
+    return {metrics:{},histories:{},savedAt:0,errors:{static:error.message},source:'static cache unavailable'};
+  }
+}
+
 const headers={
   'content-type':'application/json; charset=utf-8',
   'access-control-allow-origin':'*',
@@ -188,10 +208,22 @@ export async function onRequestOptions(){return new Response(null,{status:204,he
 export async function onRequestGet({request,env}){
   const wantsAdmin=request.headers.has('x-admin-pin');
   if(wantsAdmin&&!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
-  const stored=(await readStored(env)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||''))); let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null};
+  const stored=(await readStored(env)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
+  const staticOfficial=await fetchStaticOfficial(request);
+  let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null};
+  // Runtime sources remain as a fallback. The committed static cache is preferred
+  // because GitHub Actions verifies the complete official-data set before deploy.
   try{bls=await fetchBls(env);}catch(e){bls.error=e.message;}
   try{fred=await fetchFred(env);}catch(e){fred.error=e.message;}
-  const official={metrics:{...(bls.metrics||{}),...(fred.metrics||{})},histories:{...(bls.histories||{}),...(fred.histories||{})},savedAt:Math.max(bls.savedAt||0,fred.savedAt||0),error:[bls.error,fred.error].filter(Boolean).join(' | ')};
+  const runtimeMetrics={...(bls.metrics||{}),...(fred.metrics||{})};
+  const runtimeHistories={...(bls.histories||{}),...(fred.histories||{})};
+  const official={
+    metrics:{...runtimeMetrics,...(staticOfficial.metrics||{})},
+    histories:{...runtimeHistories,...(staticOfficial.histories||{})},
+    savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,staticOfficial.savedAt||0),
+    error:[bls.error,fred.error,...Object.values(staticOfficial.errors||{})].filter(Boolean).join(' | '),
+    staticSource:staticOfficial.source
+  };
   const now=Date.now();
   const events=stored.filter(e=>Number(e.impact)>=4&&!REMOVED_TYPES.has(e.type)).map(e=>{
     const m=official.metrics?.[e.type];
@@ -212,12 +244,12 @@ export async function onRequestGet({request,env}){
     }else if(released){
       actual=e.actual||'';
     }
-    if(!previous) previous=EVENT_ONLY_TYPES.has(e.type)?'Not applicable':'Official data unavailable';
+    if(!previous) previous=EVENT_ONLY_TYPES.has(e.type)?'Not applicable':'Awaiting verified official sync';
     const history=(official.histories?.[e.type]||[]).slice(0,10).map(row=>({...row,forecast:row.period===e.releasePeriod?(e.forecast||''):''}));
     const previousStatus = previous && !/unavailable|Syncing|Manual/i.test(previous) ? 'ready' : (AUTO_TYPES.has(e.type) ? 'awaiting_official' : 'manual_required');
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus};
   });
-  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null,officialSources:{bls:!bls.error,fred:!fred.error,fredErrors:fred.errors||{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
+  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:!bls.error,fred:!fred.error,fredErrors:fred.errors||{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
 }
 export async function onRequestPost({request,env}){
   if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});

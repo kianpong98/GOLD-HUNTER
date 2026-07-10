@@ -5,6 +5,17 @@ const num=v=>{const n=Number(v);return Number.isFinite(n)?n:null};
 const validGold=n=>Number.isFinite(n)&&n>500&&n<20000;
 const validDxy=n=>Number.isFinite(n)&&n>50&&n<200;
 
+
+async function staticQuoteCache(request){
+  try{
+    const url=new URL('/data/quotes.json',new URL(request.url).origin);
+    url.searchParams.set('v',String(Date.now()).slice(0,-5));
+    const response=await fetch(url.toString(),{headers:{accept:'application/json'},cf:{cacheTtl:60,cacheEverything:true}});
+    if(!response.ok)throw new Error(`Static quote cache ${response.status}`);
+    return await response.json();
+  }catch{return null;}
+}
+
 async function yahooQuote(symbol,kind){
   const u=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`;
   const r=await fetch(u,{headers:{accept:'application/json','user-agent':'Mozilla/5.0'}});
@@ -40,9 +51,9 @@ async function stooqDxy(){
   throw new Error(errors.join(' | '));
 }
 async function firstSuccess(tasks){const errors=[];for(const task of tasks){try{return await task()}catch(e){errors.push(e.message)}}throw new Error(errors.join(' | '));}
-export async function onRequestGet({env}){
-  let stale=null;
-  if(env.GH_MARKET_DATA){try{stale=await env.GH_MARKET_DATA.get(CACHE_KEY,{type:'json'})}catch{}}
+export async function onRequestGet({request,env}){
+  let stale=await staticQuoteCache(request);
+  if(env.GH_MARKET_DATA){try{const kv=await env.GH_MARKET_DATA.get(CACHE_KEY,{type:'json'});if(kv)stale=kv}catch{}}
   const [g,d]=await Promise.allSettled([
     firstSuccess([()=>yahooQuote('XAUUSD=X','gold'),()=>yahooQuote('GC=F','gold'),goldApi]),
     firstSuccess([()=>yahooQuote('DX-Y.NYB','dxy'),()=>yahooQuote('DX=F','dxy'),()=>yahooQuote('^DXY','dxy'),stooqDxy])
