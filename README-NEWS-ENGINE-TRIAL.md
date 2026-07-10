@@ -1,32 +1,31 @@
-# Gold Hunter Calendar Setup
+# Gold Hunter News Engine — Branch Trial
 
-This version includes a working Cloudflare Pages Function and mobile calendar admin.
+Upload the extracted files to the `feature/news-engine` branch root.
 
-## Cloudflare setup
-
-1. Create a KV namespace, for example: `gh-market-data`.
-2. In Cloudflare Pages project settings, add a KV binding:
+## Cloudflare Preview setup
+1. Cloudflare Pages > your project > Settings > Bindings.
+2. Create a KV namespace, for example `gh-market-data`.
+3. Add a KV binding for **Preview** and **Production**:
    - Variable name: `GH_MARKET_DATA`
-   - Namespace: the KV namespace created above
-3. Add an encrypted secret:
+   - Namespace: `gh-market-data`
+4. Add an encrypted secret for **Preview** and **Production**:
    - Name: `ADMIN_PIN`
-   - Value: your private PIN
-4. Redeploy the latest GitHub commit.
+   - Value: your private 6-digit PIN
+5. Redeploy the preview branch.
 
-## Use from phone
+## Test URLs
+- Preview home: use the branch preview URL Cloudflare gives you.
+- Calendar: `/calendar.html`
+- Forecast admin: `/admin.html`
+- API check: `/api/market-events`
 
-Open:
+## What works in this trial
+- Fixed market-session strip, calculated in the browser.
+- 4-star / 5-star calendar cards with English + Chinese names.
+- Short Chinese explanation appears only after tapping `为什么重要？`.
+- Mobile Forecast Admin saves to Cloudflare KV.
+- BLS official Actual / Previous auto-read for CPI, Core CPI, PPI, Core PPI, NFP, and Unemployment Rate.
 
-`https://goldhunter.site/admin.html`
-
-Enter the PIN, edit Forecast / Previous / Actual, then tap **Save Calendar**.
-
-The public calendar is:
-
-`https://goldhunter.site/calendar.html`
-
-The homepage also shows the next three events.
-
-## Important
-
-The included initial release dates are based on official U.S. agency schedules. Forecast values are entered manually. Actual and Previous fields are editable in the mobile admin. Official automatic value syncing is not enabled in this package.
+## Important limitation
+- Event dates are stored in KV/seed data. This trial does not automatically scrape every agency release calendar.
+- GDP, PCE, FOMC, Powell speeches, Retail Sales, Jobless Claims and ISM connectors are not automated in this trial; they remain listed with official source links and blank Actual/Previous until their connectors are added.

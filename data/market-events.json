@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cpi-2026-07",
+    "name": "U.S. CPI",
+    "datetime": "2026-07-14T20:30:00+08:00",
+    "forecast": "",
+    "previous": "",
+    "actual": "",
+    "sourceName": "U.S. Bureau of Labor Statistics",
+    "sourceUrl": "https://www.bls.gov/schedule/news_release/cpi.htm",
+    "impact": "high",
+    "notes": "Consumer Price Index for June 2026"
+  },
+  {
+    "id": "ppi-2026-07",
+    "name": "U.S. PPI",
+    "datetime": "2026-07-15T20:30:00+08:00",
+    "forecast": "",
+    "previous": "",
+    "actual": "",
+    "sourceName": "U.S. Bureau of Labor Statistics",
+    "sourceUrl": "https://www.bls.gov/schedule/",
+    "impact": "high",
+    "notes": "Producer Price Index for June 2026"
+  },
+  {
+    "id": "fomc-2026-07",
+    "name": "FOMC Rate Decision",
+    "datetime": "2026-07-30T02:00:00+08:00",
+    "forecast": "",
+    "previous": "",
+    "actual": "",
+    "sourceName": "Federal Reserve",
+    "sourceUrl": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "impact": "high",
+    "notes": "July 28–29 FOMC meeting statement"
+  },
+  {
+    "id": "pce-2026-07",
+    "name": "U.S. PCE Price Index",
+    "datetime": "2026-07-30T20:30:00+08:00",
+    "forecast": "",
+    "previous": "",
+    "actual": "",
+    "sourceName": "U.S. Bureau of Economic Analysis",
+    "sourceUrl": "https://www.bea.gov/data/personal-consumption-expenditures-price-index",
+    "impact": "high",
+    "notes": "Personal Income and Outlays release"
+  },
+  {
+    "id": "nfp-2026-08",
+    "name": "U.S. Nonfarm Payrolls",
+    "datetime": "2026-08-07T20:30:00+08:00",
+    "forecast": "",
+    "previous": "",
+    "actual": "",
+    "sourceName": "U.S. Bureau of Labor Statistics",
+    "sourceUrl": "https://www.bls.gov/schedule/news_release/empsit.htm",
+    "impact": "high",
+    "notes": "Employment Situation for July 2026"
+  }
+]
