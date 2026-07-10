@@ -837,3 +837,18 @@ body.gallery-browser-active{overflow:hidden}
 @media(max-width:800px){.session-strip{height:38px}.session-strip-inner{padding:0 8px;gap:7px;overflow:visible}.session-live{font-size:7px;padding:3px 5px;flex:0 0 auto}.session-strip-items{gap:12px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;padding:0 2px}.session-strip-items::-webkit-scrollbar{display:none}.session-strip-item{font-size:8px;flex:0 0 auto;scroll-snap-align:start}.session-strip-item b{font-size:8px}.session-strip-item em{font-size:7px}.session-strip-item span{font-size:8px}.session-calendar-link{display:none}.market-tools-layout{grid-template-columns:1fr}.market-calendar-card,.market-sessions-card{padding:13px;border-radius:17px}.market-event-row{grid-template-columns:1fr;padding:10px}.market-values{grid-template-columns:repeat(3,1fr)}.market-session-grid{grid-template-columns:repeat(2,1fr)}.calendar-page{padding:82px 12px 50px}.calendar-item{grid-template-columns:1fr;gap:12px;padding:14px}.calendar-values{grid-template-columns:repeat(3,1fr)}.market-card-head h3{font-size:16px}.market-card-head a{font-size:9px}}
 /* GH News Engine trial */
 .event-zh{font-size:12px!important;color:#9d978c!important;margin:.15rem 0 .35rem!important}.impact-badge{display:inline-flex;color:#e7bc53;font-size:11px;letter-spacing:1px;margin-bottom:5px}.calendar-copy details{margin:10px 0}.calendar-copy summary{cursor:pointer;color:#e6c765;font-size:13px}.calendar-copy details p{margin:7px 0 0;color:#b8b0a0;font-size:13px;line-height:1.5}.calendar-copy a{color:#d8b74e;font-size:12px}
+
+
+/* Release history — compact, mobile friendly */
+.release-history{margin-top:10px;border-top:1px solid rgba(255,255,255,.07);padding-top:9px}
+.release-history>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:#e2c361;font-size:11px;font-weight:700}
+.release-history>summary::-webkit-details-marker{display:none}
+.release-history>summary::after{content:'＋';font-size:12px;color:#8f8878}
+.release-history[open]>summary::after{content:'−'}
+.history-scroll{margin-top:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid rgba(255,255,255,.06);border-radius:12px;background:rgba(0,0,0,.25)}
+.history-scroll table{width:100%;min-width:440px;border-collapse:collapse;font-size:10px;font-variant-numeric:tabular-nums}
+.history-scroll th,.history-scroll td{padding:8px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap}
+.history-scroll th{color:#827d73;font-size:8px;letter-spacing:.08em;text-transform:uppercase;background:rgba(255,255,255,.025)}
+.history-scroll td{color:#ddd7ca}.history-scroll td:nth-child(n+2){color:#f0df9f}
+.history-scroll tr:last-child td{border-bottom:0}
+@media(max-width:800px){.release-history{margin-top:8px}.history-scroll table{min-width:390px}.history-scroll th,.history-scroll td{padding:7px 8px}.calendar-copy{min-width:0}}
