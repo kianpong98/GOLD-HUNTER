@@ -1,7 +1,7 @@
 (()=>{
   const EVENTS_API='/api/market-events';
   const SNAPSHOT_API='/api/market-snapshot';
-  const ETF_DATA='/assets/data/spdr-gld-holdings.json';
+  const ETF_DATA='/assets/data/spdr-gld-holdings.json?v=2';
   const sessions=[
     {name:'Sydney',short:'SYD',tz:'Australia/Sydney',open:8,close:17},
     {name:'Tokyo',short:'TKY',tz:'Asia/Tokyo',open:8,close:17},
@@ -88,6 +88,6 @@
   setupEtfToggle();
   setInterval(renderSessions,1000);
   setInterval(updateCountdowns,1000);
-  setInterval(loadSnapshot,3000);
+  setInterval(loadSnapshot,2000);
   setInterval(loadEvents,300000);
 })();
