@@ -41,7 +41,7 @@ jobs:
           def key_for(e):
               typ=text(e.get('type')).lower()
               if typ=='fed_speech':
-                  stamp=text(e.get('datetime'))
+                  stamp=text(e.get('datetime'))[:16]+'|'+text(e.get('name')).lower()
               else:
                   stamp=text(e.get('releasePeriod')) or text(e.get('datetime'))[:10]
               return typ, stamp
@@ -54,6 +54,9 @@ jobs:
               # Start with the more complete row, then fill all blanks from the other row.
               primary, secondary=(a,b) if score(a)>=score(b) else (b,a)
               out=deepcopy(primary)
+              typ, stamp = key_for(out)
+              safe = ''.join(ch if ch.isalnum() else '_' for ch in stamp).strip('_')
+              out['id'] = f'{typ}_{safe}'
               for k,v in secondary.items():
                   if k not in out or text(out.get(k)) in ('','—','-','null','None'):
                       out[k]=v
@@ -88,7 +91,13 @@ jobs:
                   duplicate_keys.append(k)
                   by_key[k]=merge(by_key[k],e)
 
-          clean=[by_key[k] for k in order]
+          clean=[]
+          for k in order:
+              row=by_key[k]
+              typ, stamp=k
+              safe=''.join(ch if ch.isalnum() else '_' for ch in stamp).strip('_')
+              row['id']=f'{typ}_{safe}'
+              clean.append(row)
           payload={'events':clean}
           json.dump(payload,open('clean-events.json','w',encoding='utf-8'),ensure_ascii=False,separators=(',',':'))
           print(f'Input events: {len(events)}')
@@ -132,7 +141,7 @@ jobs:
           seen=set(); dup=[]
           for e in events:
               typ=str(e.get('type','')).strip().lower()
-              stamp=str(e.get('datetime','')) if typ=='fed_speech' else str(e.get('releasePeriod') or e.get('datetime',''))[:10]
+              stamp=(str(e.get('datetime',''))[:16]+'|'+str(e.get('name','')).lower()) if typ=='fed_speech' else str(e.get('releasePeriod') or e.get('datetime',''))[:10]
               k=(typ,stamp)
               if k in seen: dup.append(k)
               seen.add(k)
