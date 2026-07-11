@@ -172,24 +172,44 @@ function normalizedReleaseDate(value){
   if(Number.isFinite(ms))return new Date(ms).toISOString().slice(0,10);
   return String(value||'').trim().slice(0,10);
 }
-function eventKey(e){
+function canonicalEventId(e){
   const type=canonicalType(e);
+  const period=String(e?.releasePeriod||'').trim();
   const date=normalizedReleaseDate(e?.datetime);
   const minute=(()=>{const ms=Date.parse(String(e?.datetime||''));return Number.isFinite(ms)?new Date(ms).toISOString().slice(0,16):String(e?.datetime||'').trim().slice(0,16)})();
-  // Numeric macro releases appear only once per type per release date. Using the
-  // date instead of releasePeriod also removes stale duplicates with a wrong period.
-  if(AUTO_TYPES.has(type)||type==='fomc_minutes')return `${type}|${date}`;
-  // Fed speeches can legitimately occur more than once per day.
-  return `${type}|${minute}|${String(e?.name||'').trim().toLowerCase()}`;
+  // One numeric macro release is identified by metric + official release period.
+  // This remains stable even if a schedule source changes the release date/time.
+  if(AUTO_TYPES.has(type)||type==='fomc_minutes')return `${type}_${(period||date).replace(/[^0-9A-Za-z]+/g,'_').replace(/^_|_$/g,'')}`;
+  // Multiple Fed speeches may happen on the same day, so keep minute + title.
+  const title=String(e?.name||'event').trim().toLowerCase().replace(/[^0-9a-z]+/g,'_').replace(/^_|_$/g,'');
+  return `${type}_${minute.replace(/[^0-9A-Za-z]+/g,'_')}_${title}`;
+}
+function eventKey(e){return canonicalEventId(e);}
+function historyKey(row){return `${String(row?.period||'').trim()}|${String(row?.dateTime||row?.datetime||'').trim().slice(0,16)}`;}
+function mergeHistoryRows(...lists){
+  const byKey=new Map();
+  for(const list of lists){
+    for(const row of Array.isArray(list)?list:[]){
+      if(!row||!row.period)continue;
+      const key=historyKey(row);
+      const old=byKey.get(key)||{};
+      byKey.set(key,{...row,actual:row.actual||old.actual||'',forecast:row.forecast||old.forecast||'',previous:row.previous||old.previous||'',archivedAt:row.archivedAt||old.archivedAt||''});
+    }
+  }
+  return [...byKey.values()].sort((a,b)=>String(b.period).localeCompare(String(a.period))).slice(0,100);
 }
 function dedupeEvents(input){
   const out=new Map();
-  for(const e of Array.isArray(input)?input:[]){
-    const key=eventKey(e);if(!key||key==='|')continue;
+  for(const raw of Array.isArray(input)?input:[]){
+    const e={...raw,type:canonicalType(raw)};
+    const key=eventKey(e);if(!key)continue;
+    e.id=key;
     const old=out.get(key);
     if(!old){out.set(key,e);continue;}
-    // Keep one row only and preserve user-managed lifecycle fields.
-    out.set(key,{...old,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,releaseHistory:[...(old.releaseHistory||[]),...(e.releaseHistory||[])],releaseForecasts:{...(e.releaseForecasts||{}),...(old.releaseForecasts||{})},archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''});
+    // Keep the most complete schedule row while preserving all user-managed fields.
+    const preferred=(String(e.datetime||'').length>=String(old.datetime||'').length)?e:old;
+    const other=preferred===e?old:e;
+    out.set(key,{...other,...preferred,id:key,type:canonicalType(preferred),forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,releaseHistory:mergeHistoryRows(old.releaseHistory,e.releaseHistory),releaseForecasts:{...(e.releaseForecasts||{}),...(old.releaseForecasts||{})},archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''});
   }
   return [...out.values()].sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
 }
