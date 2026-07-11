@@ -348,10 +348,6 @@ export async function onRequestPost({request,env}){
   if(!env.GH_MARKET_DATA)return json({error:'GH_MARKET_DATA KV binding is not configured in Cloudflare.'},503,{'cache-control':'no-store'});
   let body;try{body=await request.json();}catch{return json({error:'Invalid request.'},400);}
   const events=sanitizeEvents(body?.events); if(!events.length)return json({error:'No valid 4-star or 5-star events.'},400);
-  const missingPrevious = events.filter(e=>!AUTO_TYPES.has(e.type) && !e.previous).map(e=>e.name);
-  if(missingPrevious.length){
-    return json({error:`Previous is required for events without an automatic official connector: ${missingPrevious.join(', ')}`},400);
-  }
   events.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
   await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(events));
   return json({ok:true,count:events.length,events,updatedAt:new Date().toISOString()},200,{'cache-control':'no-store'});
