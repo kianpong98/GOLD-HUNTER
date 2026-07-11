@@ -152,7 +152,7 @@ async function readStored(env,request){
   const byTypePeriod=new Map(stored.map(e=>[`${e.type||''}|${e.releasePeriod||''}`,e]));
   const merged=base.map(e=>{
     const old=byId.get(String(e.id||''))||byTypePeriod.get(`${e.type||''}|${e.releasePeriod||''}`);
-    return old?{...e,forecast:old.forecast||'',lastRelease:old.lastRelease||null,archivedPeriod:old.archivedPeriod||'',archivedAt:old.archivedAt||''}:e;
+    return old?{...e,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''}:e;
   });
   // Preserve manually maintained official Fed speech events not yet present in the generated schedule.
   for(const e of stored){if(e.type==='fed_speech'&&!merged.some(x=>x.id===e.id))merged.push(e);}
@@ -337,8 +337,8 @@ export async function onRequestGet({request,env}){
     let actual=exactCurrentRelease?(m.actual||''):'';
     let previous='';
     if(eventOnly) previous='Not applicable';
-    else if(exactCurrentRelease) previous=m.previous||rawHistory.find(r=>r&&r.period!==e.releasePeriod&&r.actual)?.actual||'';
-    else previous=(m?.actual||rawHistory.find(r=>r&&r.actual)?.actual||'');
+    else if(exactCurrentRelease) previous=m.previous||rawHistory.find(r=>r&&r.period!==e.releasePeriod&&r.actual)?.actual||e.lastRelease?.actual||e.previous||'';
+    else previous=(m?.actual||rawHistory.find(r=>r&&r.actual)?.actual||e.lastRelease?.actual||e.previous||'');
 
     // At Malaysia midnight on the day after release, archive the complete released row once.
     // Forecast is then cleared, so Admin only needs to enter the next release forecast.
@@ -354,7 +354,7 @@ export async function onRequestGet({request,env}){
     // Once archived, the released row lives in Last Release rather than the live values.
     const archivedThisPeriod=e.archivedPeriod&&e.archivedPeriod===e.releasePeriod;
     if(archivedThisPeriod){actual='';previous=e.lastRelease?.actual||previous;}
-    if(!previous) previous=eventOnly?'Not applicable':'Previous awaiting official sync';
+    if(!previous) previous=eventOnly?'Not applicable':'—';
 
     const history=[];
     if(e.lastRelease?.actual)history.push({...e.lastRelease,lastRelease:true});
