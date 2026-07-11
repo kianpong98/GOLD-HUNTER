@@ -127,9 +127,26 @@ const headers={
 const json=(data,status=200,extra={})=>new Response(JSON.stringify(data),{status,headers:{...headers,...extra}});
 const clean=(v,max=500)=>typeof v==='string'?v.trim().slice(0,max):'';
 function authorized(request,env){const supplied=request.headers.get('x-admin-pin')||'';return Boolean(env.ADMIN_PIN&&supplied&&supplied===env.ADMIN_PIN);}
+function eventKey(e){
+  const type=String(e?.type||'').trim().toLowerCase();
+  const period=String(e?.releasePeriod||'').trim();
+  const minute=String(e?.datetime||'').trim().slice(0,16);
+  return period?`${type}|${period}`:`${type}|${minute}`;
+}
+function dedupeEvents(input){
+  const out=new Map();
+  for(const e of Array.isArray(input)?input:[]){
+    const key=eventKey(e);if(!key||key==='|')continue;
+    const old=out.get(key);
+    if(!old){out.set(key,e);continue;}
+    // Keep one row only and preserve user-managed lifecycle fields.
+    out.set(key,{...old,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''});
+  }
+  return [...out.values()].sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
+}
 function sanitizeEvents(input){
   if(!Array.isArray(input)) return [];
-  return input.slice(0,100).map((e,i)=>({
+  return dedupeEvents(input.slice(0,150).map((e,i)=>({
     id:clean(e?.id,80)||`event-${Date.now()}-${i}`,
     type:clean(e?.type,60), releasePeriod:clean(e?.releasePeriod,10), name:clean(e?.name,120), nameZh:clean(e?.nameZh,120),
     datetime:clean(e?.datetime,50), forecast:clean(e?.forecast,80), previous:clean(e?.previous,80), actual:clean(e?.actual,80),
@@ -137,7 +154,7 @@ function sanitizeEvents(input){
     archivedPeriod:clean(e?.archivedPeriod,20), archivedAt:clean(e?.archivedAt,50),
     sourceName:clean(e?.sourceName,160), sourceUrl:/^https:\/\//i.test(clean(e?.sourceUrl,500))?clean(e?.sourceUrl,500):'',
     impact:Math.min(5,Math.max(4,Number(e?.impact)||4)), whyZh:clean(e?.whyZh,180)
-  })).filter(e=>e.name&&e.datetime&&e.impact>=4&&!REMOVED_TYPES.has(e.type));
+  })).filter(e=>e.name&&e.datetime&&e.impact>=4&&!REMOVED_TYPES.has(e.type)));
 }
 async function readStored(env,request){
   const generated=await fetchStaticEvents(request);
@@ -146,7 +163,7 @@ async function readStored(env,request){
     const value=await env.GH_MARKET_DATA.get(EVENTS_KEY,{type:'json'});
     if(Array.isArray(value))stored=value;
   }
-  const base=generated.length?generated:(stored.length?stored:SEED_EVENTS);
+  const base=dedupeEvents(generated.length?generated:(stored.length?stored:SEED_EVENTS));
   if(!generated.length||!stored.length)return base;
   const byId=new Map(stored.map(e=>[String(e.id||''),e]));
   const byTypePeriod=new Map(stored.map(e=>[`${e.type||''}|${e.releasePeriod||''}`,e]));
@@ -156,7 +173,7 @@ async function readStored(env,request){
   });
   // Preserve manually maintained official Fed speech events not yet present in the generated schedule.
   for(const e of stored){if(e.type==='fed_speech'&&!merged.some(x=>x.id===e.id))merged.push(e);}
-  return merged.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
+  return dedupeEvents(merged);
 }
 function monthKey(row){return `${row.year}-${String(Number(row.period?.replace('M',''))).padStart(2,'0')}`;}
 function newestRows(series){return (series?.data||[]).filter(r=>/^M\d\d$/.test(r.period)).sort((a,b)=>monthKey(b).localeCompare(monthKey(a)));}
@@ -323,7 +340,7 @@ export async function onRequestGet({request,env}){
   const now=Date.now();
   let archiveChanged=false;
   const persistable=stored.map(e=>({...e}));
-  const events=persistable.filter(e=>Number(e.impact)>=4&&!REMOVED_TYPES.has(e.type)).map(e=>{
+  const events=dedupeEvents(persistable.filter(e=>Number(e.impact)>=4&&!REMOVED_TYPES.has(e.type))).map(e=>{
     const m=official.metrics?.[e.type];
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;

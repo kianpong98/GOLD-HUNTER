@@ -252,19 +252,42 @@ def main() -> None:
                 preserved.extend(seed_data)
         except Exception:
             pass
-    generated_keys = {(str(e.get("type", "")), str(e.get("releasePeriod", ""))) for e in events}
+    def canonical_key(event: dict[str, Any]) -> str:
+        event_type = str(event.get("type", "")).strip().lower()
+        period = str(event.get("releasePeriod", "")).strip()
+        dt = str(event.get("datetime", "")).strip()
+        # A release period uniquely identifies CPI/PPI/NFP/PCE/GDP/FOMC rows.
+        # Event-only rows without a period use their exact minute.
+        return f"{event_type}|{period}" if period else f"{event_type}|{dt[:16]}"
+
+    generated_keys = {canonical_key(e) for e in events}
     for old in preserved:
-        key = (str(old.get("type", "")), str(old.get("releasePeriod", "")))
+        key = canonical_key(old)
         if key not in generated_keys and new_time_ok(old.get("datetime")):
             events.append(old)
+            generated_keys.add(key)
 
+    # Prefer freshly generated official rows over legacy/seed duplicates, while
+    # retaining Admin forecast and archived Last Release data from the old row.
     dedup: dict[str, dict[str, Any]] = {}
     for event in events:
-        key = (event.get("type", ""), event.get("releasePeriod", ""), event.get("datetime", "")[:10])
+        key = canonical_key(event)
+        prior = dedup.get(key)
         old = existing_by_key.get((str(event.get("type", "")), str(event.get("releasePeriod", ""))))
-        if old:
-            event["forecast"] = str(old.get("forecast") or "")
-        dedup["|".join(key)] = event
+        merged = dict(event)
+        carry = old or prior
+        if carry:
+            merged["forecast"] = str(carry.get("forecast") or merged.get("forecast") or "")
+            for field in ("lastRelease", "archivedPeriod", "archivedAt"):
+                if carry.get(field):
+                    merged[field] = carry[field]
+        # Keep the first official/generated row; only enrich it with carried state.
+        if key not in dedup:
+            dedup[key] = merged
+        else:
+            for field in ("forecast", "lastRelease", "archivedPeriod", "archivedAt"):
+                if not dedup[key].get(field) and merged.get(field):
+                    dedup[key][field] = merged[field]
     result = sorted(dedup.values(), key=lambda e: e.get("datetime", ""))
     if not result:
         raise SystemExit(f"No events generated; preserving old file. Errors: {errors}")
