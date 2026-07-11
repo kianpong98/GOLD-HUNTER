@@ -1,0 +1,156 @@
+name: Watch official Actual releases
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub cron's minimum interval is five minutes. A release-window run
+    # stays alive and checks every two minutes, while the normal 5-minute
+    # official-data workflow remains as an independent fallback.
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: actual-release-watcher-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    env:
+      SITE_URL: https://goldhunter.site
+      ADMIN_PIN: ${{ secrets.ADMIN_PIN }}
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependency
+        run: pip install requests
+
+      - name: Detect active release window
+        id: window
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone, timedelta
+          from pathlib import Path
+
+          events=json.loads(Path('data/generated-events.json').read_text(encoding='utf-8'))
+          now=datetime.now(timezone.utc)
+          active=[]
+          for event in events:
+              if not event.get('releasePeriod'):
+                  continue
+              try:
+                  release=datetime.fromisoformat(event['datetime']).astimezone(timezone.utc)
+              except Exception:
+                  continue
+              # Start shortly before release and continue for 90 minutes.
+              if release-timedelta(minutes=10) <= now <= release+timedelta(minutes=90):
+                  active.append({
+                      'type':event.get('type',''),
+                      'period':event.get('releasePeriod',''),
+                      'datetime':event.get('datetime',''),
+                      'name':event.get('name',''),
+                  })
+          Path('/tmp/active-events.json').write_text(json.dumps(active),encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as out:
+              out.write(f"active={'true' if active else 'false'}\n")
+          print('Active releases:', json.dumps(active, ensure_ascii=False))
+          PY
+
+      - name: Watch and force-refresh official connectors
+        if: steps.window.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${ADMIN_PIN:-}" ]; then
+            echo "ADMIN_PIN repository secret is missing."
+            exit 1
+          fi
+
+          found_all=false
+          for attempt in $(seq 1 10); do
+            echo "Actual watcher attempt ${attempt}/10"
+
+            # Refresh the static official-data cache too. Partial upstream
+            # failures preserve every previously successful metric.
+            python scripts/update_official_data.py || true
+
+            # Authenticated force=1 bypasses the normal 15/30-minute runtime
+            # connector cache and writes fresh successful results into KV.
+            curl --fail --silent --show-error \
+              -H "x-admin-pin: ${ADMIN_PIN}" \
+              "${SITE_URL}/api/data-engine?force=1&watch=$(date +%s)" \
+              -o /tmp/live-engine.json || true
+
+            if python - <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          active=json.loads(Path('/tmp/active-events.json').read_text())
+          try:
+              payload=json.loads(Path('/tmp/live-engine.json').read_text())
+          except Exception:
+              print('Live engine response unavailable; retrying.')
+              sys.exit(1)
+          rows=payload.get('events') or []
+          index={(str(r.get('type')),str(r.get('releasePeriod'))):r for r in rows}
+          missing=[]
+          for event in active:
+              row=index.get((str(event['type']),str(event['period'])))
+              if not row or not str(row.get('actual') or '').strip():
+                  missing.append(f"{event['type']}:{event['period']}")
+          if missing:
+              print('Waiting for matching Actual:', ', '.join(missing))
+              sys.exit(1)
+          print('All matching Actual values are live.')
+          PY
+            then
+              found_all=true
+              break
+            fi
+
+            if [ "$attempt" -lt 10 ]; then sleep 120; fi
+          done
+
+          # A source may publish later than the 20-minute burst. Do not mark
+          # the workflow failed: the next scheduled watcher and the existing
+          # 5-minute official-data workflow will continue automatically.
+          if [ "$found_all" != true ]; then
+            echo "Actual is not available yet; automatic retries will continue."
+          fi
+
+      - name: Commit refreshed official cache
+        if: steps.window.outputs.active == 'true'
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/official-data.json
+          if git diff --cached --quiet; then
+            echo "No new official Actual yet."
+            exit 0
+          fi
+          git commit -m "Refresh official Actual release data"
+          BRANCH="${GITHUB_REF_NAME}"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 2))
+          done
+          exit 1
