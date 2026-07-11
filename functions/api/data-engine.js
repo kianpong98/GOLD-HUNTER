@@ -189,7 +189,7 @@ function dedupeEvents(input){
     const old=out.get(key);
     if(!old){out.set(key,e);continue;}
     // Keep one row only and preserve user-managed lifecycle fields.
-    out.set(key,{...old,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,releaseForecasts:{...(e.releaseForecasts||{}),...(old.releaseForecasts||{})},archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''});
+    out.set(key,{...old,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,releaseHistory:[...(old.releaseHistory||[]),...(e.releaseHistory||[])],releaseForecasts:{...(e.releaseForecasts||{}),...(old.releaseForecasts||{})},archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''});
   }
   return [...out.values()].sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
 }
@@ -200,6 +200,7 @@ function sanitizeEvents(input){
     type:canonicalType({type:clean(e?.type,60)}), releasePeriod:clean(e?.releasePeriod,10), name:clean(e?.name,120), nameZh:clean(e?.nameZh,120),
     datetime:clean(e?.datetime,50), forecast:clean(e?.forecast,80), previous:clean(e?.previous,80), actual:clean(e?.actual,80),
     lastRelease:(e?.lastRelease&&typeof e.lastRelease==='object')?{period:clean(e.lastRelease.period,20),dateTime:clean(e.lastRelease.dateTime,50),actual:clean(e.lastRelease.actual,80),forecast:clean(e.lastRelease.forecast,80),previous:clean(e.lastRelease.previous,80)}:null,
+    releaseHistory:Array.isArray(e?.releaseHistory)?e.releaseHistory.slice(0,100).map(r=>({period:clean(r?.period,20),dateTime:clean(r?.dateTime,50),actual:clean(r?.actual,80),forecast:clean(r?.forecast,80),previous:clean(r?.previous,80),archivedAt:clean(r?.archivedAt,50)})).filter(r=>r.period&&r.actual):[],
     releaseForecasts:(e?.releaseForecasts&&typeof e.releaseForecasts==='object')?Object.fromEntries(Object.entries(e.releaseForecasts).slice(0,20).map(([k,v])=>[clean(k,20),clean(v,80)]).filter(([k])=>k)): {},
     archivedPeriod:clean(e?.archivedPeriod,20), archivedAt:clean(e?.archivedAt,50),
     sourceName:clean(e?.sourceName,160), sourceUrl:/^https:\/\//i.test(clean(e?.sourceUrl,500))?clean(e?.sourceUrl,500):'',
@@ -219,7 +220,7 @@ async function readStored(env,request){
   const byTypePeriod=new Map(stored.map(e=>[`${e.type||''}|${e.releasePeriod||''}`,e]));
   const merged=base.map(e=>{
     const old=byId.get(String(e.id||''))||byTypePeriod.get(`${e.type||''}|${e.releasePeriod||''}`);
-    return old?{...e,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,releaseForecasts:{...(e.releaseForecasts||{}),...(old.releaseForecasts||{})},archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''}:e;
+    return old?{...e,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,releaseHistory:[...(old.releaseHistory||[]),...(e.releaseHistory||[])],releaseForecasts:{...(e.releaseForecasts||{}),...(old.releaseForecasts||{})},archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''}:e;
   });
   // Preserve manually maintained official Fed speech events not yet present in the generated schedule.
   for(const e of stored){if(e.type==='fed_speech'&&!merged.some(x=>x.id===e.id))merged.push(e);}
@@ -438,9 +439,15 @@ export async function onRequestGet({request,env}){
     // Forecast is then cleared, so Admin only needs to enter the next release forecast.
     const archiveAt=nextMalaysiaDayStart(e.datetime);
     if(!eventOnly&&exactCurrentRelease&&Number.isFinite(archiveAt)&&now>=archiveAt&&e.archivedPeriod!==e.releasePeriod){
-      e.lastRelease={period:e.releasePeriod||'',dateTime:e.datetime||'',actual,forecast:e.forecast||'',previous:previous||''};
+      const archivedAt=new Date().toISOString();
+      const archivedRow={period:e.releasePeriod||'',dateTime:e.datetime||'',actual,forecast:e.forecast||'',previous:previous||'',archivedAt};
+      e.lastRelease=archivedRow;
+      const existing=Array.isArray(e.releaseHistory)?e.releaseHistory:[];
+      const byPeriod=new Map(existing.map(row=>[String(row?.period||''),row]));
+      byPeriod.set(String(archivedRow.period),archivedRow);
+      e.releaseHistory=[...byPeriod.values()].filter(row=>row?.period&&row?.actual).sort((a,b)=>String(b.period).localeCompare(String(a.period))).slice(0,100);
       e.archivedPeriod=e.releasePeriod||'';
-      e.archivedAt=new Date().toISOString();
+      e.archivedAt=archivedAt;
       e.forecast='';
       archiveChanged=true;
     }
@@ -452,12 +459,17 @@ export async function onRequestGet({request,env}){
 
     const history=[];
     const forecastMap=e.releaseForecasts||{};
-    if(e.lastRelease?.actual)history.push({...e.lastRelease,forecast:forecastMap[e.lastRelease.period]||e.lastRelease.forecast||'',lastRelease:true});
-    for(const row of rawHistory){
-      if(history.length>=10)break;
-      if(e.lastRelease?.period&&row.period===e.lastRelease.period)continue;
-      history.push({...row,forecast:forecastMap[row.period]||row.forecast||''});
-    }
+    const seenHistory=new Set();
+    const addHistory=(row,lastRelease=false)=>{
+      if(!row?.period||!row?.actual||seenHistory.has(String(row.period)))return;
+      seenHistory.add(String(row.period));
+      history.push({...row,forecast:forecastMap[row.period]||row.forecast||'',lastRelease});
+    };
+    for(const row of (e.releaseHistory||[]))addHistory(row,Boolean(e.lastRelease?.period===row.period));
+    if(e.lastRelease?.actual)addHistory(e.lastRelease,true);
+    for(const row of rawHistory)addHistory(row,false);
+    history.sort((a,b)=>String(b.period).localeCompare(String(a.period)));
+    history.splice(10);
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
     const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
@@ -466,7 +478,7 @@ export async function onRequestGet({request,env}){
   if(archiveChanged&&env.GH_MARKET_DATA){
     await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(sanitizeEvents(persistable)));
   }
-  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:!bls.error,fred:!fred.error,fredErrors:fred.errors||{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
+  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:!bls.error,fred:!fred.error,dol:Boolean(official.metrics?.jobless_claims?.actual),bea:Boolean(official.metrics?.gdp?.actual&&official.metrics?.pce?.actual&&official.metrics?.core_pce?.actual),federalReserve:Boolean(official.metrics?.fomc?.actual),fredErrors:fred.errors||{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
 }
 export async function onRequestPost({request,env}){
   if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
