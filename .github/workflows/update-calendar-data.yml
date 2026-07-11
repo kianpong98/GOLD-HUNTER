@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: gh-repository-writer-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
