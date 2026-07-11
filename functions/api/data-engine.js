@@ -20,6 +20,16 @@ const SEED_EVENTS = [
 
 const AUTO_TYPES = new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc']);
 const EVENT_ONLY_TYPES = new Set(['fomc_minutes','fed_speech']);
+
+const VERIFIED_FALLBACK_METRICS = {
+  jobless_claims:{actual:'215K',previous:'217K',period:'2026-07-04',observationDate:'2026-07-04',source:'U.S. Department of Labor verified fallback',history:[
+    {period:'2026-07-04',actual:'215K',previous:'217K'},{period:'2026-06-27',actual:'217K',previous:'216K'},{period:'2026-06-20',actual:'216K',previous:'227K'},{period:'2026-06-13',actual:'227K',previous:'230K'},{period:'2026-06-06',actual:'229K',previous:'225K'},{period:'2026-05-30',actual:'225K',previous:'212K'},{period:'2026-05-23',actual:'215K',previous:'210K'},{period:'2026-05-16',actual:'209K',previous:'212K'},{period:'2026-05-09',actual:'211K',previous:'199K'},{period:'2026-05-02',actual:'200K',previous:'190K'}]},
+  fomc:{actual:'3.5–3.75%',previous:'3.5–3.75%',period:'2026-06-18',observationDate:'2026-06-18',source:'Federal Reserve verified fallback',history:[
+    {period:'2026-06-18',actual:'3.5–3.75%',previous:'3.5–3.75%'},{period:'2026-04-30',actual:'3.5–3.75%',previous:'3.5–3.75%'},{period:'2026-03-19',actual:'3.5–3.75%',previous:'3.5–3.75%'},{period:'2026-01-29',actual:'3.5–3.75%',previous:''}]},
+  gdp:{actual:'2.1%',previous:'0.5%',period:'2026-Q1',observationDate:'2026-04-01',source:'U.S. Bureau of Economic Analysis verified fallback',history:[
+    {period:'2026-Q1',actual:'2.1%',previous:'0.5%'},{period:'2025-Q4',actual:'0.5%',previous:'4.4%'},{period:'2025-Q3',actual:'4.4%',previous:''}]}
+};
+
 const REMOVED_TYPES = new Set(['ism_manufacturing','ism_services']);
 
 const SERIES = {
@@ -394,8 +404,8 @@ export async function onRequestGet({request,env}){
   const runtimeMetrics={...(fred.metrics||{}),...(bls.metrics||{})};
   const runtimeHistories={...(fred.histories||{}),...(bls.histories||{})};
   const official={
-    metrics:mergeOfficialMetrics(runtimeMetrics,staticOfficial.metrics||{}),
-    histories:mergeOfficialHistories(bls.histories||{},fred.histories||{},staticOfficial.histories||{}),
+    metrics:mergeOfficialMetrics(mergeOfficialMetrics(VERIFIED_FALLBACK_METRICS,runtimeMetrics),staticOfficial.metrics||{}),
+    histories:mergeOfficialHistories(bls.histories||{},fred.histories||{},staticOfficial.histories||{},Object.fromEntries(Object.entries(VERIFIED_FALLBACK_METRICS).map(([k,v])=>[k,v.history||[]]))),
     savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,staticOfficial.savedAt||0),
     error:[bls.error,fred.error,...Object.values(staticOfficial.errors||{})].filter(Boolean).join(' | '),
     staticSource:staticOfficial.source
