@@ -36,10 +36,17 @@ const SERIES = {
 
 const FRED_CACHE_KEY='official-fred-cache-v2';
 const FRED_CONFIG={
+  // FRED fallback coverage for every numeric news type. BLS remains primary where available.
+  cpi_yoy:{series:'CPIAUCSL',mode:'yoy',suffix:'%',decimals:1},
+  core_cpi_yoy:{series:'CPILFESL',mode:'yoy',suffix:'%',decimals:1},
+  ppi_yoy:{series:'WPSFD4',mode:'yoy',suffix:'%',decimals:1},
+  core_ppi_yoy:{series:'WPSFD49116',mode:'yoy',suffix:'%',decimals:1},
+  nfp:{series:'PAYEMS',mode:'change',suffix:'K',decimals:0},
+  unemployment:{series:'UNRATE',mode:'level',suffix:'%',decimals:1},
   avg_hourly_earnings:{series:'CES0500000003',mode:'mom',suffix:'%',decimals:1},
   retail_sales:{series:'RSAFS',mode:'mom',suffix:'%',decimals:1},
   jobless_claims:{series:'ICSA',mode:'level',suffix:'K',decimals:0,scale:0.001},
-  gdp:{series:'A191RL1Q225SBEA',mode:'level',suffix:'%',decimals:1},
+  gdp:{series:'A191RL1Q225SBEA',mode:'level',suffix:'%',decimals:1,period:'quarter'},
   pce:{series:'PCEPI',mode:'yoy',suffix:'%',decimals:1},
   core_pce:{series:'PCEPILFE',mode:'yoy',suffix:'%',decimals:1},
   fomc:{series:'DFEDTARU',lowerSeries:'DFEDTARL',mode:'range',suffix:'%',decimals:2}
@@ -67,11 +74,13 @@ function fredMetric(rows,cfg,lowerRows){
   const r=rows;
   let calc;
   if(cfg.mode==='level')calc=i=>r[i]?r[i].value:null;
+  if(cfg.mode==='change')calc=i=>r[i+1]?r[i].value-r[i+1].value:null;
   if(cfg.mode==='mom')calc=i=>r[i+1]&&r[i+1].value!==0?((r[i].value/r[i+1].value)-1)*100:null;
   if(cfg.mode==='yoy')calc=i=>{const target=new Date(r[i].date+'T00:00:00Z');target.setUTCFullYear(target.getUTCFullYear()-1);const key=target.toISOString().slice(0,7);const base=r.find(x=>x.date.slice(0,7)===key);return base&&base.value!==0?((r[i].value/base.value)-1)*100:null};
   const a=calc?.(0),pr=calc?.(1);
   const history=[];for(let i=0;i<r.length&&history.length<10;i++){const v=calc?.(i);if(v===null||v===undefined)continue;const pv=calc?.(i+1);history.push({period:r[i].date,actual:fredFmt(v,cfg),previous:fredFmt(pv,cfg)})}
-  return {actual:fredFmt(a,cfg),previous:fredFmt(pr,cfg),period:cfg.mode==='level'?r[0].date:fredPeriod(r[0].date),history};
+  const period=cfg.period==='quarter'?`${r[0].date.slice(0,4)}-Q${Math.floor((Number(r[0].date.slice(5,7))-1)/3)+1}`:(cfg.mode==='level'?r[0].date:fredPeriod(r[0].date));
+  return {actual:fredFmt(a,cfg),previous:fredFmt(pr,cfg),period,observationDate:r[0].date,history};
 }
 async function fetchFred(env){
   let stale=null;
@@ -81,8 +90,13 @@ async function fetchFred(env){
   await Promise.all(Object.entries(FRED_CONFIG).map(async([type,cfg])=>{
     try{const [rows,lower]=await Promise.all([fetchFredCsv(cfg.series),cfg.lowerSeries?fetchFredCsv(cfg.lowerSeries):Promise.resolve(null)]);const m=fredMetric(rows,cfg,lower);metrics[type]=m;histories[type]=m?.history||[];}catch(e){errors[type]=e.message;}
   }));
-  const result={savedAt:Date.now(),metrics,histories,errors,source:'FRED / official source series'};
-  if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(FRED_CACHE_KEY,JSON.stringify(result),{expirationTtl:604800});
+  // Never let a partial refresh erase a previously working metric.
+  const mergedMetrics={...(stale?.metrics||{})};
+  const mergedHistories={...(stale?.histories||{})};
+  for(const [type,metric] of Object.entries(metrics)){if(metric?.actual)mergedMetrics[type]=metric;}
+  for(const [type,rows] of Object.entries(histories)){if(Array.isArray(rows)&&rows.length)mergedHistories[type]=rows;}
+  const result={savedAt:Date.now(),metrics:mergedMetrics,histories:mergedHistories,errors,source:'FRED / official source series',partial:Boolean(Object.keys(errors).length)};
+  if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(FRED_CACHE_KEY,JSON.stringify(result),{expirationTtl:2592000});
   return result;
   }catch(error){if(stale)return {...stale,stale:true,refreshError:error.message};throw error;}
 }
@@ -282,8 +296,13 @@ async function fetchBls(env){
   const payload=await r.json();
   const byId=new Map((payload?.Results?.series||[]).map(s=>[s.seriesID,s]));
   const metrics={}; const histories={}; for(const [key,cfg] of Object.entries(SERIES)){ metrics[key]=computeMetric(byId.get(cfg.id),cfg); histories[key]=computeHistory(byId.get(cfg.id),cfg,10); }
-  const result={savedAt:Date.now(),metrics,histories,source:'BLS Public Data API'};
-  if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(BLS_CACHE_KEY,JSON.stringify(result),{expirationTtl:604800});
+  // Preserve each previous successful metric if BLS omits one series temporarily.
+  const mergedMetrics={...(stale?.metrics||{})};
+  const mergedHistories={...(stale?.histories||{})};
+  for(const [type,metric] of Object.entries(metrics)){if(metric?.actual)mergedMetrics[type]=metric;}
+  for(const [type,rows] of Object.entries(histories)){if(Array.isArray(rows)&&rows.length)mergedHistories[type]=rows;}
+  const result={savedAt:Date.now(),metrics:mergedMetrics,histories:mergedHistories,source:'BLS Public Data API'};
+  if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(BLS_CACHE_KEY,JSON.stringify(result),{expirationTtl:2592000});
   return result;
   }catch(error){if(stale)return {...stale,stale:true,refreshError:error.message};throw error;}
 }
@@ -353,8 +372,8 @@ export async function onRequestGet({request,env}){
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null};
   try{bls=await fetchBls(env);}catch(e){bls.error=e.message;}
   try{fred=await fetchFred(env);}catch(e){fred.error=e.message;}
-  const runtimeMetrics={...(bls.metrics||{}),...(fred.metrics||{})};
-  const runtimeHistories={...(bls.histories||{}),...(fred.histories||{})};
+  const runtimeMetrics={...(fred.metrics||{}),...(bls.metrics||{})};
+  const runtimeHistories={...(fred.histories||{}),...(bls.histories||{})};
   const official={
     metrics:mergeOfficialMetrics(runtimeMetrics,staticOfficial.metrics||{}),
     histories:{...(staticOfficial.histories||{}),...runtimeHistories},
@@ -369,7 +388,7 @@ export async function onRequestGet({request,env}){
     const m=official.metrics?.[e.type];
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
-    const exactCurrentRelease=Boolean(released&&e.releasePeriod&&m&&m.period===e.releasePeriod&&m.actual);
+    const exactCurrentRelease=Boolean(released&&e.releasePeriod&&m&&m.actual&&(m.period===e.releasePeriod||(e.type==='fomc'&&String(m.period||'').slice(0,10)===String(e.releasePeriod||'').slice(0,10))));
     const eventOnly=EVENT_ONLY_TYPES.has(e.type);
     const rawHistory=(official.histories?.[e.type]||[]).slice(0,10);
 
