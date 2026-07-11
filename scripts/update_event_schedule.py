@@ -252,13 +252,35 @@ def main() -> None:
                 preserved.extend(seed_data)
         except Exception:
             pass
+    type_aliases = {
+        "cpi": "cpi_yoy", "consumer_price_index": "cpi_yoy", "headline_cpi": "cpi_yoy",
+        "core_cpi": "core_cpi_yoy", "core_consumer_price_index": "core_cpi_yoy",
+        "ppi": "ppi_yoy", "producer_price_index": "ppi_yoy", "headline_ppi": "ppi_yoy",
+        "core_ppi": "core_ppi_yoy", "core_producer_price_index": "core_ppi_yoy",
+        "nonfarm_payrolls": "nfp", "non_farm_payrolls": "nfp", "payrolls": "nfp",
+        "unemployment_rate": "unemployment", "average_hourly_earnings": "avg_hourly_earnings",
+        "retail_sales_mom": "retail_sales", "initial_jobless_claims": "jobless_claims",
+        "gross_domestic_product": "gdp", "pce_price_index": "pce", "core_pce_price_index": "core_pce",
+        "fed_rate_decision": "fomc", "fomc_rate_decision": "fomc", "interest_rate_decision": "fomc",
+        "fomc_meeting_minutes": "fomc_minutes",
+    }
+    auto_types = {"cpi_yoy","core_cpi_yoy","ppi_yoy","core_ppi_yoy","nfp","unemployment","avg_hourly_earnings","retail_sales","jobless_claims","gdp","pce","core_pce","fomc"}
+    def canonical_type(event: dict[str, Any]) -> str:
+        raw = str(event.get("type", "")).strip().lower().replace("-", " ")
+        raw = "_".join(raw.split())
+        return type_aliases.get(raw, raw)
     def canonical_key(event: dict[str, Any]) -> str:
-        event_type = str(event.get("type", "")).strip().lower()
-        period = str(event.get("releasePeriod", "")).strip()
+        event_type = canonical_type(event)
         dt = str(event.get("datetime", "")).strip()
-        # A release period uniquely identifies CPI/PPI/NFP/PCE/GDP/FOMC rows.
-        # Event-only rows without a period use their exact minute.
-        return f"{event_type}|{period}" if period else f"{event_type}|{dt[:16]}"
+        try:
+            parsed = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+            day = parsed.astimezone(ET).date().isoformat()
+            minute = parsed.astimezone(ET).strftime("%Y-%m-%dT%H:%M")
+        except Exception:
+            day, minute = dt[:10], dt[:16]
+        if event_type in auto_types or event_type == "fomc_minutes":
+            return f"{event_type}|{day}"
+        return f"{event_type}|{minute}|{str(event.get('name','')).strip().lower()}"
 
     generated_keys = {canonical_key(e) for e in events}
     for old in preserved:
@@ -271,6 +293,8 @@ def main() -> None:
     # retaining Admin forecast and archived Last Release data from the old row.
     dedup: dict[str, dict[str, Any]] = {}
     for event in events:
+        event = dict(event)
+        event["type"] = canonical_type(event)
         key = canonical_key(event)
         prior = dedup.get(key)
         old = existing_by_key.get((str(event.get("type", "")), str(event.get("releasePeriod", ""))))

@@ -127,11 +127,36 @@ const headers={
 const json=(data,status=200,extra={})=>new Response(JSON.stringify(data),{status,headers:{...headers,...extra}});
 const clean=(v,max=500)=>typeof v==='string'?v.trim().slice(0,max):'';
 function authorized(request,env){const supplied=request.headers.get('x-admin-pin')||'';return Boolean(env.ADMIN_PIN&&supplied&&supplied===env.ADMIN_PIN);}
+const TYPE_ALIASES={
+  cpi:'cpi_yoy',consumer_price_index:'cpi_yoy',headline_cpi:'cpi_yoy',
+  core_cpi:'core_cpi_yoy',core_consumer_price_index:'core_cpi_yoy',
+  ppi:'ppi_yoy',producer_price_index:'ppi_yoy',headline_ppi:'ppi_yoy',
+  core_ppi:'core_ppi_yoy',core_producer_price_index:'core_ppi_yoy',
+  nonfarm_payrolls:'nfp',non_farm_payrolls:'nfp',payrolls:'nfp',
+  unemployment_rate:'unemployment',average_hourly_earnings:'avg_hourly_earnings',
+  retail_sales_mom:'retail_sales',initial_jobless_claims:'jobless_claims',
+  gross_domestic_product:'gdp',pce_price_index:'pce',core_pce_price_index:'core_pce',
+  fed_rate_decision:'fomc',fomc_rate_decision:'fomc',interest_rate_decision:'fomc',
+  fomc_meeting_minutes:'fomc_minutes'
+};
+function canonicalType(e){
+  const raw=String(e?.type||'').trim().toLowerCase().replace(/[\s-]+/g,'_');
+  return TYPE_ALIASES[raw]||raw;
+}
+function normalizedReleaseDate(value){
+  const ms=Date.parse(String(value||''));
+  if(Number.isFinite(ms))return new Date(ms).toISOString().slice(0,10);
+  return String(value||'').trim().slice(0,10);
+}
 function eventKey(e){
-  const type=String(e?.type||'').trim().toLowerCase();
-  const period=String(e?.releasePeriod||'').trim();
-  const minute=String(e?.datetime||'').trim().slice(0,16);
-  return period?`${type}|${period}`:`${type}|${minute}`;
+  const type=canonicalType(e);
+  const date=normalizedReleaseDate(e?.datetime);
+  const minute=(()=>{const ms=Date.parse(String(e?.datetime||''));return Number.isFinite(ms)?new Date(ms).toISOString().slice(0,16):String(e?.datetime||'').trim().slice(0,16)})();
+  // Numeric macro releases appear only once per type per release date. Using the
+  // date instead of releasePeriod also removes stale duplicates with a wrong period.
+  if(AUTO_TYPES.has(type)||type==='fomc_minutes')return `${type}|${date}`;
+  // Fed speeches can legitimately occur more than once per day.
+  return `${type}|${minute}|${String(e?.name||'').trim().toLowerCase()}`;
 }
 function dedupeEvents(input){
   const out=new Map();
@@ -148,7 +173,7 @@ function sanitizeEvents(input){
   if(!Array.isArray(input)) return [];
   return dedupeEvents(input.slice(0,150).map((e,i)=>({
     id:clean(e?.id,80)||`event-${Date.now()}-${i}`,
-    type:clean(e?.type,60), releasePeriod:clean(e?.releasePeriod,10), name:clean(e?.name,120), nameZh:clean(e?.nameZh,120),
+    type:canonicalType({type:clean(e?.type,60)}), releasePeriod:clean(e?.releasePeriod,10), name:clean(e?.name,120), nameZh:clean(e?.nameZh,120),
     datetime:clean(e?.datetime,50), forecast:clean(e?.forecast,80), previous:clean(e?.previous,80), actual:clean(e?.actual,80),
     lastRelease:(e?.lastRelease&&typeof e.lastRelease==='object')?{period:clean(e.lastRelease.period,20),dateTime:clean(e.lastRelease.dateTime,50),actual:clean(e.lastRelease.actual,80),forecast:clean(e.lastRelease.forecast,80),previous:clean(e.lastRelease.previous,80)}:null,
     archivedPeriod:clean(e?.archivedPeriod,20), archivedAt:clean(e?.archivedAt,50),
