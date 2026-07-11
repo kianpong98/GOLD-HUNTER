@@ -104,9 +104,9 @@ function fredMetric(rows,cfg,lowerRows){
   const period=cfg.period==='quarter'?`${r[0].date.slice(0,4)}-Q${Math.floor((Number(r[0].date.slice(5,7))-1)/3)+1}`:(cfg.mode==='level'?r[0].date:fredPeriod(r[0].date));
   return {actual:fredFmt(a,cfg),previous:fredFmt(pr,cfg),period,observationDate:r[0].date,history};
 }
-async function fetchFred(env){
+async function fetchFred(env,forceRefresh=false){
   let stale=null;
-  if(env.GH_MARKET_DATA){stale=await env.GH_MARKET_DATA.get(FRED_CACHE_KEY,{type:'json'});if(stale&&Date.now()-stale.savedAt<15*60*1000)return stale;}
+  if(env.GH_MARKET_DATA){stale=await env.GH_MARKET_DATA.get(FRED_CACHE_KEY,{type:'json'});if(!forceRefresh&&stale&&Date.now()-stale.savedAt<15*60*1000)return stale;}
   try{
   const metrics={},histories={},errors={};
   await Promise.all(Object.entries(FRED_CONFIG).map(async([type,cfg])=>{
@@ -329,9 +329,9 @@ function computeHistory(series,config,limit=10){
   }
   return out;
 }
-async function fetchBls(env){
+async function fetchBls(env,forceRefresh=false){
   let stale=null;
-  if(env.GH_MARKET_DATA){stale=await env.GH_MARKET_DATA.get(BLS_CACHE_KEY,{type:'json'});if(stale&&Date.now()-stale.savedAt<30*60*1000)return stale;}
+  if(env.GH_MARKET_DATA){stale=await env.GH_MARKET_DATA.get(BLS_CACHE_KEY,{type:'json'});if(!forceRefresh&&stale&&Date.now()-stale.savedAt<30*60*1000)return stale;}
   try{
   const year=new Date().getUTCFullYear();
   const ids=Object.values(SERIES).map(x=>x.id);
@@ -429,11 +429,15 @@ export async function onRequestOptions(){return new Response(null,{status:204,he
 export async function onRequestGet({request,env}){
   const wantsAdmin=request.headers.has('x-admin-pin');
   if(wantsAdmin&&!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
+  const requestUrl=new URL(request.url);
+  // Only an authenticated watcher/admin request may bypass the normal connector cache.
+  // This prevents public visitors from repeatedly hammering official upstream sources.
+  const forceRefresh=Boolean(wantsAdmin&&requestUrl.searchParams.get('force')==='1');
   const stored=(await readStored(env,request)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
   const staticOfficial=await fetchStaticOfficial(request);
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null};
-  try{bls=await fetchBls(env);}catch(e){bls.error=e.message;}
-  try{fred=await fetchFred(env);}catch(e){fred.error=e.message;}
+  try{bls=await fetchBls(env,forceRefresh);}catch(e){bls.error=e.message;}
+  try{fred=await fetchFred(env,forceRefresh);}catch(e){fred.error=e.message;}
   const runtimeMetrics={...(fred.metrics||{}),...(bls.metrics||{})};
   const runtimeHistories={...(fred.histories||{}),...(bls.histories||{})};
   const official={
