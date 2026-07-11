@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: spdr-etf-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   update:
@@ -51,25 +51,10 @@ jobs:
           print('ETF records:',len(rows),'latest:',rows[-1])
           PY
 
-      - name: Commit updated data
-        shell: bash
+      - name: Commit updated holdings
         run: |
-          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/data/spdr-gld-holdings.json
-          if git diff --cached --quiet; then
-            echo "No changes"
-            exit 0
-          fi
-          git commit -m "Update SPDR GLD holdings 
-          BRANCH="${{ github.ref_name }}"
-          for attempt in 1 2 3; do
-            git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH" || (git rebase --abort || true)
-            if git push origin "HEAD:$BRANCH"; then
-              exit 0
-            fi
-            sleep 3
-          done
-          exit 1
+          git diff --cached --quiet || git commit -m "Update SPDR GLD holdings"
+          git push origin HEAD:${{ github.ref_name }}
