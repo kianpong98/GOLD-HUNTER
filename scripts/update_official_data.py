@@ -345,7 +345,7 @@ def main() -> None:
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(payload["coverage"], indent=2))
     if missing:
-        raise SystemExit(f"Official-data sync incomplete: {', '.join(missing)}")
+        print(f"WARNING: official-data sync partial; preserved available/previous metrics. Missing: {', '.join(missing)}")
 
 
 if __name__ == "__main__":

@@ -333,9 +333,9 @@ export async function onRequestGet({request,env}){
     }else if(released){
       actual=e.actual||'';
     }
-    if(!previous) previous=EVENT_ONLY_TYPES.has(e.type)?'Not applicable':'Awaiting verified official sync';
+    if(!previous) previous=EVENT_ONLY_TYPES.has(e.type)?'Not applicable':(!released?'Official data pending':'Official release sync pending');
     const history=(official.histories?.[e.type]||[]).slice(0,10).map(row=>({...row,forecast:row.period===e.releasePeriod?(e.forecast||''):''}));
-    const previousStatus = previous && !/unavailable|Syncing|Manual/i.test(previous) ? 'ready' : (AUTO_TYPES.has(e.type) ? 'awaiting_official' : 'manual_required');
+    const previousStatus = previous && !/unavailable|Syncing|Manual|pending/i.test(previous) ? 'ready' : (AUTO_TYPES.has(e.type) ? 'awaiting_official' : 'manual_required');
     const eventOnly=EVENT_ONLY_TYPES.has(e.type);
     const status=!released?'Scheduled':released?'Released':'Scheduled';
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
