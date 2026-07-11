@@ -2,35 +2,45 @@ name: Run release lifecycle
 
 on:
   schedule:
-    # 03:05 Malaysia time (UTC+8) every day
-    - cron: '5 19 * * *'
+    # Malaysia 03:05, 03:35 and 04:05 (UTC+8). Multiple passes protect against temporary API failures.
+    - cron: '5,35 19 * * *'
+    - cron: '5 20 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-lifecycle
+  group: release-lifecycle-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   archive-releases:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - name: Trigger lifecycle engine
+        shell: bash
         run: |
           set -euo pipefail
           URL="https://goldhunter.site/api/market-events?lifecycle=$(date +%s)"
+          : > response.json
           for attempt in 1 2 3 4 5; do
             code=$(curl -L --silent --show-error --output response.json --write-out "%{http_code}" \
-              --retry 2 --retry-delay 5 --max-time 120 "$URL" || true)
+              --retry 2 --retry-all-errors --retry-delay 5 --connect-timeout 20 --max-time 150 "$URL" || true)
             if [ "$code" = "200" ]; then
-              echo "Release lifecycle completed."
-              cat response.json | head -c 1000
+              python - <<'PY'
+          import json
+          data=json.load(open('response.json',encoding='utf-8'))
+          events=data.get('events',[])
+          print(f"Lifecycle completed. Events: {len(events)}")
+          print(f"KV configured: {data.get('kvConfigured')}")
+          print(f"Official updated: {data.get('officialUpdatedAt')}")
+          PY
               exit 0
             fi
-            echo "Attempt $attempt failed with HTTP $code"
-            sleep $((attempt * 10))
+            echo "Attempt $attempt failed with HTTP ${code:-none}"
+            sleep $((attempt * 12))
           done
           echo "Lifecycle endpoint did not return HTTP 200."
           cat response.json || true
