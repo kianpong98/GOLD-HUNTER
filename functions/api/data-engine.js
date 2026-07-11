@@ -65,8 +65,20 @@ function csvRows(text){
   const lines=String(text||'').trim().split(/\r?\n/);if(lines.length<2)return[];
   return lines.slice(1).map(line=>{const i=line.indexOf(',');if(i<0)return null;const date=line.slice(0,i).trim();const raw=line.slice(i+1).trim();const value=Number(raw);return date&&Number.isFinite(value)?{date,value}:null}).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date));
 }
+async function fetchWithRetry(url,options={},attempts=3){
+  let lastError;
+  for(let attempt=1;attempt<=attempts;attempt++){
+    try{
+      const response=await fetch(url,options);
+      if(response.ok||response.status<500)return response;
+      lastError=new Error(`HTTP ${response.status}`);
+    }catch(error){lastError=error;}
+    if(attempt<attempts)await new Promise(resolve=>setTimeout(resolve,attempt*350));
+  }
+  throw lastError||new Error('Request failed');
+}
 async function fetchFredCsv(series){
-  const r=await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`,{headers:{accept:'text/csv','user-agent':'GoldHunter/1.0'}});
+  const r=await fetchWithRetry(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`,{headers:{accept:'text/csv','user-agent':'GoldHunter/1.0'}},3);
   if(!r.ok)throw new Error(`FRED ${series} ${r.status}`);
   const rows=csvRows(await r.text());if(!rows.length)throw new Error(`FRED ${series} empty`);return rows;
 }
@@ -323,7 +335,7 @@ async function fetchBls(env){
   try{
   const year=new Date().getUTCFullYear();
   const ids=Object.values(SERIES).map(x=>x.id);
-  const r=await fetch('https://api.bls.gov/publicAPI/v2/timeseries/data/',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({seriesid:ids,startyear:String(year-2),endyear:String(year)})});
+  const r=await fetchWithRetry('https://api.bls.gov/publicAPI/v2/timeseries/data/',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({seriesid:ids,startyear:String(year-2),endyear:String(year)})},3);
   if(!r.ok)throw new Error(`BLS ${r.status}`);
   const payload=await r.json();
   const byId=new Map((payload?.Results?.series||[]).map(s=>[s.seriesID,s]));
@@ -498,7 +510,26 @@ export async function onRequestGet({request,env}){
   if(archiveChanged&&env.GH_MARKET_DATA){
     await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(sanitizeEvents(persistable)));
   }
-  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:!bls.error,fred:!fred.error,dol:Boolean(official.metrics?.jobless_claims?.actual),bea:Boolean(official.metrics?.gdp?.actual&&official.metrics?.pce?.actual&&official.metrics?.core_pce?.actual),federalReserve:Boolean(official.metrics?.fomc?.actual),fredErrors:fred.errors||{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
+  const hasMetrics=source=>Boolean(Object.keys(source?.metrics||{}).length);
+  const sourceStatus=(source,liveOk)=>liveOk?'live':hasMetrics(source)?'cached':'offline';
+  const blsLive=!bls.error&&!bls.refreshError&&!bls.stale;
+  const fredHasErrors=Boolean(fred.error||fred.refreshError||fred.stale||Object.keys(fred.errors||{}).length);
+  const fredLive=!fredHasErrors;
+  const connectorSources={
+    staticCache:{status:Object.keys(staticOfficial.metrics||{}).length?'cached':'offline',lastSuccess:staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null},
+    bls:{status:sourceStatus(bls,blsLive),lastSuccess:bls.savedAt?new Date(bls.savedAt).toISOString():null},
+    fred:{status:sourceStatus(fred,fredLive),lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
+    dol:{status:official.metrics?.jobless_claims?.actual?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
+    bea:{status:(official.metrics?.gdp?.actual&&official.metrics?.pce?.actual&&official.metrics?.core_pce?.actual)?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
+    federalReserve:{status:official.metrics?.fomc?.actual?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
+    cloudflareKv:{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?new Date().toISOString():null}
+  };
+  const degraded=[];
+  if(connectorSources.bls.status!=='live')degraded.push('BLS');
+  if(connectorSources.fred.status!=='live')degraded.push('FRED');
+  if(connectorSources.bea.status==='offline')degraded.push('BEA');
+  const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
+  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
 }
 export async function onRequestPost({request,env}){
   if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
