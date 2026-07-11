@@ -245,9 +245,29 @@ async function fetchBls(env){
 }
 
 function parseComparable(value){
-  const match=String(value||'').replace(/,/g,'').match(/-?\d+(?:\.\d+)?/);
-  return match?Number(match[0]):null;
+  const matches=String(value||'').replace(/,/g,'').match(/-?\d+(?:\.\d+)?/g);
+  if(!matches?.length)return null;
+  const nums=matches.map(Number).filter(Number.isFinite);
+  if(!nums.length)return null;
+  // Interest-rate forecasts/actuals may be ranges such as 5.25–5.50%.
+  return nums.length>=2?(nums[0]+nums[1])/2:nums[0];
 }
+function metricFreshness(metric){
+  const raw=metric?.observationDate||metric?.period||'';
+  if(/^\d{4}-Q[1-4]$/.test(raw))return Number(raw.slice(0,4))*10+Number(raw.slice(-1))*3;
+  const parsed=Date.parse(String(raw).length===7?`${raw}-01`:raw);
+  return Number.isFinite(parsed)?parsed:0;
+}
+function chooseMetric(runtimeMetric,staticMetric){
+  if(!runtimeMetric)return staticMetric;
+  if(!staticMetric)return runtimeMetric;
+  return metricFreshness(runtimeMetric)>=metricFreshness(staticMetric)?runtimeMetric:staticMetric;
+}
+function mergeOfficialMetrics(runtimeMetrics,staticMetrics){
+  const keys=new Set([...Object.keys(runtimeMetrics||{}),...Object.keys(staticMetrics||{})]);
+  return Object.fromEntries([...keys].map(key=>[key,chooseMetric(runtimeMetrics?.[key],staticMetrics?.[key])]));
+}
+
 function classifyResult(type,actual,forecast){
   const a=parseComparable(actual),f=parseComparable(forecast);
   if(a===null||f===null)return {comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:''};
@@ -266,7 +286,10 @@ function classifyResult(type,actual,forecast){
   }
   const suffix=String(actual||'').includes('%')?'%':String(actual||'').toUpperCase().includes('K')?'K':'';
   const difference=`${delta>0?'+':''}${delta.toFixed(Math.abs(delta)<1?2:1).replace(/\.0$/,'')}${suffix}`;
-  return {comparison,comparisonZh,difference,goldImpact,goldImpactZh};
+  const surprisePct=Math.abs(f)>0?Math.abs(delta/f)*100:null;
+  const surpriseStrength=surprisePct===null?'':surprisePct>=20?'High surprise':surprisePct>=7.5?'Moderate surprise':'Small surprise';
+  const surpriseStrengthZh=surpriseStrength==='High surprise'?'明显偏离预期':surpriseStrength==='Moderate surprise'?'中度偏离预期':surpriseStrength==='Small surprise'?'轻微偏离预期':'';
+  return {comparison,comparisonZh,difference,goldImpact,goldImpactZh,surpriseStrength,surpriseStrengthZh};
 }
 export async function onRequestOptions(){return new Response(null,{status:204,headers});}
 export async function onRequestGet({request,env}){
@@ -282,8 +305,10 @@ export async function onRequestGet({request,env}){
   const runtimeMetrics={...(bls.metrics||{}),...(fred.metrics||{})};
   const runtimeHistories={...(bls.histories||{}),...(fred.histories||{})};
   const official={
-    metrics:{...runtimeMetrics,...(staticOfficial.metrics||{})},
-    histories:{...runtimeHistories,...(staticOfficial.histories||{})},
+    // Select the newest observation per metric. Runtime data can publish before the
+    // next GitHub commit/Cloudflare deployment, while static cache remains fallback.
+    metrics:mergeOfficialMetrics(runtimeMetrics,staticOfficial.metrics||{}),
+    histories:{...(staticOfficial.histories||{}),...runtimeHistories},
     savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,staticOfficial.savedAt||0),
     error:[bls.error,fred.error,...Object.values(staticOfficial.errors||{})].filter(Boolean).join(' | '),
     staticSource:staticOfficial.source
@@ -313,7 +338,7 @@ export async function onRequestGet({request,env}){
     const previousStatus = previous && !/unavailable|Syncing|Manual/i.test(previous) ? 'ready' : (AUTO_TYPES.has(e.type) ? 'awaiting_official' : 'manual_required');
     const eventOnly=EVENT_ONLY_TYPES.has(e.type);
     const status=!released?'Scheduled':released?'Released':'Scheduled';
-    const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:''}:classifyResult(e.type,actual,e.forecast);
+    const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
   return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:!bls.error,fred:!fred.error,fredErrors:fred.errors||{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
