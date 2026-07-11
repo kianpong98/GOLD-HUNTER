@@ -9,11 +9,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: gh-repository-writer-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   update-manifests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Generate manifests
         run: |
@@ -24,5 +30,14 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add assets/results/manifest.json assets/reviews/manifest.json
-          git diff --cached --quiet || git commit -m "Update gallery manifests"
-          git push
+          if git diff --cached --quiet; then echo "No gallery changes."; exit 0; fi
+          git commit -m "Update gallery manifests"
+          BRANCH="${GITHUB_REF_NAME:-main}"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 2))
+          done
+          exit 1

@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: gh-data-writers-${{ github.ref }}
+  group: gh-repository-writer-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -56,10 +56,11 @@ jobs:
           fi
           git commit -m "Update official release schedule"
           BRANCH="${GITHUB_REF_NAME}"
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             git fetch origin "$BRANCH"
             git rebase "origin/$BRANCH"
             if git push origin "HEAD:$BRANCH"; then exit 0; fi
-            sleep 3
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 2))
           done
           exit 1

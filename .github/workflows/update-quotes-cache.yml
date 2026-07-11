@@ -17,8 +17,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: quote-cache-${{ github.ref }}
-  cancel-in-progress: true
+  group: gh-repository-writer-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   update:
@@ -38,5 +38,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/quotes.json
-          git diff --cached --quiet || git commit -m "Update quote cache"
-          git push origin HEAD:${{ github.ref_name }}
+          if git diff --cached --quiet; then echo "No quote changes."; exit 0; fi
+          git commit -m "Update quote cache"
+          BRANCH="${GITHUB_REF_NAME}"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 2))
+          done
+          exit 1
