@@ -133,6 +133,8 @@ function sanitizeEvents(input){
     id:clean(e?.id,80)||`event-${Date.now()}-${i}`,
     type:clean(e?.type,60), releasePeriod:clean(e?.releasePeriod,10), name:clean(e?.name,120), nameZh:clean(e?.nameZh,120),
     datetime:clean(e?.datetime,50), forecast:clean(e?.forecast,80), previous:clean(e?.previous,80), actual:clean(e?.actual,80),
+    lastRelease:(e?.lastRelease&&typeof e.lastRelease==='object')?{period:clean(e.lastRelease.period,20),dateTime:clean(e.lastRelease.dateTime,50),actual:clean(e.lastRelease.actual,80),forecast:clean(e.lastRelease.forecast,80),previous:clean(e.lastRelease.previous,80)}:null,
+    archivedPeriod:clean(e?.archivedPeriod,20), archivedAt:clean(e?.archivedAt,50),
     sourceName:clean(e?.sourceName,160), sourceUrl:/^https:\/\//i.test(clean(e?.sourceUrl,500))?clean(e?.sourceUrl,500):'',
     impact:Math.min(5,Math.max(4,Number(e?.impact)||4)), whyZh:clean(e?.whyZh,180)
   })).filter(e=>e.name&&e.datetime&&e.impact>=4&&!REMOVED_TYPES.has(e.type));
@@ -150,7 +152,7 @@ async function readStored(env,request){
   const byTypePeriod=new Map(stored.map(e=>[`${e.type||''}|${e.releasePeriod||''}`,e]));
   const merged=base.map(e=>{
     const old=byId.get(String(e.id||''))||byTypePeriod.get(`${e.type||''}|${e.releasePeriod||''}`);
-    return old?{...e,forecast:old.forecast||'',previous:old.previous||e.previous||''}:e;
+    return old?{...e,forecast:old.forecast||'',lastRelease:old.lastRelease||null,archivedPeriod:old.archivedPeriod||'',archivedAt:old.archivedAt||''}:e;
   });
   // Preserve manually maintained official Fed speech events not yet present in the generated schedule.
   for(const e of stored){if(e.type==='fed_speech'&&!merged.some(x=>x.id===e.id))merged.push(e);}
@@ -268,6 +270,15 @@ function mergeOfficialMetrics(runtimeMetrics,staticMetrics){
   return Object.fromEntries([...keys].map(key=>[key,chooseMetric(runtimeMetrics?.[key],staticMetrics?.[key])]));
 }
 
+
+function nextMalaysiaDayStart(datetime){
+  const day=String(datetime||'').slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(day))return NaN;
+  const d=new Date(`${day}T00:00:00+08:00`);
+  d.setUTCDate(d.getUTCDate()+1);
+  return d.getTime();
+}
+
 function classifyResult(type,actual,forecast){
   const a=parseComparable(actual),f=parseComparable(forecast);
   if(a===null||f===null)return {comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:''};
@@ -298,15 +309,11 @@ export async function onRequestGet({request,env}){
   const stored=(await readStored(env,request)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
   const staticOfficial=await fetchStaticOfficial(request);
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null};
-  // Runtime sources remain as a fallback. The committed static cache is preferred
-  // because GitHub Actions verifies the complete official-data set before deploy.
   try{bls=await fetchBls(env);}catch(e){bls.error=e.message;}
   try{fred=await fetchFred(env);}catch(e){fred.error=e.message;}
   const runtimeMetrics={...(bls.metrics||{}),...(fred.metrics||{})};
   const runtimeHistories={...(bls.histories||{}),...(fred.histories||{})};
   const official={
-    // Select the newest observation per metric. Runtime data can publish before the
-    // next GitHub commit/Cloudflare deployment, while static cache remains fallback.
     metrics:mergeOfficialMetrics(runtimeMetrics,staticOfficial.metrics||{}),
     histories:{...(staticOfficial.histories||{}),...runtimeHistories},
     savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,staticOfficial.savedAt||0),
@@ -314,33 +321,56 @@ export async function onRequestGet({request,env}){
     staticSource:staticOfficial.source
   };
   const now=Date.now();
-  const events=stored.filter(e=>Number(e.impact)>=4&&!REMOVED_TYPES.has(e.type)).map(e=>{
+  let archiveChanged=false;
+  const persistable=stored.map(e=>({...e}));
+  const events=persistable.filter(e=>Number(e.impact)>=4&&!REMOVED_TYPES.has(e.type)).map(e=>{
     const m=official.metrics?.[e.type];
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
-    let actual='';
-    let previous=e.previous||'';
-    if(EVENT_ONLY_TYPES.has(e.type)) previous='Not applicable';
-    if(m){
-      if(released && e.releasePeriod && m.period===e.releasePeriod){
-        actual=m.actual||'';
-        previous=m.previous||e.previous||'';
-      }else{
-        // Before the release (or while the official source has not published the new period),
-        // the latest official reading is the Previous value and Actual stays blank.
-        previous=m.actual||m.previous||e.previous||'';
-      }
-    }else if(released){
-      actual=e.actual||'';
-    }
-    if(!previous) previous=EVENT_ONLY_TYPES.has(e.type)?'Not applicable':(!released?'Official data pending':'Official release sync pending');
-    const history=(official.histories?.[e.type]||[]).slice(0,10).map(row=>({...row,forecast:row.period===e.releasePeriod?(e.forecast||''):''}));
-    const previousStatus = previous && !/unavailable|Syncing|Manual|pending/i.test(previous) ? 'ready' : (AUTO_TYPES.has(e.type) ? 'awaiting_official' : 'manual_required');
+    const exactCurrentRelease=Boolean(released&&e.releasePeriod&&m&&m.period===e.releasePeriod&&m.actual);
     const eventOnly=EVENT_ONLY_TYPES.has(e.type);
-    const status=!released?'Scheduled':released?'Released':'Scheduled';
+    const rawHistory=(official.histories?.[e.type]||[]).slice(0,10);
+
+    // Before release, the newest published official Actual is the automatic Previous.
+    // On release day, only a metric whose period exactly matches releasePeriod may become Actual.
+    // An older official observation is never copied into the current Actual field.
+    let actual=exactCurrentRelease?(m.actual||''):'';
+    let previous='';
+    if(eventOnly) previous='Not applicable';
+    else if(exactCurrentRelease) previous=m.previous||rawHistory.find(r=>r&&r.period!==e.releasePeriod&&r.actual)?.actual||'';
+    else previous=(m?.actual||rawHistory.find(r=>r&&r.actual)?.actual||'');
+
+    // At Malaysia midnight on the day after release, archive the complete released row once.
+    // Forecast is then cleared, so Admin only needs to enter the next release forecast.
+    const archiveAt=nextMalaysiaDayStart(e.datetime);
+    if(!eventOnly&&exactCurrentRelease&&Number.isFinite(archiveAt)&&now>=archiveAt&&e.archivedPeriod!==e.releasePeriod){
+      e.lastRelease={period:e.releasePeriod||'',dateTime:e.datetime||'',actual,forecast:e.forecast||'',previous:previous||''};
+      e.archivedPeriod=e.releasePeriod||'';
+      e.archivedAt=new Date().toISOString();
+      e.forecast='';
+      archiveChanged=true;
+    }
+
+    // Once archived, the released row lives in Last Release rather than the live values.
+    const archivedThisPeriod=e.archivedPeriod&&e.archivedPeriod===e.releasePeriod;
+    if(archivedThisPeriod){actual='';previous=e.lastRelease?.actual||previous;}
+    if(!previous) previous=eventOnly?'Not applicable':'Previous awaiting official sync';
+
+    const history=[];
+    if(e.lastRelease?.actual)history.push({...e.lastRelease,lastRelease:true});
+    for(const row of rawHistory){
+      if(history.length>=10)break;
+      if(e.lastRelease?.period&&row.period===e.lastRelease.period)continue;
+      history.push({...row,forecast:''});
+    }
+    const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
+    const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
+  if(archiveChanged&&env.GH_MARKET_DATA){
+    await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(sanitizeEvents(persistable)));
+  }
   return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:!bls.error,fred:!fred.error,fredErrors:fred.errors||{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
 }
 export async function onRequestPost({request,env}){
