@@ -179,7 +179,7 @@ function dedupeEvents(input){
     const old=out.get(key);
     if(!old){out.set(key,e);continue;}
     // Keep one row only and preserve user-managed lifecycle fields.
-    out.set(key,{...old,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''});
+    out.set(key,{...old,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,releaseForecasts:{...(e.releaseForecasts||{}),...(old.releaseForecasts||{})},archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''});
   }
   return [...out.values()].sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
 }
@@ -190,6 +190,7 @@ function sanitizeEvents(input){
     type:canonicalType({type:clean(e?.type,60)}), releasePeriod:clean(e?.releasePeriod,10), name:clean(e?.name,120), nameZh:clean(e?.nameZh,120),
     datetime:clean(e?.datetime,50), forecast:clean(e?.forecast,80), previous:clean(e?.previous,80), actual:clean(e?.actual,80),
     lastRelease:(e?.lastRelease&&typeof e.lastRelease==='object')?{period:clean(e.lastRelease.period,20),dateTime:clean(e.lastRelease.dateTime,50),actual:clean(e.lastRelease.actual,80),forecast:clean(e.lastRelease.forecast,80),previous:clean(e.lastRelease.previous,80)}:null,
+    releaseForecasts:(e?.releaseForecasts&&typeof e.releaseForecasts==='object')?Object.fromEntries(Object.entries(e.releaseForecasts).slice(0,20).map(([k,v])=>[clean(k,20),clean(v,80)]).filter(([k])=>k)): {},
     archivedPeriod:clean(e?.archivedPeriod,20), archivedAt:clean(e?.archivedAt,50),
     sourceName:clean(e?.sourceName,160), sourceUrl:/^https:\/\//i.test(clean(e?.sourceUrl,500))?clean(e?.sourceUrl,500):'',
     impact:Math.min(5,Math.max(4,Number(e?.impact)||4)), whyZh:clean(e?.whyZh,180)
@@ -208,7 +209,7 @@ async function readStored(env,request){
   const byTypePeriod=new Map(stored.map(e=>[`${e.type||''}|${e.releasePeriod||''}`,e]));
   const merged=base.map(e=>{
     const old=byId.get(String(e.id||''))||byTypePeriod.get(`${e.type||''}|${e.releasePeriod||''}`);
-    return old?{...e,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''}:e;
+    return old?{...e,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,releaseForecasts:{...(e.releaseForecasts||{}),...(old.releaseForecasts||{})},archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''}:e;
   });
   // Preserve manually maintained official Fed speech events not yet present in the generated schedule.
   for(const e of stored){if(e.type==='fed_speech'&&!merged.some(x=>x.id===e.id))merged.push(e);}
@@ -331,6 +332,24 @@ function mergeOfficialMetrics(runtimeMetrics,staticMetrics){
   return Object.fromEntries([...keys].map(key=>[key,chooseMetric(runtimeMetrics?.[key],staticMetrics?.[key])]));
 }
 
+function mergeOfficialHistories(...sources){
+  const keys=new Set(sources.flatMap(src=>Object.keys(src||{})));
+  const out={};
+  for(const key of keys){
+    const rows=[]; const seen=new Set();
+    for(const src of sources){
+      for(const row of (src?.[key]||[])){
+        if(!row||!row.period||!row.actual)continue;
+        const k=String(row.period); if(seen.has(k))continue;
+        seen.add(k); rows.push({...row});
+      }
+    }
+    rows.sort((a,b)=>String(b.period).localeCompare(String(a.period)));
+    out[key]=rows.slice(0,10);
+  }
+  return out;
+}
+
 
 function nextMalaysiaDayStart(datetime){
   const day=String(datetime||'').slice(0,10);
@@ -376,7 +395,7 @@ export async function onRequestGet({request,env}){
   const runtimeHistories={...(fred.histories||{}),...(bls.histories||{})};
   const official={
     metrics:mergeOfficialMetrics(runtimeMetrics,staticOfficial.metrics||{}),
-    histories:{...(staticOfficial.histories||{}),...runtimeHistories},
+    histories:mergeOfficialHistories(bls.histories||{},fred.histories||{},staticOfficial.histories||{}),
     savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,staticOfficial.savedAt||0),
     error:[bls.error,fred.error,...Object.values(staticOfficial.errors||{})].filter(Boolean).join(' | '),
     staticSource:staticOfficial.source
@@ -400,6 +419,10 @@ export async function onRequestGet({request,env}){
     if(eventOnly) previous='Not applicable';
     else if(exactCurrentRelease) previous=m.previous||rawHistory.find(r=>r&&r.period!==e.releasePeriod&&r.actual)?.actual||e.lastRelease?.actual||e.previous||'';
     else previous=(m?.actual||rawHistory.find(r=>r&&r.actual)?.actual||e.lastRelease?.actual||e.previous||'');
+    if(!previous&&!eventOnly){
+      const anyMetric=Object.values(official.metrics||{}).find(x=>x&&x.actual&&x.period===e.releasePeriod);
+      previous=anyMetric?.previous||'';
+    }
 
     // At Malaysia midnight on the day after release, archive the complete released row once.
     // Forecast is then cleared, so Admin only needs to enter the next release forecast.
@@ -418,11 +441,12 @@ export async function onRequestGet({request,env}){
     if(!previous) previous=eventOnly?'Not applicable':'—';
 
     const history=[];
-    if(e.lastRelease?.actual)history.push({...e.lastRelease,lastRelease:true});
+    const forecastMap=e.releaseForecasts||{};
+    if(e.lastRelease?.actual)history.push({...e.lastRelease,forecast:forecastMap[e.lastRelease.period]||e.lastRelease.forecast||'',lastRelease:true});
     for(const row of rawHistory){
       if(history.length>=10)break;
       if(e.lastRelease?.period&&row.period===e.lastRelease.period)continue;
-      history.push({...row,forecast:''});
+      history.push({...row,forecast:forecastMap[row.period]||row.forecast||''});
     }
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
     const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
