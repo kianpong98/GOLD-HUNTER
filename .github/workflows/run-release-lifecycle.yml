@@ -1,0 +1,37 @@
+name: Run release lifecycle
+
+on:
+  schedule:
+    # 03:05 Malaysia time (UTC+8) every day
+    - cron: '5 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  archive-releases:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger lifecycle engine
+        run: |
+          set -euo pipefail
+          URL="https://goldhunter.site/api/market-events?lifecycle=$(date +%s)"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -L --silent --show-error --output response.json --write-out "%{http_code}" \
+              --retry 2 --retry-delay 5 --max-time 120 "$URL" || true)
+            if [ "$code" = "200" ]; then
+              echo "Release lifecycle completed."
+              cat response.json | head -c 1000
+              exit 0
+            fi
+            echo "Attempt $attempt failed with HTTP $code"
+            sleep $((attempt * 10))
+          done
+          echo "Lifecycle endpoint did not return HTTP 200."
+          cat response.json || true
+          exit 1
