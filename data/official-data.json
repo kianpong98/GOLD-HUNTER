@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 2,
+  "updatedAt": "2026-07-11T09:06:16.895409+00:00",
+  "metrics": {},
+  "errors": {
+    "fetch_bls": "Request failed: https://api.bls.gov/publicAPI/v2/timeseries/data/: HTTPSConnectionPool(host='api.bls.gov', port=443): Max retries exceeded with url: /publicAPI/v2/timeseries/data/ (Caused by NameResolutionError(\"HTTPSConnection(host='api.bls.gov', port=443): Failed to resolve 'api.bls.gov' ([Errno -3] Temporary failure in name resolution)\"))",
+    "retail_sales": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=RSAFS: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=RSAFS (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "gdp": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=A191RL1Q225SBEA: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=A191RL1Q225SBEA (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "jobless_claims": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=ICSA (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "pce": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPI: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=PCEPI (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "core_pce": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPILFE: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=PCEPILFE (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "fomc": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=DFEDTARU: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=DFEDTARU (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "missing": "cpi_yoy, core_cpi_yoy, ppi_yoy, core_ppi_yoy, nfp, unemployment, avg_hourly_earnings, retail_sales, jobless_claims, gdp, pce, core_pce, fomc"
+  },
+  "coverage": {
+    "cpi_yoy": false,
+    "core_cpi_yoy": false,
+    "ppi_yoy": false,
+    "core_ppi_yoy": false,
+    "nfp": false,
+    "unemployment": false,
+    "avg_hourly_earnings": false,
+    "retail_sales": false,
+    "jobless_claims": false,
+    "gdp": false,
+    "pce": false,
+    "core_pce": false,
+    "fomc": false
+  }
+}

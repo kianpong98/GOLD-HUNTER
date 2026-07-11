@@ -93,8 +93,9 @@
   gtag('config', 'G-RMTE7H8TP1');
 </script>
 <link href="style.css" rel="stylesheet">
-</link></head>
-<body>
+</link><meta name="gh-platform-version" content="3.1-unified-engines"/>
+</head>
+<body class="home-page">
 <div class="loader" id="loader">
 <img alt="Gold Hunter" src="assets/logo.png"/>
 <strong>Gold Hunter</strong>
@@ -108,8 +109,9 @@
 <div><b>Gold Hunter</b><small>Built for disciplined traders.</small></div>
 </a>
 <button aria-label="Open menu" class="menu-toggle" id="menuToggle">☰</button>
-<div class="nav-links" id="navLinks"><a href="#examples">Results</a><a href="#stories">Reviews</a><a href="#inside">Inside</a><a href="#framework">Membership</a><a href="#ecosystem">Partners</a><a class="nav-cta" href="https://wa.me/60133954958?text=Hi%20Gold%20Hunter,%20I%20would%20like%20to%20learn%20more%20about%20your%20membership." rel="noopener" target="_blank">Apply for Membership</a></div>
+<div class="nav-links" id="navLinks"><a href="#examples">Results</a><a href="#market-tools">Market Tools</a><a href="#stories">Reviews</a><a href="#inside">Inside</a><a href="#framework">Membership</a><a href="#ecosystem">Partners</a><a class="nav-cta" href="https://wa.me/60133954958?text=Hi%20Gold%20Hunter,%20I%20would%20like%20to%20learn%20more%20about%20your%20membership." rel="noopener" target="_blank">Apply for Membership</a></div>
 </nav>
+<div class="session-strip" aria-label="Live market sessions"><div class="session-strip-inner"><span class="session-live">LIVE</span><div id="sessionStripItems" class="session-strip-items"><span class="session-strip-item closed"><b>Market Sessions</b><em>Loading</em></span></div><a class="session-calendar-link" href="calendar.html">Calendar →</a></div></div>
 <main>
 <section class="hero" id="home">
 <div class="hero-copy reveal">
@@ -151,7 +153,35 @@
 </div>
 <div class="featured-mosaic reveal" id="resultsGallery"></div>
 <button class="gallery-more reveal" data-gallery="results">Show More Results →</button>
-</section><section class="section conversion-reviews" id="stories">
+</section>
+<section class="section market-tools-section" id="market-tools">
+  <div class="section-head reveal compact-head">
+    <span class="eyebrow">MARKET TOOLS</span>
+    <h2>High-impact news. Clear timing.</h2>
+    <p>Upcoming U.S. economic releases relevant to Gold traders, shown in Malaysia Time.</p>
+  </div>
+  <div class="market-tools-stack reveal">
+    <div class="market-calendar-card">
+      <div class="market-card-head"><div><span>GOLD NEWS</span><h3>Upcoming high-impact events</h3></div><a href="calendar.html">View Full Calendar →</a></div>
+      <div id="homeMarketEvents" class="home-market-events"><div class="market-loading">Loading official schedule…</div></div>
+    </div>
+    <div class="market-etf-card">
+      <div class="market-card-head"><div><span>SPDR GOLD ETF</span><h3>30-day holdings trend</h3></div><button id="toggleEtfHistory" class="market-link-button" type="button">View 30 Days →</button></div>
+      <div id="etfSummary" class="etf-summary"><div class="market-loading">Loading holdings…</div></div>
+      <div id="etfChart" class="etf-chart" aria-label="SPDR Gold ETF 30-day holdings chart"></div>
+      <div id="etfHistory" class="etf-history" hidden></div>
+    </div>
+    <div class="market-sessions-card">
+      <div class="market-card-head"><div><span>LIVE MARKET</span><h3>Sessions, Gold &amp; DXY</h3></div><span id="marketSnapshotUpdated" class="market-updated">Connecting…</span></div>
+      <div id="marketSessionGrid" class="market-session-grid"></div>
+      <div class="market-prices-grid">
+        <article class="price-card"><span>XAU/USD</span><strong id="goldPrice">—</strong><em id="goldChange">Waiting for price</em></article>
+        <article class="price-card"><span>DXY</span><strong id="dxyPrice">—</strong><em id="dxyChange">Waiting for price</em></article>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="section conversion-reviews" id="stories">
 <div class="section-head reveal compact-head">
 <span class="eyebrow">MEMBER REVIEWS</span>
 <h2>Real conversations. Real trust.</h2>
@@ -309,5 +339,6 @@
   <button class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Next media">›</button>
 </div>
 <script src="script.js"></script>
+<script src="market-tools.js"></script>
 </body>
 </html>

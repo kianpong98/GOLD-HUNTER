@@ -814,3 +814,198 @@ body.gallery-browser-active{overflow:hidden}
     width: 100% !important;
   }
 }
+
+/* Gold Hunter Market Tools */
+.session-strip{position:sticky;top:0;z-index:1200;height:34px;background:rgba(4,4,4,.96);border-bottom:1px solid rgba(214,175,55,.2);backdrop-filter:blur(14px)}
+.session-strip-inner{height:100%;max-width:1240px;margin:auto;padding:0 22px;display:flex;align-items:center;gap:14px;overflow:hidden}
+.session-live{font-size:9px;letter-spacing:.18em;color:#090909;background:#d5ad43;padding:4px 7px;border-radius:99px;font-weight:900;flex:0 0 auto}
+.session-strip-items{display:flex;align-items:center;gap:14px;min-width:0;flex:1;overflow:hidden}
+.session-strip-item{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:10px;color:#d7d1c5}
+.session-strip-item b{font-weight:700;color:#fff}.session-strip-item em{font-style:normal;font-size:8px;letter-spacing:.09em}.session-strip-item.open em{color:#75d79a}.session-strip-item.closed em{color:#8f8f8f}.session-strip-item span{font-variant-numeric:tabular-nums;color:#d8b957}
+.session-calendar-link{font-size:10px;color:#e3c76d;text-decoration:none;white-space:nowrap}.session-mini-brand img{width:25px;height:25px;object-fit:contain}
+.navbar{top:34px!important}
+.market-tools-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.6fr);gap:18px}
+.market-calendar-card,.market-sessions-card{border:1px solid rgba(216,178,72,.2);border-radius:24px;background:linear-gradient(150deg,rgba(255,255,255,.055),rgba(255,255,255,.018));padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.market-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}.market-card-head span{font-size:9px;letter-spacing:.18em;color:#c9a94d}.market-card-head h3{margin:4px 0 0;font-size:20px}.market-card-head a{font-size:11px;color:#e0c366;text-decoration:none;white-space:nowrap}
+.home-market-events{display:grid;gap:9px}.market-event-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:13px;border:1px solid rgba(255,255,255,.07);border-radius:16px;background:rgba(0,0,0,.28)}
+.market-event-main{display:flex;gap:10px;align-items:flex-start}.impact-dot{width:7px;height:7px;border-radius:50%;background:#d5ad43;margin-top:7px;box-shadow:0 0 12px rgba(213,173,67,.5)}.impact-dot.medium{background:#ad8e50}.impact-dot.low{background:#777}
+.market-event-main h3{margin:0;color:#fff;font-size:14px}.market-event-main p{margin:3px 0;color:#9f9a8e;font-size:10px}.event-countdown{font-size:10px;color:#dabb61;font-variant-numeric:tabular-nums}
+.market-values{display:grid;grid-template-columns:repeat(3,minmax(54px,1fr));gap:7px}.market-values div,.calendar-values div{background:#0a0a0a;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:7px;text-align:center}.market-values small,.calendar-values small{display:block;color:#7e7a72;font-size:8px;text-transform:uppercase;letter-spacing:.08em}.market-values b,.calendar-values b{display:block;margin-top:3px;color:#f5e7b0;font-size:12px}
+.market-session-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.session-card{padding:13px;border-radius:15px;background:#090909;border:1px solid rgba(255,255,255,.07)}.session-card>div{display:flex;align-items:center;justify-content:space-between;gap:8px}.session-card h4{margin:0;font-size:12px;color:#fff}.session-card span{font-size:8px;letter-spacing:.1em}.session-card.open span{color:#70d497}.session-card.closed span{color:#777}.session-card p{margin:8px 0 0;color:#c8a94e;font-size:10px;font-variant-numeric:tabular-nums}
+.market-loading,.market-empty{padding:24px;border:1px dashed rgba(255,255,255,.12);border-radius:16px;color:#aaa;text-align:center}.market-empty{display:grid;gap:5px}.market-empty b{color:#eee}
+.calendar-page{max-width:1120px;margin:auto;padding:100px 22px 70px}.calendar-hero{max-width:760px;margin-bottom:34px}.calendar-hero h1{font-size:clamp(42px,8vw,82px);line-height:.95;margin:12px 0}.calendar-hero p{color:#aaa;max-width:650px}.calendar-list{display:grid;gap:12px}.calendar-item{display:grid;grid-template-columns:190px minmax(0,1fr) 300px;gap:20px;align-items:center;border:1px solid rgba(214,175,55,.2);border-radius:20px;padding:18px;background:rgba(255,255,255,.035)}.calendar-date{display:grid;gap:5px}.calendar-date b{font-size:12px;color:#eee}.calendar-copy h2{margin:0 0 6px;font-size:20px}.calendar-copy p{margin:0 0 8px;color:#999;font-size:12px}.calendar-copy a{color:#daba5c;font-size:11px}.calendar-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.calendar-disclaimer{margin-top:24px;color:#777;font-size:11px}
+@media(max-width:800px){.session-strip{height:38px}.session-strip-inner{padding:0 8px;gap:7px;overflow:visible}.session-live{font-size:7px;padding:3px 5px;flex:0 0 auto}.session-strip-items{gap:12px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;padding:0 2px}.session-strip-items::-webkit-scrollbar{display:none}.session-strip-item{font-size:8px;flex:0 0 auto;scroll-snap-align:start}.session-strip-item b{font-size:8px}.session-strip-item em{font-size:7px}.session-strip-item span{font-size:8px}.session-calendar-link{display:none}.market-tools-layout{grid-template-columns:1fr}.market-calendar-card,.market-sessions-card{padding:13px;border-radius:17px}.market-event-row{grid-template-columns:1fr;padding:10px}.market-values{grid-template-columns:repeat(3,1fr)}.market-session-grid{grid-template-columns:repeat(2,1fr)}.calendar-page{padding:82px 12px 50px}.calendar-item{grid-template-columns:1fr;gap:12px;padding:14px}.calendar-values{grid-template-columns:repeat(3,1fr)}.market-card-head h3{font-size:16px}.market-card-head a{font-size:9px}}
+/* GH News Engine trial */
+.event-zh{font-size:12px!important;color:#9d978c!important;margin:.15rem 0 .35rem!important}.impact-badge{display:inline-flex;color:#e7bc53;font-size:11px;letter-spacing:1px;margin-bottom:5px}.calendar-copy details{margin:10px 0}.calendar-copy summary{cursor:pointer;color:#e6c765;font-size:13px}.calendar-copy details p{margin:7px 0 0;color:#b8b0a0;font-size:13px;line-height:1.5}.calendar-copy a{color:#d8b74e;font-size:12px}
+
+
+/* Release history — compact, mobile friendly */
+.release-history{margin-top:10px;border-top:1px solid rgba(255,255,255,.07);padding-top:9px}
+.release-history>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:#e2c361;font-size:11px;font-weight:700}
+.release-history>summary::-webkit-details-marker{display:none}
+.release-history>summary::after{content:'＋';font-size:12px;color:#8f8878}
+.release-history[open]>summary::after{content:'−'}
+.history-scroll{margin-top:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid rgba(255,255,255,.06);border-radius:12px;background:rgba(0,0,0,.25)}
+.history-scroll table{width:100%;min-width:360px;border-collapse:collapse;font-size:10px;font-variant-numeric:tabular-nums}
+.history-scroll th,.history-scroll td{padding:8px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap}
+.history-scroll th{color:#827d73;font-size:8px;letter-spacing:.08em;text-transform:uppercase;background:rgba(255,255,255,.025)}
+.history-scroll td{color:#ddd7ca}.history-scroll td:nth-child(n+2){color:#f0df9f}
+.history-scroll tr:last-child td{border-bottom:0}
+@media(max-width:800px){.release-history{margin-top:8px}.history-scroll table{min-width:340px}.history-scroll th,.history-scroll td{padding:7px 8px}.calendar-copy{min-width:0}}
+
+/* GH Platform V1 market tools */
+.market-tools-stack{display:grid;gap:18px}
+.market-etf-card{border:1px solid rgba(216,178,72,.2);border-radius:24px;background:linear-gradient(150deg,rgba(255,255,255,.055),rgba(255,255,255,.018));padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.market-link-button{border:0;background:transparent;color:#daba5c;font:inherit;font-size:11px;cursor:pointer;padding:6px 0}
+.market-updated{font-size:10px;color:#8f8878}
+.market-prices-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.price-card{padding:14px;border-radius:15px;background:#090909;border:1px solid rgba(255,255,255,.07);display:grid;gap:4px}
+.price-card>span{font-size:9px;letter-spacing:.12em;color:#a9a08f}
+.price-card strong{font-size:22px;color:#fff;font-variant-numeric:tabular-nums}
+.price-card em{font-style:normal;font-size:10px;color:#8f8878}.price-card em.up,.etf-daily.up,.etf-change.up{color:#74d79a}.price-card em.down,.etf-daily.down,.etf-change.down{color:#ef7a7a}.price-card em.flat,.etf-daily.flat,.etf-change.flat{color:#c7b77d}
+.session-strip-item i{width:6px;height:6px;border-radius:50%;background:#777;display:block;box-shadow:0 0 0 3px rgba(255,255,255,.025)}
+.session-strip-item.open i{background:#62d58c}.session-strip-item.closed i{background:#666}
+.session-strip-quote{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:9px;color:#fff;border-left:1px solid rgba(255,255,255,.08);padding-left:10px}
+.session-strip-quote b{font-size:8px;color:#d7b84d;letter-spacing:.1em}.session-strip-quote span{font-variant-numeric:tabular-nums}
+.session-card p b{color:#8f8878;font-weight:600;margin-right:4px}
+.etf-summary{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-top:4px}
+.etf-summary>div:first-child{display:grid;gap:3px}.etf-summary span,.etf-summary small{font-size:10px;color:#9d9586}.etf-summary strong{font-size:30px;color:#fff;font-variant-numeric:tabular-nums}
+.etf-daily{text-align:right;display:grid;gap:3px}.etf-daily b{font-size:14px}.etf-chart{height:92px;margin-top:12px;border-radius:14px;overflow:hidden;background:linear-gradient(180deg,rgba(216,182,75,.045),rgba(255,255,255,.01));border:1px solid rgba(255,255,255,.05)}
+.etf-chart svg{width:100%;height:100%;display:block}.etf-history{margin-top:12px}.market-empty.compact{min-height:72px;display:grid;place-items:center;text-align:center}
+.etf-change{font-weight:700;font-size:10px;white-space:nowrap}
+.event-source{display:inline-flex;margin:8px 0 2px}
+
+@media(max-width:800px){
+  .session-strip{height:auto;min-height:58px}
+  .session-strip-inner{padding:5px 7px;overflow:visible;align-items:stretch}
+  .session-live,.session-calendar-link{display:none}
+  .session-strip-items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;overflow:visible;padding:0;width:100%}
+  .session-strip-item,.session-strip-quote{min-width:0;display:grid;grid-template-columns:auto 1fr;grid-template-areas:'dot name' 'status count';column-gap:4px;row-gap:1px;padding:4px 5px;border-radius:8px;background:#090909;border:1px solid rgba(255,255,255,.06);font-size:7px;line-height:1.05}
+  .session-strip-item i{grid-area:dot;width:5px;height:5px;align-self:center}.session-strip-item b{grid-area:name;font-size:7px;overflow:hidden;text-overflow:ellipsis}.session-strip-item em{grid-area:status;font-size:6px}.session-strip-item span{grid-area:count;font-size:7px;text-align:right}
+  .session-strip-quote{grid-template-areas:'name price';grid-template-columns:auto 1fr;align-items:center;border-left:0;padding-left:5px}.session-strip-quote b{grid-area:name;font-size:7px}.session-strip-quote span{grid-area:price;text-align:right;font-size:8px;color:#fff}
+  .market-tools-stack{gap:12px}.market-calendar-card,.market-sessions-card,.market-etf-card{padding:13px;border-radius:17px}
+  .market-prices-grid{grid-template-columns:1fr 1fr}.price-card{padding:10px}.price-card strong{font-size:17px}
+  .etf-summary strong{font-size:24px}.etf-chart{height:70px}
+  .history-scroll table{min-width:360px}
+}
+
+/* Mobile header stacking fix: keep live strip above the original Gold Hunter navbar */
+@media (max-width:800px){
+  .session-strip{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    z-index:1300;
+    min-height:58px;
+  }
+  .navbar,
+  .navbar.scrolled{
+    top:64px!important;
+    z-index:1200;
+  }
+  .nav-links{
+    top:62px!important;
+  }
+  .hero{
+    padding-top:176px!important;
+  }
+  .calendar-page{
+    padding-top:142px!important;
+  }
+}
+
+@media (max-width:420px){
+  .session-strip{min-height:54px}
+  .navbar,.navbar.scrolled{top:59px!important}
+  .hero{padding-top:168px!important}
+  .calendar-page{padding-top:134px!important}
+}
+
+
+/* GH Platform V3 — brand header first, live market strip second */
+body.home-page .navbar,
+body.home-page .navbar.scrolled{
+  top:10px!important;
+  z-index:1400!important;
+}
+body.home-page .session-strip{
+  position:fixed!important;
+  top:104px!important;
+  left:0;
+  right:0;
+  z-index:1300!important;
+}
+body.home-page .hero{
+  padding-top:224px!important;
+}
+body.home-page .nav-links{
+  z-index:1450;
+}
+@media(max-width:980px){
+  body.home-page .navbar,
+  body.home-page .navbar.scrolled{
+    top:8px!important;
+  }
+  body.home-page .session-strip{
+    top:76px!important;
+  }
+  body.home-page .nav-links{
+    top:64px!important;
+  }
+  body.home-page .hero{
+    padding-top:206px!important;
+  }
+}
+@media(max-width:800px){
+  body.home-page .session-strip{
+    min-height:56px!important;
+    height:auto!important;
+  }
+  body.home-page .session-strip-inner{
+    padding:4px 7px!important;
+  }
+  body.home-page .session-strip-items{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  }
+}
+@media(max-width:420px){
+  body.home-page .navbar,
+  body.home-page .navbar.scrolled{
+    top:6px!important;
+  }
+  body.home-page .session-strip{
+    top:70px!important;
+    min-height:54px!important;
+  }
+  body.home-page .hero{
+    padding-top:196px!important;
+  }
+}
+
+
+/* GH V3.1 authoritative header stack — logo/menu first, live market second */
+.navbar,.navbar.scrolled{position:fixed!important;top:10px!important;z-index:1300!important;}
+.session-strip{position:fixed!important;top:104px!important;left:0!important;right:0!important;z-index:1250!important;}
+body.home-page .hero{padding-top:220px!important;}
+.calendar-page{padding-top:170px!important;}
+@media(max-width:800px){
+  .navbar,.navbar.scrolled{top:7px!important;height:58px!important;min-height:58px!important;}
+  .session-strip{top:72px!important;min-height:54px!important;height:54px!important;}
+  .session-strip-inner{height:54px!important;padding:4px 6px!important;}
+  .session-strip-items{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:3px!important;overflow:visible!important;width:100%!important;}
+  .session-strip-item,.session-strip-quote{padding:3px 4px!important;min-height:21px!important;border-radius:7px!important;}
+  body.home-page .hero{padding-top:150px!important;}
+  .calendar-page{padding-top:145px!important;}
+}
+@media(min-width:801px){
+  .session-strip{height:34px!important;}
+}
+/* GH official release comparison */
+.release-insight{grid-column:1/-1;display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:.45rem .7rem;margin-top:.35rem;padding:.55rem .7rem;border:1px solid rgba(216,182,75,.2);border-radius:12px;background:rgba(255,255,255,.025)}
+.release-insight .comparison{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#d8b64b}
+.release-insight b{font-size:.8rem;color:#f2f2f2}
+.release-insight span:last-of-type{font-size:.76rem;color:#ddd}
+.release-insight small{grid-column:3;font-size:.65rem;color:#8f8f8f}
+.event-only-values{grid-template-columns:1fr 1.6fr}
+@media(max-width:640px){.release-insight{grid-template-columns:auto auto;gap:.3rem .5rem;padding:.45rem .55rem}.release-insight span:last-of-type,.release-insight small{grid-column:1/-1}.event-only-values{grid-template-columns:1fr}.event-only-values div:last-child b{font-size:.72rem}}
