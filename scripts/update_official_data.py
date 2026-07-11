@@ -35,6 +35,7 @@ BLS_SERIES = {
     "core_ppi_yoy": {"id": "WPUFD49116", "mode": "yoy", "suffix": "%", "decimals": 1},
     "nfp": {"id": "CES0000000001", "mode": "change", "suffix": "K", "decimals": 0},
     "unemployment": {"id": "LNS14000000", "mode": "level", "suffix": "%", "decimals": 1},
+    "avg_hourly_earnings": {"id": "CES0500000003", "mode": "mom", "suffix": "%", "decimals": 1},
 }
 
 FRED_SERIES = {
@@ -107,6 +108,11 @@ def bls_metric(series: dict[str, Any], cfg: dict[str, Any]) -> dict[str, Any] | 
                 return None
             previous = clean_number(rows[index + 1].get("value"))
             return None if previous is None else current - previous
+        if mode == "mom":
+            if index + 1 >= len(rows):
+                return None
+            previous = clean_number(rows[index + 1].get("value"))
+            return None if not previous else ((current / previous) - 1) * 100
         if mode == "yoy":
             current_key = month_key(rows[index])
             year, month = current_key.split("-")
@@ -319,16 +325,18 @@ def main() -> None:
 
     required = [
         "cpi_yoy", "core_cpi_yoy", "ppi_yoy", "core_ppi_yoy",
-        "nfp", "unemployment", "retail_sales", "jobless_claims",
+        "nfp", "unemployment", "avg_hourly_earnings", "retail_sales", "jobless_claims",
         "gdp", "pce", "core_pce", "fomc",
     ]
     missing = [key for key in required if not metrics.get(key, {}).get("actual")]
     if missing:
         errors["missing"] = ", ".join(missing)
 
+    previous_metrics = existing.get("metrics") or {}
+    changed = metrics != previous_metrics
     payload = {
-        "schemaVersion": 1,
-        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "schemaVersion": 2,
+        "updatedAt": datetime.now(timezone.utc).isoformat() if changed else (existing.get("updatedAt") or datetime.now(timezone.utc).isoformat()),
         "metrics": metrics,
         "errors": errors,
         "coverage": {key: bool(metrics.get(key, {}).get("actual")) for key in required},

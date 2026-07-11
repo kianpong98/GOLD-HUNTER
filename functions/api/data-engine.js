@@ -28,7 +28,8 @@ const SERIES = {
   ppi_yoy: {id:'WPUFD4', mode:'yoy', suffix:'%'},
   core_ppi_yoy: {id:'WPUFD49116', mode:'yoy', suffix:'%'},
   nfp: {id:'CES0000000001', mode:'change', suffix:'K'},
-  unemployment: {id:'LNS14000000', mode:'level', suffix:'%'}
+  unemployment: {id:'LNS14000000', mode:'level', suffix:'%'},
+  avg_hourly_earnings: {id:'CES0500000003', mode:'mom', suffix:'%'}
 };
 
 
@@ -106,6 +107,17 @@ async function fetchStaticOfficial(request){
   }
 }
 
+async function fetchStaticEvents(request){
+  try{
+    const url=new URL('/data/generated-events.json',new URL(request.url).origin);
+    url.searchParams.set('v',String(Date.now()).slice(0,-5));
+    const response=await fetch(url.toString(),{headers:{accept:'application/json'},cf:{cacheTtl:60,cacheEverything:true}});
+    if(!response.ok)throw new Error(`Static schedule ${response.status}`);
+    const data=await response.json();
+    return Array.isArray(data)?data:[];
+  }catch{return[];}
+}
+
 const headers={
   'content-type':'application/json; charset=utf-8',
   'access-control-allow-origin':'*',
@@ -125,10 +137,24 @@ function sanitizeEvents(input){
     impact:Math.min(5,Math.max(4,Number(e?.impact)||4)), whyZh:clean(e?.whyZh,180)
   })).filter(e=>e.name&&e.datetime&&e.impact>=4&&!REMOVED_TYPES.has(e.type));
 }
-async function readStored(env){
-  if(!env.GH_MARKET_DATA) return SEED_EVENTS;
-  const stored=await env.GH_MARKET_DATA.get(EVENTS_KEY,{type:'json'});
-  return Array.isArray(stored)&&stored.length?stored:SEED_EVENTS;
+async function readStored(env,request){
+  const generated=await fetchStaticEvents(request);
+  let stored=[];
+  if(env.GH_MARKET_DATA){
+    const value=await env.GH_MARKET_DATA.get(EVENTS_KEY,{type:'json'});
+    if(Array.isArray(value))stored=value;
+  }
+  const base=generated.length?generated:(stored.length?stored:SEED_EVENTS);
+  if(!generated.length||!stored.length)return base;
+  const byId=new Map(stored.map(e=>[String(e.id||''),e]));
+  const byTypePeriod=new Map(stored.map(e=>[`${e.type||''}|${e.releasePeriod||''}`,e]));
+  const merged=base.map(e=>{
+    const old=byId.get(String(e.id||''))||byTypePeriod.get(`${e.type||''}|${e.releasePeriod||''}`);
+    return old?{...e,forecast:old.forecast||'',previous:old.previous||e.previous||''}:e;
+  });
+  // Preserve manually maintained official Fed speech events not yet present in the generated schedule.
+  for(const e of stored){if(e.type==='fed_speech'&&!merged.some(x=>x.id===e.id))merged.push(e);}
+  return merged.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
 }
 function monthKey(row){return `${row.year}-${String(Number(row.period?.replace('M',''))).padStart(2,'0')}`;}
 function newestRows(series){return (series?.data||[]).filter(r=>/^M\d\d$/.test(r.period)).sort((a,b)=>monthKey(b).localeCompare(monthKey(a)));}
@@ -140,6 +166,11 @@ function computeMetric(series,config){
   if(config.mode==='change'){
     if(rows.length<3)return null; const a=num(rows[0].value),b=num(rows[1].value),c=num(rows[2].value);
     return {actual:format(a-b,config.suffix,0),previous:format(b-c,config.suffix,0),period:monthKey(rows[0])};
+  }
+  if(config.mode==='mom'){
+    if(rows.length<3)return null; const a=num(rows[0].value),b=num(rows[1].value),c=num(rows[2].value);
+    if(!b||!c)return null;
+    return {actual:format((a/b-1)*100,config.suffix,1),previous:format((b/c-1)*100,config.suffix,1),period:monthKey(rows[0])};
   }
   if(config.mode==='yoy'){
     const map=new Map(rows.map(r=>[monthKey(r),num(r.value)]));
@@ -167,6 +198,14 @@ function computeHistory(series,config,limit=10){
       const a=num(rows[i].value),b=num(rows[i+1].value),c=num(rows[i+2].value);
       if([a,b,c].some(v=>v===null))continue;
       out.push({period:monthKey(rows[i]),actual:format(a-b,config.suffix,0),previous:format(b-c,config.suffix,0)});
+    }
+    return out;
+  }
+  if(config.mode==='mom'){
+    for(let i=0;i<Math.min(limit,rows.length-2);i++){
+      const a=num(rows[i].value),b=num(rows[i+1].value),c=num(rows[i+2].value);
+      if([a,b,c].some(v=>v===null)||!b||!c)continue;
+      out.push({period:monthKey(rows[i]),actual:format((a/b-1)*100,config.suffix,1),previous:format((b/c-1)*100,config.suffix,1)});
     }
     return out;
   }
@@ -204,11 +243,36 @@ async function fetchBls(env){
   return result;
   }catch(error){if(stale)return {...stale,stale:true,refreshError:error.message};throw error;}
 }
+
+function parseComparable(value){
+  const match=String(value||'').replace(/,/g,'').match(/-?\d+(?:\.\d+)?/);
+  return match?Number(match[0]):null;
+}
+function classifyResult(type,actual,forecast){
+  const a=parseComparable(actual),f=parseComparable(forecast);
+  if(a===null||f===null)return {comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:''};
+  const tolerance=Math.max(0.0001,Math.abs(f)*0.0001);
+  const delta=a-f;
+  const comparison=Math.abs(delta)<=tolerance?'In Line':delta>0?'Above Forecast':'Below Forecast';
+  const comparisonZh=comparison==='In Line'?'符合预期':comparison==='Above Forecast'?'高于预期':'低于预期';
+  const bullishWhenHigher=new Set(['unemployment','jobless_claims']);
+  const bearishWhenHigher=new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','avg_hourly_earnings','retail_sales','gdp','pce','core_pce','fomc']);
+  let goldImpact='',goldImpactZh='';
+  if(comparison==='In Line'){goldImpact='Typically Neutral for Gold';goldImpactZh='通常对黄金影响中性';}
+  else if(bullishWhenHigher.has(type)){
+    const bullish=delta>0;goldImpact=bullish?'Typically Supportive for Gold':'Typically Negative for Gold';goldImpactZh=bullish?'通常利好黄金':'通常利空黄金';
+  }else if(bearishWhenHigher.has(type)){
+    const bullish=delta<0;goldImpact=bullish?'Typically Supportive for Gold':'Typically Negative for Gold';goldImpactZh=bullish?'通常利好黄金':'通常利空黄金';
+  }
+  const suffix=String(actual||'').includes('%')?'%':String(actual||'').toUpperCase().includes('K')?'K':'';
+  const difference=`${delta>0?'+':''}${delta.toFixed(Math.abs(delta)<1?2:1).replace(/\.0$/,'')}${suffix}`;
+  return {comparison,comparisonZh,difference,goldImpact,goldImpactZh};
+}
 export async function onRequestOptions(){return new Response(null,{status:204,headers});}
 export async function onRequestGet({request,env}){
   const wantsAdmin=request.headers.has('x-admin-pin');
   if(wantsAdmin&&!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
-  const stored=(await readStored(env)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
+  const stored=(await readStored(env,request)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
   const staticOfficial=await fetchStaticOfficial(request);
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null};
   // Runtime sources remain as a fallback. The committed static cache is preferred
@@ -247,7 +311,10 @@ export async function onRequestGet({request,env}){
     if(!previous) previous=EVENT_ONLY_TYPES.has(e.type)?'Not applicable':'Awaiting verified official sync';
     const history=(official.histories?.[e.type]||[]).slice(0,10).map(row=>({...row,forecast:row.period===e.releasePeriod?(e.forecast||''):''}));
     const previousStatus = previous && !/unavailable|Syncing|Manual/i.test(previous) ? 'ready' : (AUTO_TYPES.has(e.type) ? 'awaiting_official' : 'manual_required');
-    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus};
+    const eventOnly=EVENT_ONLY_TYPES.has(e.type);
+    const status=!released?'Scheduled':released?'Released':'Scheduled';
+    const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:''}:classifyResult(e.type,actual,e.forecast);
+    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
   return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:official.error||null,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:!bls.error,fred:!fred.error,fredErrors:fred.errors||{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
 }

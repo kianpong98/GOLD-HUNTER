@@ -1001,3 +1001,11 @@ body.home-page .hero{padding-top:220px!important;}
 @media(min-width:801px){
   .session-strip{height:34px!important;}
 }
+/* GH official release comparison */
+.release-insight{grid-column:1/-1;display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:.45rem .7rem;margin-top:.35rem;padding:.55rem .7rem;border:1px solid rgba(216,182,75,.2);border-radius:12px;background:rgba(255,255,255,.025)}
+.release-insight .comparison{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#d8b64b}
+.release-insight b{font-size:.8rem;color:#f2f2f2}
+.release-insight span:last-of-type{font-size:.76rem;color:#ddd}
+.release-insight small{grid-column:3;font-size:.65rem;color:#8f8f8f}
+.event-only-values{grid-template-columns:1fr 1.6fr}
+@media(max-width:640px){.release-insight{grid-template-columns:auto auto;gap:.3rem .5rem;padding:.45rem .55rem}.release-insight span:last-of-type,.release-insight small{grid-column:1/-1}.event-only-values{grid-template-columns:1fr}.event-only-values div:last-child b{font-size:.72rem}}
