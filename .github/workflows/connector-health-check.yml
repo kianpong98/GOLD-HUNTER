@@ -33,15 +33,15 @@ jobs:
           events=d.get('events') or []
           sources=d.get('officialSources') or {}
           numeric={'cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc'}
-          missing=[]
-          duplicates=[]
-          seen=set()
+          missing=[]; duplicates=[]; seen=set()
           for e in events:
-              key=(str(e.get('type','')).strip().lower(), str(e.get('releasePeriod') or e.get('datetime',''))[:10])
+              typ=str(e.get('type','')).strip().lower()
+              stamp=str(e.get('datetime','')) if typ=='fed_speech' else str(e.get('releasePeriod') or e.get('datetime',''))[:10]
+              key=(typ,stamp)
               if key in seen: duplicates.append(key)
               seen.add(key)
-              if e.get('type') in numeric and str(e.get('previous','')).strip() in {'','—','-'}:
-                  missing.append(f"{e.get('name') or e.get('type')} [{e.get('releasePeriod','')}]" )
+              if typ in numeric and str(e.get('previous','')).strip() in {'','—','-'}:
+                  missing.append(f"{e.get('name') or typ} [{e.get('releasePeriod','')}]" )
           summary=[
               '# Gold Hunter connector health',
               f"- Events: **{len(events)}**",
@@ -56,11 +56,11 @@ jobs:
               f"- Numeric events missing Previous: **{len(missing)}**",
           ]
           if missing: summary += ['', '## Missing Previous', *[f'- {x}' for x in missing]]
-          if duplicates: summary += ['', '## Duplicate keys', *[f'- `{x[0]} | {x[1]}`' for x in duplicates]]
+          if duplicates: summary += ['', '## Duplicate keys (run Cleanup duplicate news)', *[f'- `{x[0]} | {x[1]}`' for x in sorted(set(duplicates))]]
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as f: f.write('\n'.join(summary)+'\n')
           assert events, 'No market events returned'
           assert d.get('kvConfigured') is True, 'Cloudflare KV is not configured'
-          assert not duplicates, f'Duplicate live events detected: {duplicates[:5]}'
-          # Connector outages are reported, but do not fail the whole workflow because cached official values remain valid.
+          # Duplicates and missing Previous are health warnings. Cleanup/sync workflows repair them;
+          # they should not make connector health itself red.
           print('\n'.join(summary))
           PY

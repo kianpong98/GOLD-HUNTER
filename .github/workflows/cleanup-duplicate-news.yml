@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Fetch deduplicated live events
+      - name: Fetch live events
         shell: bash
         run: |
           set -euo pipefail
@@ -25,35 +25,88 @@ jobs:
             --connect-timeout 20 --max-time 180 \
             -o live-events.json "https://goldhunter.site/api/market-events?cleanup=$(date +%s)"
 
-      - name: Verify unique event keys
+      - name: Merge duplicate event rows
         run: |
           python - <<'PY'
           import json
-          d=json.load(open('live-events.json',encoding='utf-8'))
-          events=d.get('events') or []
-          seen=set(); duplicates=[]
-          for e in events:
-              typ=str(e.get('type','')).strip().lower()
-              # Fed speeches can legitimately occur more than once per day; exact time keeps them separate.
-              stamp=str(e.get('datetime','')) if typ=='fed_speech' else str(e.get('releasePeriod') or e.get('datetime',''))[:10]
-              key=(typ,stamp)
-              if key in seen: duplicates.append(key)
-              seen.add(key)
+          from copy import deepcopy
+
+          data=json.load(open('live-events.json',encoding='utf-8'))
+          events=data.get('events') or []
           assert events, 'No events returned by market engine'
-          assert not duplicates, f'Duplicates remain in live output: {duplicates[:10]}'
-          json.dump({'events':events},open('clean-events.json','w',encoding='utf-8'),ensure_ascii=False,separators=(',',':'))
-          print(f'Unique live events: {len(events)}')
+
+          def text(v):
+              return str(v or '').strip()
+
+          def key_for(e):
+              typ=text(e.get('type')).lower()
+              if typ=='fed_speech':
+                  stamp=text(e.get('datetime'))
+              else:
+                  stamp=text(e.get('releasePeriod')) or text(e.get('datetime'))[:10]
+              return typ, stamp
+
+          def score(e):
+              fields=('actual','forecast','previous','releasePeriod','datetime','officialPeriod','source','status')
+              return sum(2 for f in fields if text(e.get(f)) not in ('','—','-','null','None')) + (3 if text(e.get('actual')) not in ('','—','-') else 0)
+
+          def merge(a,b):
+              # Start with the more complete row, then fill all blanks from the other row.
+              primary, secondary=(a,b) if score(a)>=score(b) else (b,a)
+              out=deepcopy(primary)
+              for k,v in secondary.items():
+                  if k not in out or text(out.get(k)) in ('','—','-','null','None'):
+                      out[k]=v
+              # Preserve nested history/lastRelease data from either copy.
+              for k in ('history','lastReleases'):
+                  merged=[]; seen=set()
+                  for src in (primary.get(k) or [], secondary.get(k) or []):
+                      if not isinstance(src,dict):
+                          continue
+                      hk=(text(src.get('releasePeriod') or src.get('period')), text(src.get('datetime') or src.get('releaseTime')))
+                      if hk in seen: continue
+                      seen.add(hk); merged.append(src)
+                  if merged: out[k]=merged
+              if isinstance(primary.get('lastRelease'),dict) or isinstance(secondary.get('lastRelease'),dict):
+                  lr={}
+                  for src in (secondary.get('lastRelease') or {}, primary.get('lastRelease') or {}):
+                      if isinstance(src,dict):
+                          for k,v in src.items():
+                              if k not in lr or text(lr.get(k)) in ('','—','-','null','None'):
+                                  lr[k]=v
+                  if lr: out['lastRelease']=lr
+              return out
+
+          by_key={}
+          order=[]
+          duplicate_keys=[]
+          for e in events:
+              k=key_for(e)
+              if k not in by_key:
+                  by_key[k]=deepcopy(e); order.append(k)
+              else:
+                  duplicate_keys.append(k)
+                  by_key[k]=merge(by_key[k],e)
+
+          clean=[by_key[k] for k in order]
+          payload={'events':clean}
+          json.dump(payload,open('clean-events.json','w',encoding='utf-8'),ensure_ascii=False,separators=(',',':'))
+          print(f'Input events: {len(events)}')
+          print(f'Unique events: {len(clean)}')
+          print(f'Removed duplicate rows: {len(events)-len(clean)}')
+          if duplicate_keys:
+              print('Merged keys:', sorted(set(duplicate_keys))[:20])
           PY
 
-      - name: Persist clean list when GitHub ADMIN_PIN secret is configured
+      - name: Persist clean list
         env:
           ADMIN_PIN: ${{ secrets.ADMIN_PIN }}
         shell: bash
         run: |
           set -euo pipefail
           if [ -z "${ADMIN_PIN:-}" ]; then
-            echo "GitHub secret ADMIN_PIN is not configured; live output is already deduplicated, so KV cleanup was skipped."
-            exit 0
+            echo "GitHub secret ADMIN_PIN is not configured; cannot write the cleaned list back to Cloudflare KV."
+            exit 1
           fi
           code=$(curl -L --silent --show-error --output save-response.json --write-out "%{http_code}" \
             --retry 4 --retry-all-errors --retry-delay 5 --connect-timeout 20 --max-time 180 \
@@ -63,3 +116,27 @@ jobs:
             --data-binary @clean-events.json)
           cat save-response.json
           test "$code" = "200"
+
+      - name: Verify live output is unique
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 3
+          curl -fL --retry 4 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 20 --max-time 180 \
+            -o verified-events.json "https://goldhunter.site/api/market-events?verify=$(date +%s)"
+          python - <<'PY'
+          import json
+          d=json.load(open('verified-events.json',encoding='utf-8'))
+          events=d.get('events') or []
+          seen=set(); dup=[]
+          for e in events:
+              typ=str(e.get('type','')).strip().lower()
+              stamp=str(e.get('datetime','')) if typ=='fed_speech' else str(e.get('releasePeriod') or e.get('datetime',''))[:10]
+              k=(typ,stamp)
+              if k in seen: dup.append(k)
+              seen.add(k)
+          assert events, 'No events returned after cleanup'
+          assert not dup, f'Duplicates still remain after cleanup: {dup[:10]}'
+          print(f'Verified unique live events: {len(events)}')
+          PY
