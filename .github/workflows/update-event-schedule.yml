@@ -1,0 +1,65 @@
+name: Update official release schedule
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feature/news-engine
+    paths:
+      - '.github/workflows/update-event-schedule.yml'
+      - 'scripts/update_event_schedule.py'
+  schedule:
+    - cron: '17 0 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-data-writers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 python-dateutil
+      - name: Sync future official release dates
+        run: python scripts/update_event_schedule.py
+      - name: Validate generated schedule
+        run: |
+          python - <<'PY'
+          import json
+          events=json.load(open('data/generated-events.json',encoding='utf-8'))
+          assert len(events)>=8, f'Only {len(events)} events generated'
+          assert all(e.get('datetime') and e.get('type') for e in events)
+          print('Generated events:',len(events))
+          PY
+      - name: Commit schedule
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/generated-events.json
+          if git diff --cached --quiet; then
+            echo "No schedule changes."
+            exit 0
+          fi
+          git commit -m "Update official release schedule"
+          BRANCH="${GITHUB_REF_NAME}"
+          for attempt in 1 2 3; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            sleep 3
+          done
+          exit 1

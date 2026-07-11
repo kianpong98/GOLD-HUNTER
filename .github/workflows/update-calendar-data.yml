@@ -1,0 +1,75 @@
+name: Update official calendar data
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feature/news-engine
+    paths:
+      - '.github/workflows/update-calendar-data.yml'
+      - 'scripts/update_official_data.py'
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-data-writers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependency
+        run: pip install requests
+
+      - name: Download official economic data
+        run: python scripts/update_official_data.py
+
+      - name: Validate coverage
+        run: |
+          python - <<'PY'
+          import json
+          data=json.load(open('data/official-data.json',encoding='utf-8'))
+          required=['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc']
+          ready=[k for k in required if data.get('metrics',{}).get(k,{}).get('actual')]
+          missing=[k for k in required if k not in ready]
+          assert ready, 'No official metrics were generated'
+          print('Official-data ready:', ', '.join(ready))
+          if missing: print('Partial sync; previous cache preserved for:', ', '.join(missing))
+          PY
+
+      - name: Commit official data cache
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/official-data.json
+          if git diff --cached --quiet; then
+            echo "No official data changes."
+            exit 0
+          fi
+          git commit -m "Update official calendar data"
+          BRANCH="${GITHUB_REF_NAME}"
+          for attempt in 1 2 3; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            sleep 3
+          done
+          exit 1
