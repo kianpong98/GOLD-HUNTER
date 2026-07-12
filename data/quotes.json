@@ -1,7 +1,19 @@
 {
-  "updatedAt": null,
-  "gold": null,
-  "dxy": null,
+  "updatedAt": "2026-07-12T16:05:34.815855+00:00",
+  "gold": {
+    "price": 4113.7,
+    "changePct": -0.6544629057187105,
+    "timestamp": "2026-07-10T20:59:57+00:00",
+    "source": "Yahoo Finance GC=F",
+    "delayed": true
+  },
+  "dxy": {
+    "price": 100.965,
+    "changePct": 0.012877407084560215,
+    "timestamp": "2026-07-10T20:59:59+00:00",
+    "source": "Yahoo Finance DX-Y.NYB",
+    "delayed": true
+  },
   "errors": {},
   "note": "Delayed last-known market quotes; not MT5 tick data."
 }
