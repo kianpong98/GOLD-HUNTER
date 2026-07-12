@@ -1032,3 +1032,17 @@ body.home-page .hero{padding-top:220px!important;}
 
 .rate-meeting-time{display:flex;align-items:baseline;gap:8px;margin-top:8px;font-size:17px;color:#f4d873}.rate-meeting-time i{font-style:normal;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#8e877a}.rate-countdown{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;padding:10px 12px;border:1px solid rgba(216,182,75,.18);border-radius:12px;background:rgba(216,182,75,.055)}.rate-countdown span{font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:#958d7e}.rate-countdown strong{margin:0!important;font-variant-numeric:tabular-nums;font-size:17px!important;letter-spacing:.03em;color:#fff!important}.rate-meeting>small{display:block}
 @media(max-width:760px){.rate-meeting-time{font-size:15px}.rate-countdown{padding:9px 10px}.rate-countdown strong{font-size:15px!important}}
+
+
+/* v9.0 — balanced market intelligence grid */
+.market-tools-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
+.market-tools-grid>.market-etf-card,.market-tools-grid>.market-rate-card,.market-tools-grid>.market-reserves-card,.market-tools-grid>.market-calendar-card{height:100%;min-width:0;display:flex;flex-direction:column}
+.market-tools-grid .etf-chart,.market-tools-grid .gold-reserves-grid,.market-tools-grid .home-market-events,.market-tools-grid #rateExpectationBody{flex:1}
+.rate-decision-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:12px 0 15px;padding:12px;border:1px solid rgba(216,178,72,.18);border-radius:17px;background:rgba(0,0,0,.25)}
+.rate-decision-summary>div:not(.rate-arrow){padding:10px;border-radius:12px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.045)}
+.rate-decision-summary span{display:block;color:#8f8f8f;font-size:9px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
+.rate-decision-summary strong{font-size:16px;color:#f5f2e8;font-variant-numeric:tabular-nums}
+.rate-decision-summary .rate-arrow{display:none}
+.rate-decision-summary .cut strong{color:#72d89b}.rate-decision-summary .hike strong{color:#ef7b7b}.rate-decision-summary .hold strong{color:#e2c45f}
+@media(max-width:980px){.market-tools-grid{grid-template-columns:1fr}.market-tools-grid>.market-etf-card,.market-tools-grid>.market-rate-card,.market-tools-grid>.market-reserves-card,.market-tools-grid>.market-calendar-card{min-height:0}}
+@media(max-width:560px){.rate-decision-summary{grid-template-columns:repeat(2,minmax(0,1fr));padding:9px}.rate-decision-summary strong{font-size:14px}}

@@ -144,28 +144,56 @@ def bls_metric(series: dict[str, Any], cfg: dict[str, Any]) -> dict[str, Any] | 
 
 
 def fetch_bls() -> tuple[dict[str, Any], dict[str, str]]:
+    """Fetch BLS with a bulk request and isolate failures by retrying series individually.
+
+    BLS occasionally returns a partial/empty bulk payload around major releases. A
+    per-series retry prevents one problematic series from blocking CPI, payrolls,
+    unemployment or earnings that are already available.
+    """
     current_year = datetime.now(timezone.utc).year
-    response = request(
-        "POST",
-        "https://api.bls.gov/publicAPI/v2/timeseries/data/",
-        headers={"Content-Type": "application/json"},
-        data=json.dumps({
-            "seriesid": [cfg["id"] for cfg in BLS_SERIES.values()],
-            "startyear": str(current_year - 3),
-            "endyear": str(current_year),
-        }),
-    )
-    payload = response.json()
-    series_by_id = {row.get("seriesID"): row for row in payload.get("Results", {}).get("series", [])}
+    ids = [cfg["id"] for cfg in BLS_SERIES.values()]
+
+    def call(series_ids: list[str]) -> dict[str, Any]:
+        response = request(
+            "POST",
+            "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+            headers={"Content-Type": "application/json"},
+            data=json.dumps({
+                "seriesid": series_ids,
+                "startyear": str(current_year - 3),
+                "endyear": str(current_year),
+            }),
+        )
+        payload = response.json()
+        status = str(payload.get("status") or "").upper()
+        if status and status != "REQUEST_SUCCEEDED":
+            raise RuntimeError("BLS status: " + str(payload.get("message") or status))
+        return {row.get("seriesID"): row for row in payload.get("Results", {}).get("series", [])}
+
+    series_by_id: dict[str, Any] = {}
+    bulk_error = ""
+    try:
+        series_by_id.update(call(ids))
+    except Exception as exc:  # noqa: BLE001
+        bulk_error = str(exc)
+
+    missing_ids = [series_id for series_id in ids if not series_by_id.get(series_id, {}).get("data")]
+    for series_id in missing_ids:
+        try:
+            series_by_id.update(call([series_id]))
+        except Exception:
+            pass
+
     metrics: dict[str, Any] = {}
     errors: dict[str, str] = {}
     for event_type, cfg in BLS_SERIES.items():
         metric = bls_metric(series_by_id.get(cfg["id"], {}), cfg)
         if metric:
             metric["source"] = "U.S. Bureau of Labor Statistics"
+            metric["fetchedAt"] = datetime.now(timezone.utc).isoformat()
             metrics[event_type] = metric
         else:
-            errors[event_type] = "BLS returned no usable observations"
+            errors[event_type] = "BLS returned no usable observations" + (f"; bulk: {bulk_error}" if bulk_error else "")
     return metrics, errors
 
 
@@ -258,6 +286,7 @@ def fetch_fred() -> tuple[dict[str, Any], dict[str, str]]:
         if not metric:
             raise RuntimeError("No usable metric")
         metric["source"] = "FRED (official-source series)"
+        metric["fetchedAt"] = datetime.now(timezone.utc).isoformat()
         return event_type, metric
 
     with ThreadPoolExecutor(max_workers=len(FRED_SERIES)) as pool:

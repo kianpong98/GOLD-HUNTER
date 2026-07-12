@@ -160,16 +160,16 @@
     <h2>High-impact news. Clear timing.</h2>
     <p>Upcoming U.S. economic releases relevant to Gold traders, shown in Malaysia Time.</p>
   </div>
-  <div class="market-tools-stack reveal">
-    <div class="market-calendar-card">
-      <div class="market-card-head"><div><span>GOLD NEWS</span><h3>Upcoming high-impact events</h3></div><a href="calendar.html">View Full Calendar →</a></div>
-      <div id="homeMarketEvents" class="home-market-events"><div class="market-loading">Loading official schedule…</div></div>
-    </div>
+  <div class="market-tools-stack market-tools-grid reveal">
     <div class="market-etf-card">
       <div class="market-card-head"><div><span>SPDR GOLD ETF</span><h3>30-day holdings trend</h3></div><button id="toggleEtfHistory" class="market-link-button" type="button">View 30 Days →</button></div>
       <div id="etfSummary" class="etf-summary"><div class="market-loading">Loading holdings…</div></div>
       <div id="etfChart" class="etf-chart" aria-label="SPDR Gold ETF 30-day holdings chart"></div>
       <div id="etfHistory" class="etf-history" hidden></div>
+    </div>
+    <div class="market-rate-card">
+      <div class="market-card-head"><div><span>FED RATE EXPECTATION</span><h3>Market-implied target range</h3></div><a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" rel="noopener">CME FedWatch →</a></div>
+      <div id="rateExpectationBody"><div class="market-loading">Loading rate expectations…</div></div>
     </div>
     <div class="market-reserves-card">
       <div class="market-card-head"><div><span>CENTRAL BANK GOLD</span><h3>Official reserve holdings</h3></div><button id="toggleReserveTable" class="market-link-button" type="button">View Countries →</button></div>
@@ -177,9 +177,9 @@
       <div id="goldReservesGrid" class="gold-reserves-grid"></div>
       <div id="goldReservesTable" class="gold-reserves-table" hidden></div>
     </div>
-    <div class="market-rate-card">
-      <div class="market-card-head"><div><span>FED RATE EXPECTATION</span><h3>Market-implied target range</h3></div><a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" rel="noopener">CME FedWatch →</a></div>
-      <div id="rateExpectationBody"><div class="market-loading">Loading rate expectations…</div></div>
+    <div class="market-calendar-card">
+      <div class="market-card-head"><div><span>GOLD NEWS</span><h3>Upcoming high-impact events</h3></div><a href="calendar.html">View Full Calendar →</a></div>
+      <div id="homeMarketEvents" class="home-market-events"><div class="market-loading">Loading official schedule…</div></div>
     </div>
   </div>
 </section>

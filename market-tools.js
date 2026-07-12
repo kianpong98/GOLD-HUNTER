@@ -136,8 +136,8 @@
         }catch(_){return null;}
       }
       const d=(await readJson(RATE_EXPECTATION_API))
-        ||(await readJson('./assets/data/rate-expectation.json?v=8.8.1'))
-        ||(await readJson('/assets/data/rate-expectation.json?v=8.8.1'))
+        ||(await readJson('./assets/data/rate-expectation.json?v=9.0'))
+        ||(await readJson('/assets/data/rate-expectation.json?v=9.0'))
         ||fallbackData;
       const outcomes=(Array.isArray(d.outcomes)?d.outcomes:[])
         .map(x=>({...x,probability:Number(x.probability)}))
@@ -170,6 +170,14 @@
             <b>${leader.probability.toFixed(0)}%</b>
             <small>${esc(leader.move||'Market-implied outcome')}</small>
           </div>
+        </div>
+        <div class="rate-decision-summary">
+          <div><span>Current Rate</span><strong>${esc(d.currentTargetRange||'—')}</strong></div>
+          <div class="rate-arrow" aria-hidden="true">↓</div>
+          <div><span>Expected</span><strong>${esc(leader.targetRange)}</strong></div>
+          <div><span>Probability</span><strong>${leader.probability.toFixed(0)}%</strong></div>
+          <div><span>Expected Move</span><strong>${esc((()=>{const parseRange=v=>{const nums=String(v||'').match(/\d+(?:\.\d+)?/g)||[];return nums.length>=2?(Number(nums[0])+Number(nums[1]))/2:null};const current=parseRange(d.currentTargetRange),expected=parseRange(leader.targetRange);if(current===null||expected===null)return leader.move||'—';const bps=Math.round((expected-current)*100);return `${bps>0?'+':''}${bps} bps`;})())}</strong></div>
+          <div class="${dir}"><span>Gold</span><strong>${dir==='cut'?'Bullish':dir==='hike'?'Bearish':'Neutral'}</strong></div>
         </div>
         <div class="rate-range-list">
           ${outcomes.map((x,i)=>{
