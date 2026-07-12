@@ -1,0 +1,12 @@
+{
+  "source": "World Gold Council / IMF IFS",
+  "sourceUrl": "https://www.gold.org/goldhub/data/gold-reserves-by-country",
+  "updatedAt": null,
+  "records": [],
+  "summary": {
+    "countriesTracked": 0,
+    "netMonthlyChangeTonnes": null,
+    "signal": "Awaiting first official sync"
+  },
+  "status": "awaiting_sync"
+}
