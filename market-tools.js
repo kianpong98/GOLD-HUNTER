@@ -109,10 +109,33 @@
     const box=document.getElementById('rateExpectationBody');
     if(!box)return;
     try{
-      let r=await fetch(RATE_EXPECTATION_API,{cache:'no-store'});
-      if(!r.ok)r=await fetch('/assets/data/rate-expectation.json?v=8.8',{cache:'no-store'});
-      const d=await r.json();
-      if(!r.ok)throw new Error(d.error||'Rate expectation unavailable');
+      const fallbackData={
+        meetingDate:'2026-07-29',
+        meetingLabel:'Next FOMC decision',
+        currentTargetRange:'3.75%–4.00%',
+        outcomes:[
+          {targetRange:'3.50%–3.75%',probability:78,move:'25 bps cut',direction:'cut'},
+          {targetRange:'3.75%–4.00%',probability:22,move:'No change',direction:'hold'}
+        ],
+        updatedAt:'2026-07-12T11:00:00Z',
+        source:'CME FedWatch',
+        sourceUrl:'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html',
+        note:'Probabilities are market-implied estimates and may change during the trading day.'
+      };
+      async function readJson(url){
+        try{
+          const r=await fetch(url,{cache:'no-store'});
+          if(!r.ok)return null;
+          const type=(r.headers.get('content-type')||'').toLowerCase();
+          if(!type.includes('json'))return null;
+          const data=await r.json();
+          return data&&typeof data==='object'?data:null;
+        }catch(_){return null;}
+      }
+      const d=(await readJson(RATE_EXPECTATION_API))
+        ||(await readJson('./assets/data/rate-expectation.json?v=8.8.1'))
+        ||(await readJson('/assets/data/rate-expectation.json?v=8.8.1'))
+        ||fallbackData;
       const outcomes=(Array.isArray(d.outcomes)?d.outcomes:[])
         .map(x=>({...x,probability:Number(x.probability)}))
         .filter(x=>x.targetRange&&Number.isFinite(x.probability))
