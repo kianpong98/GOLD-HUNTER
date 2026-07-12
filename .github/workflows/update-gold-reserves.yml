@@ -47,7 +47,7 @@ jobs:
               assert all(x.get('country') and float(x.get('holdingsTonnes')) > 0 for x in d['records'])
               print('Reserve records:',len(d['records']),'updated:',d.get('updatedAt'))
           else:
-              print('No first snapshot yet; existing news/forecast data is untouched.')
+              raise SystemExit('First official reserve sync produced no records')
           PY
       - name: Commit reserve snapshot
         run: |
