@@ -1,12 +1,105 @@
 {
   "source": "World Gold Council / IMF IFS",
   "sourceUrl": "https://www.gold.org/goldhub/data/gold-reserves-by-country",
-  "updatedAt": null,
-  "records": [],
+  "updatedAt": "2026-07-12T10:28:48.915162Z",
+  "checkedAt": "2026-07-12T10:28:48.915162Z",
+  "records": [
+    {
+      "country": "United States",
+      "holdingsTonnes": 8133.46,
+      "monthlyChangeTonnes": 0.0,
+      "period": "2026-03-31",
+      "sourceLabel": "World Gold Council / IMF IFS baseline snapshot",
+      "sourceUrl": "https://www.gold.org/goldhub/data/gold-reserves-by-country"
+    },
+    {
+      "country": "China",
+      "holdingsTonnes": 2313.46,
+      "monthlyChangeTonnes": 7.16,
+      "period": "first quarter of 2026",
+      "sourceLabel": "WGC/IMF-based public country summary",
+      "sourceUrl": "https://tradingeconomics.com/china/gold-reserves"
+    },
+    {
+      "country": "India",
+      "holdingsTonnes": 880.52,
+      "monthlyChangeTonnes": 0.34,
+      "period": "first quarter of 2026",
+      "sourceLabel": "WGC/IMF-based public country summary",
+      "sourceUrl": "https://tradingeconomics.com/india/gold-reserves"
+    },
+    {
+      "country": "Türkiye",
+      "holdingsTonnes": 534.85,
+      "monthlyChangeTonnes": -78.85,
+      "period": "first quarter of 2026",
+      "sourceLabel": "WGC/IMF-based public country summary",
+      "sourceUrl": "https://tradingeconomics.com/turkey/gold-reserves"
+    },
+    {
+      "country": "Russia",
+      "holdingsTonnes": 2304.75,
+      "monthlyChangeTonnes": -21.77,
+      "period": "first quarter of 2026",
+      "sourceLabel": "WGC/IMF-based public country summary",
+      "sourceUrl": "https://tradingeconomics.com/russia/gold-reserves"
+    },
+    {
+      "country": "Poland",
+      "holdingsTonnes": 581.64,
+      "monthlyChangeTonnes": 31.43,
+      "period": "first quarter of 2026",
+      "sourceLabel": "WGC/IMF-based public country summary",
+      "sourceUrl": "https://tradingeconomics.com/poland/gold-reserves"
+    },
+    {
+      "country": "Singapore",
+      "holdingsTonnes": 193.85,
+      "monthlyChangeTonnes": 0.29,
+      "period": "first quarter of 2026",
+      "sourceLabel": "WGC/IMF-based public country summary",
+      "sourceUrl": "https://tradingeconomics.com/singapore/gold-reserves"
+    },
+    {
+      "country": "Kazakhstan",
+      "holdingsTonnes": 353.59,
+      "monthlyChangeTonnes": 12.55,
+      "period": "first quarter of 2026",
+      "sourceLabel": "WGC/IMF-based public country summary",
+      "sourceUrl": "https://tradingeconomics.com/kazakhstan/gold-reserves"
+    },
+    {
+      "country": "Malaysia",
+      "holdingsTonnes": 43.86,
+      "monthlyChangeTonnes": 4.98,
+      "period": "first quarter of 2026",
+      "sourceLabel": "WGC/IMF-based public country summary",
+      "sourceUrl": "https://tradingeconomics.com/malaysia/gold-reserves"
+    }
+  ],
   "summary": {
-    "countriesTracked": 0,
-    "netMonthlyChangeTonnes": null,
-    "signal": "Awaiting first official sync"
+    "countriesTracked": 9,
+    "netMonthlyChangeTonnes": -43.87,
+    "signal": "Net Selling"
   },
-  "status": "awaiting_sync"
+  "status": "ready",
+  "sourceMode": "partial_live_refresh",
+  "refresh": {
+    "countriesUpdated": [
+      "China",
+      "India",
+      "Türkiye",
+      "Russia",
+      "Poland",
+      "Singapore",
+      "Kazakhstan",
+      "Malaysia"
+    ],
+    "countriesRetainedFromSnapshot": [
+      "United States"
+    ],
+    "errors": [
+      "United States: gold reserve summary not found"
+    ]
+  }
 }
