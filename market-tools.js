@@ -110,7 +110,10 @@
     if(!box)return;
     try{
       const fallbackData={
-        meetingDate:'2026-07-29',
+        meetingDate:'2026-07-30',
+        meetingDateTime:'2026-07-30T02:00:00+08:00',
+        meetingTimezone:'Asia/Kuala_Lumpur',
+        meetingTimezoneLabel:'Malaysia Time (MYT)',
         meetingLabel:'Next FOMC decision',
         currentTargetRange:'3.75%–4.00%',
         outcomes:[
@@ -146,11 +149,19 @@
       const impact=dir==='cut'?'Supportive for gold':dir==='hike'?'Pressure for gold':'Neutral for gold';
       const impactText=dir==='cut'?'Lower-rate expectations usually reduce the opportunity cost of holding gold.':dir==='hike'?'Higher-rate expectations usually support yields and the U.S. dollar.':'Markets currently expect policy to remain unchanged.';
       const total=outcomes.reduce((n,x)=>n+x.probability,0);
+      const meetingIso=d.meetingDateTime||d.meetingDate||'';
+      const meetingInstant=meetingIso?new Date(meetingIso):null;
+      const meetingValid=meetingInstant&&!Number.isNaN(meetingInstant.getTime());
+      const meetingTz=d.meetingTimezone||'Asia/Kuala_Lumpur';
+      const meetingDateText=meetingValid?new Intl.DateTimeFormat('en-MY',{timeZone:meetingTz,day:'2-digit',month:'short',year:'numeric'}).format(meetingInstant):'TBA';
+      const meetingTimeText=meetingValid?new Intl.DateTimeFormat('en-MY',{timeZone:meetingTz,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(meetingInstant):'—';
       box.innerHTML=`
         <div class="rate-hero">
           <div class="rate-meeting">
             <span>${esc(d.meetingLabel||'Next FOMC decision')}</span>
-            <strong>${esc(d.meetingDate||'TBA')}</strong>
+            <strong>${esc(meetingDateText)}</strong>
+            <b class="rate-meeting-time">${esc(meetingTimeText)} <i>${esc(d.meetingTimezoneLabel||'Malaysia Time (MYT)')}</i></b>
+            <div class="rate-countdown"><span>Decision countdown</span><strong data-rate-countdown="${esc(meetingValid?meetingInstant.toISOString():'')}">--d --:--:--</strong></div>
             <small>Current target range&nbsp; ${esc(d.currentTargetRange||'—')}</small>
           </div>
           <div class="rate-primary ${dir}">
@@ -181,6 +192,23 @@
           <small>Updated ${esc(d.updatedAt?new Date(d.updatedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}):'pending')} · Total ${total.toFixed(0)}%</small>
           <a href="${esc(d.sourceUrl||'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html')}" target="_blank" rel="noopener">View source ↗</a>
         </div>`;
+      const countdownEl=box.querySelector('[data-rate-countdown]');
+      if(countdownEl){
+        const targetMs=new Date(countdownEl.dataset.rateCountdown).getTime();
+        const tick=()=>{
+          if(!Number.isFinite(targetMs)){countdownEl.textContent='Time pending';return;}
+          let left=targetMs-Date.now();
+          if(left<=0){countdownEl.textContent='Decision released';return;}
+          const days=Math.floor(left/86400000);left%=86400000;
+          const hours=Math.floor(left/3600000);left%=3600000;
+          const minutes=Math.floor(left/60000);left%=60000;
+          const seconds=Math.floor(left/1000);
+          countdownEl.textContent=`${days}d ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+        };
+        tick();
+        clearInterval(window.__ghRateCountdownTimer);
+        window.__ghRateCountdownTimer=setInterval(tick,1000);
+      }
     }catch(e){box.innerHTML=`<div class="market-empty compact">${esc(e.message)}</div>`;}
   }
 
