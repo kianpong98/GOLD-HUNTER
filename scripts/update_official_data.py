@@ -272,6 +272,77 @@ def fetch_fred() -> tuple[dict[str, Any], dict[str, str]]:
     return metrics, errors
 
 
+
+def fetch_fomc_official_statements() -> tuple[dict[str, Any] | None, str | None]:
+    """Read the latest FOMC target ranges directly from Federal Reserve statements.
+
+    This is the primary release-day source. FRED remains a fallback because its
+    daily target-range series can update later and cannot identify unchanged
+    meeting decisions by itself.
+    """
+    try:
+        calendar = request("GET", "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm").text
+        links = []
+        for href in re.findall(r'href=["\']([^"\']*?/newsevents/pressreleases/monetary\d{8}a\.htm)["\']', calendar, re.I):
+            if href.startswith('/'):
+                href = 'https://www.federalreserve.gov' + href
+            elif not href.startswith('http'):
+                href = 'https://www.federalreserve.gov/' + href.lstrip('/')
+            if href not in links:
+                links.append(href)
+        links.sort(reverse=True)
+        history: list[dict[str, str]] = []
+        range_pattern = re.compile(
+            r'target range for the federal funds rate (?:at|to)\s*'
+            r'(\d+(?:\.\d+)?)\s*(?:to|–|-)\s*(\d+(?:\.\d+)?)\s*percent',
+            re.I,
+        )
+        for url in links[:18]:
+            match_date = re.search(r'monetary(\d{4})(\d{2})(\d{2})a\.htm', url, re.I)
+            if not match_date:
+                continue
+            html = request("GET", url).text
+            text = re.sub(r'<[^>]+>', ' ', html)
+            text = re.sub(r'\s+', ' ', text)
+            match = range_pattern.search(text)
+            if not match:
+                continue
+            low, high = float(match.group(1)), float(match.group(2))
+            period = f"{match_date.group(1)}-{match_date.group(2)}-{match_date.group(3)}"
+            actual = f"{low:g}–{high:g}%"
+            history.append({"period": period, "observationDate": period, "actual": actual, "previous": ""})
+            if len(history) >= 11:
+                break
+        if not history:
+            raise RuntimeError("No Federal Reserve FOMC statement target ranges found")
+        history.sort(key=lambda row: row["period"], reverse=True)
+        for index, row in enumerate(history):
+            row["previous"] = history[index + 1]["actual"] if index + 1 < len(history) else ""
+        history = history[:10]
+        return {
+            "actual": history[0]["actual"],
+            "previous": history[0]["previous"],
+            "period": history[0]["period"],
+            "observationDate": history[0]["observationDate"],
+            "history": history,
+            "source": "Federal Reserve FOMC statement",
+        }, None
+    except Exception as exc:  # noqa: BLE001
+        return None, str(exc)
+
+
+def merge_metric(old: dict[str, Any] | None, fresh: dict[str, Any] | None) -> dict[str, Any]:
+    if not fresh or not fresh.get("actual"):
+        return dict(old or {})
+    merged = {**(old or {}), **fresh}
+    by_period: dict[str, dict[str, Any]] = {}
+    for row in list(fresh.get("history") or []) + list((old or {}).get("history") or []):
+        period = str(row.get("period") or "").strip()
+        if period and row.get("actual") and period not in by_period:
+            by_period[period] = dict(row)
+    merged["history"] = sorted(by_period.values(), key=lambda row: str(row.get("period") or ""), reverse=True)[:10]
+    return merged
+
 def fetch_fomc_range() -> tuple[dict[str, Any] | None, str | None]:
     try:
         upper = fred_rows("DFEDTARU")
@@ -322,16 +393,20 @@ def main() -> None:
     for fetcher in (fetch_bls, fetch_fred):
         try:
             fresh, partial_errors = fetcher()
-            metrics.update(fresh)
+            for key, metric in fresh.items():
+                metrics[key] = merge_metric(metrics.get(key), metric)
             errors.update(partial_errors)
         except Exception as exc:  # noqa: BLE001
             errors[fetcher.__name__] = str(exc)
 
-    fomc, fomc_error = fetch_fomc_range()
-    if fomc:
-        metrics["fomc"] = fomc
-    elif fomc_error:
-        errors["fomc"] = fomc_error
+    fomc_official, fomc_official_error = fetch_fomc_official_statements()
+    fomc_fred, fomc_fred_error = fetch_fomc_range()
+    if fomc_official:
+        metrics["fomc"] = merge_metric(metrics.get("fomc"), fomc_official)
+    elif fomc_fred:
+        metrics["fomc"] = merge_metric(metrics.get("fomc"), fomc_fred)
+    else:
+        errors["fomc"] = " | ".join(x for x in (fomc_official_error, fomc_fred_error) if x)
 
     required = [
         "cpi_yoy", "core_cpi_yoy", "ppi_yoy", "core_ppi_yoy",

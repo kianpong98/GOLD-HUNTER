@@ -1,4 +1,5 @@
 const EVENTS_KEY = 'gold-market-events-v3';
+const EVENTS_BACKUP_KEY = 'gold-market-events-v3-backup';
 const BLS_CACHE_KEY = 'official-bls-cache-v1';
 
 const SEED_EVENTS = [
@@ -45,6 +46,7 @@ const SERIES = {
 
 
 const FRED_CACHE_KEY='official-fred-cache-v2';
+const FED_FOMC_CACHE_KEY='official-fed-fomc-cache-v1';
 const FRED_CONFIG={
   // FRED fallback coverage for every numeric news type. BLS remains primary where available.
   cpi_yoy:{series:'CPIAUCSL',mode:'yoy',suffix:'%',decimals:1},
@@ -116,13 +118,56 @@ async function fetchFred(env,forceRefresh=false){
   const mergedMetrics={...(stale?.metrics||{})};
   const mergedHistories={...(stale?.histories||{})};
   for(const [type,metric] of Object.entries(metrics)){if(metric?.actual)mergedMetrics[type]=metric;}
-  for(const [type,rows] of Object.entries(histories)){if(Array.isArray(rows)&&rows.length)mergedHistories[type]=rows;}
+  for(const [type,rows] of Object.entries(histories)){if(Array.isArray(rows)&&rows.length){const byPeriod=new Map();for(const row of [...rows,...(mergedHistories[type]||[])]){if(row?.period&&row?.actual&&!byPeriod.has(String(row.period)))byPeriod.set(String(row.period),row);}mergedHistories[type]=[...byPeriod.values()].sort((a,b)=>String(b.period).localeCompare(String(a.period))).slice(0,10);}}
   const result={savedAt:Date.now(),metrics:mergedMetrics,histories:mergedHistories,errors,source:'FRED / official source series',partial:Boolean(Object.keys(errors).length)};
   if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(FRED_CACHE_KEY,JSON.stringify(result),{expirationTtl:2592000});
   return result;
   }catch(error){if(stale)return {...stale,stale:true,refreshError:error.message};throw error;}
 }
 
+
+
+function stripHtml(text){return String(text||'').replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&ndash;|&#8211;/gi,'–').replace(/&mdash;|&#8212;/gi,'—').replace(/\s+/g,' ').trim();}
+function absoluteFedUrl(href){const h=String(href||'').trim();if(!h)return'';if(/^https?:\/\//i.test(h))return h;if(h.startsWith('/'))return `https://www.federalreserve.gov${h}`;return `https://www.federalreserve.gov/${h.replace(/^\.\//,'')}`;}
+function rangeText(low,high){const f=v=>Number(v).toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1');return `${f(low)}–${f(high)}%`;}
+async function fetchFederalReserveFomc(env,forceRefresh=false){
+  let stale=null;
+  if(env.GH_MARKET_DATA){stale=await env.GH_MARKET_DATA.get(FED_FOMC_CACHE_KEY,{type:'json'});if(!forceRefresh&&stale&&Date.now()-stale.savedAt<10*60*1000)return stale;}
+  try{
+    const calendarResponse=await fetchWithRetry('https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',{headers:{accept:'text/html','user-agent':'GoldHunter/1.0'}},3);
+    if(!calendarResponse.ok)throw new Error(`Federal Reserve calendar ${calendarResponse.status}`);
+    const calendarHtml=await calendarResponse.text();
+    const links=[];
+    const re=/href=["']([^"']*?\/newsevents\/pressreleases\/monetary\d{8}a\.htm)["']/gi;
+    let match;
+    while((match=re.exec(calendarHtml))){const url=absoluteFedUrl(match[1]);if(url&&!links.includes(url))links.push(url);}
+    links.sort().reverse();
+    const rows=[];
+    for(const url of links.slice(0,18)){
+      const dateMatch=url.match(/monetary(\d{4})(\d{2})(\d{2})a\.htm/i);if(!dateMatch)continue;
+      try{
+        const response=await fetchWithRetry(url,{headers:{accept:'text/html','user-agent':'GoldHunter/1.0'}},2);if(!response.ok)continue;
+        const text=stripHtml(await response.text());
+        const rate=text.match(/target range for the federal funds rate (?:at|to)\s*(\d+(?:\.\d+)?)\s*(?:to|–|-)\s*(\d+(?:\.\d+)?)\s*percent/i);
+        if(!rate)continue;
+        const period=`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+        rows.push({period,observationDate:period,actual:rangeText(Number(rate[1]),Number(rate[2])),previous:''});
+        if(rows.length>=11)break;
+      }catch{}
+    }
+    rows.sort((a,b)=>b.period.localeCompare(a.period));
+    if(!rows.length)throw new Error('No Federal Reserve FOMC statement target ranges found');
+    rows.forEach((row,i)=>{row.previous=rows[i+1]?.actual||''});
+    const history=rows.slice(0,10);
+    const metric={actual:history[0].actual,previous:history[0].previous,period:history[0].period,observationDate:history[0].period,history,source:'Federal Reserve FOMC statement'};
+    const result={savedAt:Date.now(),metrics:{fomc:metric},histories:{fomc:history},source:'Federal Reserve official statements'};
+    if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(FED_FOMC_CACHE_KEY,JSON.stringify(result),{expirationTtl:2592000});
+    return result;
+  }catch(error){if(stale)return {...stale,stale:true,refreshError:error.message};throw error;}
+}
+function fomcReleaseDate(event){
+  try{return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(event.datetime));}catch{return String(event.releasePeriod||'').slice(0,10);}
+}
 
 async function fetchStaticOfficial(request){
   try{
@@ -246,17 +291,11 @@ async function readStored(env,request){
     const value=await env.GH_MARKET_DATA.get(EVENTS_KEY,{type:'json'});
     if(Array.isArray(value))stored=value;
   }
-  const base=dedupeEvents(generated.length?generated:(stored.length?stored:SEED_EVENTS));
-  if(!generated.length||!stored.length)return base;
-  const byId=new Map(stored.map(e=>[String(e.id||''),e]));
-  const byTypePeriod=new Map(stored.map(e=>[`${e.type||''}|${e.releasePeriod||''}`,e]));
-  const merged=base.map(e=>{
-    const old=byId.get(String(e.id||''))||byTypePeriod.get(`${e.type||''}|${e.releasePeriod||''}`);
-    return old?{...e,forecast:old.forecast||e.forecast||'',previous:old.previous||e.previous||'',actual:old.actual||e.actual||'',lastRelease:old.lastRelease||e.lastRelease||null,releaseHistory:[...(old.releaseHistory||[]),...(e.releaseHistory||[])],releaseForecasts:{...(e.releaseForecasts||{}),...(old.releaseForecasts||{})},archivedPeriod:old.archivedPeriod||e.archivedPeriod||'',archivedAt:old.archivedAt||e.archivedAt||''}:e;
-  });
-  // Preserve manually maintained official Fed speech events not yet present in the generated schedule.
-  for(const e of stored){if(e.type==='fed_speech'&&!merged.some(x=>x.id===e.id))merged.push(e);}
-  return dedupeEvents(merged);
+  // Always merge generated schedule with every stored row before deduplication.
+  // The canonical type+releasePeriod id collapses legacy duplicates while retaining
+  // user-entered current forecasts and all historical forecast maps.
+  const source=generated.length?[...generated,...stored]:(stored.length?stored:SEED_EVENTS);
+  return dedupeEvents(source);
 }
 function monthKey(row){return `${row.year}-${String(Number(row.period?.replace('M',''))).padStart(2,'0')}`;}
 function newestRows(series){return (series?.data||[]).filter(r=>/^M\d\d$/.test(r.period)).sort((a,b)=>monthKey(b).localeCompare(monthKey(a)));}
@@ -344,7 +383,7 @@ async function fetchBls(env,forceRefresh=false){
   const mergedMetrics={...(stale?.metrics||{})};
   const mergedHistories={...(stale?.histories||{})};
   for(const [type,metric] of Object.entries(metrics)){if(metric?.actual)mergedMetrics[type]=metric;}
-  for(const [type,rows] of Object.entries(histories)){if(Array.isArray(rows)&&rows.length)mergedHistories[type]=rows;}
+  for(const [type,rows] of Object.entries(histories)){if(Array.isArray(rows)&&rows.length){const byPeriod=new Map();for(const row of [...rows,...(mergedHistories[type]||[])]){if(row?.period&&row?.actual&&!byPeriod.has(String(row.period)))byPeriod.set(String(row.period),row);}mergedHistories[type]=[...byPeriod.values()].sort((a,b)=>String(b.period).localeCompare(String(a.period))).slice(0,10);}}
   const result={savedAt:Date.now(),metrics:mergedMetrics,histories:mergedHistories,source:'BLS Public Data API'};
   if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(BLS_CACHE_KEY,JSON.stringify(result),{expirationTtl:2592000});
   return result;
@@ -435,16 +474,17 @@ export async function onRequestGet({request,env}){
   const forceRefresh=Boolean(wantsAdmin&&requestUrl.searchParams.get('force')==='1');
   const stored=(await readStored(env,request)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
   const staticOfficial=await fetchStaticOfficial(request);
-  let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null};
+  let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null},fedFomc={metrics:{},histories:{},savedAt:null};
   try{bls=await fetchBls(env,forceRefresh);}catch(e){bls.error=e.message;}
   try{fred=await fetchFred(env,forceRefresh);}catch(e){fred.error=e.message;}
-  const runtimeMetrics={...(fred.metrics||{}),...(bls.metrics||{})};
-  const runtimeHistories={...(fred.histories||{}),...(bls.histories||{})};
+  try{fedFomc=await fetchFederalReserveFomc(env,forceRefresh);}catch(e){fedFomc.error=e.message;}
+  const runtimeMetrics={...(fred.metrics||{}),...(bls.metrics||{}),...(fedFomc.metrics||{})};
+  const runtimeHistories={...(fred.histories||{}),...(bls.histories||{}),...(fedFomc.histories||{})};
   const official={
     metrics:mergeOfficialMetrics(mergeOfficialMetrics(VERIFIED_FALLBACK_METRICS,runtimeMetrics),staticOfficial.metrics||{}),
-    histories:mergeOfficialHistories(bls.histories||{},fred.histories||{},staticOfficial.histories||{},Object.fromEntries(Object.entries(VERIFIED_FALLBACK_METRICS).map(([k,v])=>[k,v.history||[]]))),
-    savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,staticOfficial.savedAt||0),
-    error:[bls.error,fred.error,...Object.values(staticOfficial.errors||{})].filter(Boolean).join(' | '),
+    histories:mergeOfficialHistories(fedFomc.histories||{},bls.histories||{},fred.histories||{},staticOfficial.histories||{},Object.fromEntries(Object.entries(VERIFIED_FALLBACK_METRICS).map(([k,v])=>[k,v.history||[]]))),
+    savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,fedFomc.savedAt||0,staticOfficial.savedAt||0),
+    error:[bls.error,fred.error,fedFomc.error,...Object.values(staticOfficial.errors||{})].filter(Boolean).join(' | '),
     staticSource:staticOfficial.source
   };
   const now=Date.now();
@@ -454,7 +494,7 @@ export async function onRequestGet({request,env}){
     const m=official.metrics?.[e.type];
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
-    const exactCurrentRelease=Boolean(released&&e.releasePeriod&&m&&m.actual&&(m.period===e.releasePeriod||(e.type==='fomc'&&String(m.period||'').slice(0,10)===String(e.releasePeriod||'').slice(0,10))));
+    const exactCurrentRelease=Boolean(released&&e.releasePeriod&&m&&m.actual&&(m.period===e.releasePeriod||(e.type==='fomc'&&String(m.period||'').slice(0,10)===fomcReleaseDate(e))));
     const eventOnly=EVENT_ONLY_TYPES.has(e.type);
     const rawHistory=(official.histories?.[e.type]||[]).slice(0,10);
 
@@ -525,7 +565,7 @@ export async function onRequestGet({request,env}){
     fred:{status:sourceStatus(fred,fredLive),lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
     dol:{status:official.metrics?.jobless_claims?.actual?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
     bea:{status:(official.metrics?.gdp?.actual&&official.metrics?.pce?.actual&&official.metrics?.core_pce?.actual)?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
-    federalReserve:{status:official.metrics?.fomc?.actual?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
+    federalReserve:{status:official.metrics?.fomc?.actual?((!fedFomc.error&&!fedFomc.refreshError&&!fedFomc.stale)?'live':'cached'):'offline',lastSuccess:(fedFomc.savedAt||fred.savedAt)?new Date(fedFomc.savedAt||fred.savedAt).toISOString():null},
     cloudflareKv:{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?new Date().toISOString():null}
   };
   const degraded=[];
@@ -539,8 +579,14 @@ export async function onRequestPost({request,env}){
   if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
   if(!env.GH_MARKET_DATA)return json({error:'GH_MARKET_DATA KV binding is not configured in Cloudflare.'},503,{'cache-control':'no-store'});
   let body;try{body=await request.json();}catch{return json({error:'Invalid request.'},400);}
-  const events=sanitizeEvents(body?.events); if(!events.length)return json({error:'No valid 4-star or 5-star events.'},400);
+  const submitted=sanitizeEvents(body?.events); if(!submitted.length)return json({error:'No valid 4-star or 5-star events.'},400);
+  const existing=await env.GH_MARKET_DATA.get(EVENTS_KEY,{type:'json'});
+  const current=Array.isArray(existing)?sanitizeEvents(existing):[];
+  // Backup the last known-good KV payload before every admin/workflow write.
+  if(current.length)await env.GH_MARKET_DATA.put(EVENTS_BACKUP_KEY,JSON.stringify(current));
+  // Never allow a partial workflow/admin payload to erase user-managed fields.
+  const events=dedupeEvents([...submitted,...current]);
   events.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
   await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(events));
-  return json({ok:true,count:events.length,events,updatedAt:new Date().toISOString()},200,{'cache-control':'no-store'});
+  return json({ok:true,count:events.length,events,backupCreated:Boolean(current.length),updatedAt:new Date().toISOString()},200,{'cache-control':'no-store'});
 }

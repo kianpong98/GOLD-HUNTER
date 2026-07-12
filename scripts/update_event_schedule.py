@@ -279,7 +279,8 @@ def main() -> None:
         except Exception:
             day, minute = dt[:10], dt[:16]
         if event_type in auto_types or event_type == "fomc_minutes":
-            return f"{event_type}|{day}"
+            period = str(event.get("releasePeriod", "")).strip()
+            return f"{event_type}|{period or day}"
         return f"{event_type}|{minute}|{str(event.get('name','')).strip().lower()}"
 
     generated_keys = {canonical_key(e) for e in events}
@@ -302,14 +303,14 @@ def main() -> None:
         carry = old or prior
         if carry:
             merged["forecast"] = str(carry.get("forecast") or merged.get("forecast") or "")
-            for field in ("lastRelease", "archivedPeriod", "archivedAt"):
+            for field in ("lastRelease", "releaseHistory", "releaseForecasts", "archivedPeriod", "archivedAt", "previous", "actual"):
                 if carry.get(field):
                     merged[field] = carry[field]
         # Keep the first official/generated row; only enrich it with carried state.
         if key not in dedup:
             dedup[key] = merged
         else:
-            for field in ("forecast", "lastRelease", "archivedPeriod", "archivedAt"):
+            for field in ("forecast", "lastRelease", "releaseHistory", "releaseForecasts", "archivedPeriod", "archivedAt", "previous", "actual"):
                 if not dedup[key].get(field) and merged.get(field):
                     dedup[key][field] = merged[field]
     result = sorted(dedup.values(), key=lambda e: e.get("datetime", ""))
