@@ -1,5 +1,6 @@
 const EVENTS_KEY = 'gold-market-events-v3';
 const FORECAST_OVERRIDES_KEY='market-forecast-overrides-v1';
+const ADMIN_FORECAST_OVERRIDES_KEY='market-admin-forecast-overrides-v3';
 const EVENTS_BACKUP_KEY = 'gold-market-events-v3-backup';
 const BLS_CACHE_KEY = 'official-bls-cache-v1';
 
@@ -539,7 +540,14 @@ export async function onRequestGet({request,env}){
   const forceRefresh=Boolean(wantsAdmin&&requestUrl.searchParams.get('force')==='1');
   const stored=(await readStored(env,request)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
   let forecastOverrides={};
-  if(env.GH_MARKET_DATA){try{forecastOverrides=await env.GH_MARKET_DATA.get(FORECAST_OVERRIDES_KEY,{type:'json'})||{};}catch{forecastOverrides={};}}
+  if(env.GH_MARKET_DATA){
+    try{
+      const legacy=await env.GH_MARKET_DATA.get(FORECAST_OVERRIDES_KEY,{type:'json'})||{};
+      const admin=await env.GH_MARKET_DATA.get(ADMIN_FORECAST_OVERRIDES_KEY,{type:'json'})||{};
+      forecastOverrides={...legacy,...admin};
+      delete forecastOverrides.__updatedAt;
+    }catch{forecastOverrides={};}
+  }
   const staticOfficial=await fetchStaticOfficial(request);
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null},fedFomc={metrics:{},histories:{},savedAt:null};
   try{bls=await fetchBls(env,forceRefresh);}catch(e){bls.error=e.message;}
@@ -619,7 +627,7 @@ export async function onRequestGet({request,env}){
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
   for(const e of events){
-    const keys=[String(e.id||''),`${canonicalType(e)}|${String(e.releasePeriod||'')}`,canonicalType(e)].filter(Boolean);
+    const keys=[`${canonicalType(e)}|${String(e.releasePeriod||'')}`,String(e.id||'')].filter(Boolean);
     for(const k of keys){if(Object.prototype.hasOwnProperty.call(forecastOverrides,k)){e.forecast=String(forecastOverrides[k]??'');break;}}
   }
   if(archiveChanged&&env.GH_MARKET_DATA){
