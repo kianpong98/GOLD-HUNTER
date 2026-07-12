@@ -81,8 +81,8 @@ jobs:
           fi
 
           found_all=false
-          for attempt in $(seq 1 12); do
-            echo "Actual watcher attempt ${attempt}/12"
+          for attempt in $(seq 1 24); do
+            echo "Actual watcher attempt ${attempt}/24"
 
             # Refresh the static official-data cache too. Partial upstream
             # failures preserve every previously successful metric.
@@ -122,10 +122,10 @@ jobs:
               break
             fi
 
-            if [ "$attempt" -lt 12 ]; then sleep 30; fi
+            if [ "$attempt" -lt 24 ]; then sleep 25; fi
           done
 
-          # A source may publish later than the six-minute burst. Do not mark
+          # A source may publish later than the ten-minute burst. Do not mark
           # the workflow failed: the next scheduled watcher and the existing
           # 5-minute official-data workflow will continue automatically.
           if [ "$found_all" != true ]; then
