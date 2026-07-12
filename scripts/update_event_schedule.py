@@ -88,6 +88,7 @@ def make_event(event_type: str, dt_et: datetime, release_period: str = "", suffi
         "sourceUrl": meta["sourceUrl"],
         "impact": meta["impact"],
         "whyZh": meta["whyZh"],
+        "scheduleAuthority": "official-v8",
     }
 
 
@@ -305,7 +306,7 @@ def main() -> None:
         # dates such as duplicate FOMC decisions.
         if old_type in successful_types:
             continue
-        if key not in generated_keys and new_time_ok(old.get("datetime")):
+        if old.get('scheduleAuthority') == 'official-v8' and key not in generated_keys and new_time_ok(old.get("datetime")):
             events.append(old)
             generated_keys.add(key)
 

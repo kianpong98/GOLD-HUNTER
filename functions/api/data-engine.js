@@ -9,7 +9,7 @@ const SEED_EVENTS = [
   {id:'core-ppi-2026-07',releasePeriod:'2026-06',type:'core_ppi_yoy',name:'Core Producer Price Index',nameZh:'核心生产者物价指数',datetime:'2026-07-15T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Labor Statistics',sourceUrl:'https://www.bls.gov/schedule/news_release/ppi.htm',impact:4,whyZh:'剔除波动较大的项目，用于观察持续性生产通胀。'},
   {id:'retail-sales-2026-07',releasePeriod:'2026-06',type:'retail_sales',name:'Retail Sales',nameZh:'零售销售',datetime:'2026-07-16T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Census Bureau',sourceUrl:'https://www.census.gov/retail/release_schedule.html',impact:4,whyZh:'反映消费强弱，可能改变经济与利率预期。'},
   {id:'jobless-claims-2026-07-16',releasePeriod:'2026-07-11',type:'jobless_claims',name:'Initial Jobless Claims',nameZh:'初请失业金人数',datetime:'2026-07-16T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Department of Labor',sourceUrl:'https://www.dol.gov/ui/data.pdf',impact:4,whyZh:'反映就业市场短期变化，可能影响美元与黄金。'},
-  {id:'fomc-2026-07',releasePeriod:'2026-07-30',type:'fomc',name:'FOMC Interest Rate Decision',nameZh:'美联储利率决议',datetime:'2026-07-30T02:00:00+08:00',forecast:'',previous:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:5,whyZh:'利率与政策措辞会直接改变美元、收益率和黄金定价。'},
+  {id:'fomc-2026-07',releasePeriod:'2026-07-29',type:'fomc',name:'FOMC Interest Rate Decision',nameZh:'美联储利率决议',datetime:'2026-07-30T02:00:00+08:00',forecast:'',previous:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:5,whyZh:'利率与政策措辞会直接改变美元、收益率和黄金定价。'},
   {id:'gdp-advance-2026-q2',releasePeriod:'2026-Q2',type:'gdp',name:'GDP — Advance Estimate',nameZh:'国内生产总值初值',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/news/schedule',impact:4,whyZh:'衡量美国经济增长，是影响利率预期的重要数据。'},
   {id:'pce-2026-07',releasePeriod:'2026-06',type:'pce',name:'PCE Price Index',nameZh:'PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'美联储重点关注的通胀指标之一。'},
   {id:'core-pce-2026-07',releasePeriod:'2026-06',type:'core_pce',name:'Core PCE Price Index',nameZh:'核心PCE物价指数',datetime:'2026-07-30T20:30:00+08:00',forecast:'',previous:'',sourceName:'U.S. Bureau of Economic Analysis',sourceUrl:'https://www.bea.gov/data/personal-consumption-expenditures-price-index',impact:5,whyZh:'剔除食品与能源，是美联储观察基础通胀的重要指标。'},
@@ -191,8 +191,8 @@ async function fetchStaticOfficial(request){
 async function fetchStaticEvents(request){
   try{
     const url=new URL('/data/generated-events.json',new URL(request.url).origin);
-    url.searchParams.set('v',String(Date.now()).slice(0,-5));
-    const response=await fetch(url.toString(),{headers:{accept:'application/json'},cf:{cacheTtl:60,cacheEverything:true}});
+    url.searchParams.set('v',String(Date.now()));
+    const response=await fetch(url.toString(),{headers:{accept:'application/json','cache-control':'no-cache'},cache:'no-store',cf:{cacheTtl:0,cacheEverything:false}});
     if(!response.ok)throw new Error(`Static schedule ${response.status}`);
     const data=await response.json();
     return Array.isArray(data)?data:[];
@@ -276,23 +276,47 @@ function mergeEventState(scheduleRow,...stateRows){
 }
 function applyAuthoritativeSchedule(generated,stored){
   const official=dedupeEvents(generated);
-  if(!official.length)return dedupeEvents(stored);
+  // Schedule is never sourced from KV. If the static schedule request is unavailable,
+  // use the bundled verified schedule rather than reviving stale KV dates.
+  const schedule=official.length?official:dedupeEvents(SEED_EVENTS);
   const storedRows=dedupeEvents(stored);
   const byKey=new Map();
+  const byType=new Map();
   for(const row of storedRows){
     const key=eventKey(row);
     if(!byKey.has(key))byKey.set(key,[]);
     byKey.get(key).push(row);
+    const type=canonicalType(row);
+    if(!byType.has(type))byType.set(type,[]);
+    byType.get(type).push(row);
   }
-  const officialKeys=new Set(official.map(eventKey));
-  const result=official.map(row=>mergeEventState(row,...(byKey.get(eventKey(row))||[])));
-  // Only event types that can legitimately have multiple unscheduled occurrences
-  // may survive outside the official whitelist. Numeric macro events and FOMC rows
-  // must exist in generated-events.json or they are stale/false schedule ghosts.
+  const usedState=new Set();
+  const result=schedule.map(row=>{
+    const exact=byKey.get(eventKey(row))||[];
+    let stateRows=exact;
+    // If an official date/period was corrected, migrate only user-managed state
+    // from the same metric. Never migrate an old Actual into a different release.
+    if(!stateRows.length){
+      const candidates=(byType.get(canonicalType(row))||[]).filter(x=>!usedState.has(eventKey(x)));
+      candidates.sort((a,b)=>{
+        const score=x=>Number(Boolean(x.forecast))*8+Number(Boolean(x.lastRelease))*5+Number(Boolean(x.releaseHistory?.length))*4+Number(Boolean(Object.keys(x.releaseForecasts||{}).length))*4+Number(Boolean(x.previous));
+        return score(b)-score(a);
+      });
+      if(candidates.length)stateRows=[candidates[0]];
+    }
+    for(const x of stateRows)usedState.add(eventKey(x));
+    const merged=mergeEventState(row,...stateRows);
+    if(!exact.length){
+      merged.actual='';
+      merged.archivedPeriod='';
+      merged.archivedAt='';
+    }
+    return merged;
+  });
+  // Only unscheduled speech-type rows may exist outside the authoritative schedule.
   for(const row of storedRows){
     const type=canonicalType(row);
-    if(officialKeys.has(eventKey(row)))continue;
-    if(!AUTO_TYPES.has(type)&&type!=='fomc_minutes')result.push(row);
+    if(type==='fed_speech')result.push(row);
   }
   return dedupeEvents(result);
 }
@@ -335,8 +359,7 @@ async function readStored(env,request){
   // generated-events.json is the authoritative whitelist for scheduled macro rows.
   // Stored KV rows may enrich matching schedule rows, but may not create extra
   // numeric/FOMC dates. This prevents stale false events from reappearing.
-  if(generated.length)return applyAuthoritativeSchedule(generated,stored);
-  return dedupeEvents(stored.length?stored:SEED_EVENTS);
+  return applyAuthoritativeSchedule(generated.length?generated:SEED_EVENTS,stored);
 }
 function monthKey(row){return `${row.year}-${String(Number(row.period?.replace('M',''))).padStart(2,'0')}`;}
 function newestRows(series){return (series?.data||[]).filter(r=>/^M\d\d$/.test(r.period)).sort((a,b)=>monthKey(b).localeCompare(monthKey(a)));}
@@ -614,7 +637,7 @@ export async function onRequestGet({request,env}){
   if(connectorSources.fred.status!=='live')degraded.push('FRED');
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
-  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':wantsAdmin?'no-store':'public, max-age=60, s-maxage=300'});
+  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, max-age=0'});
 }
 export async function onRequestPost({request,env}){
   if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
