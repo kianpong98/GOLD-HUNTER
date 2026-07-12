@@ -1,4 +1,5 @@
 const EVENTS_KEY = 'gold-market-events-v3';
+const FORECAST_OVERRIDES_KEY='market-forecast-overrides-v1';
 const EVENTS_BACKUP_KEY = 'gold-market-events-v3-backup';
 const BLS_CACHE_KEY = 'official-bls-cache-v1';
 
@@ -537,6 +538,8 @@ export async function onRequestGet({request,env}){
   // This prevents public visitors from repeatedly hammering official upstream sources.
   const forceRefresh=Boolean(wantsAdmin&&requestUrl.searchParams.get('force')==='1');
   const stored=(await readStored(env,request)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
+  let forecastOverrides={};
+  if(env.GH_MARKET_DATA){try{forecastOverrides=await env.GH_MARKET_DATA.get(FORECAST_OVERRIDES_KEY,{type:'json'})||{};}catch{forecastOverrides={};}}
   const staticOfficial=await fetchStaticOfficial(request);
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null},fedFomc={metrics:{},histories:{},savedAt:null};
   try{bls=await fetchBls(env,forceRefresh);}catch(e){bls.error=e.message;}
@@ -615,6 +618,10 @@ export async function onRequestGet({request,env}){
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
+  for(const e of events){
+    const keys=[String(e.id||''),`${canonicalType(e)}|${String(e.releasePeriod||'')}`,canonicalType(e)].filter(Boolean);
+    for(const k of keys){if(Object.prototype.hasOwnProperty.call(forecastOverrides,k)){e.forecast=String(forecastOverrides[k]??'');break;}}
+  }
   if(archiveChanged&&env.GH_MARKET_DATA){
     await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(sanitizeEvents(persistable)));
   }
@@ -671,6 +678,13 @@ export async function onRequestPost({request,env}){
   for(const e of current){if(!submittedKeys.has(eventKey(e)))combined.push(e);}
   const events=generated.length?applyAuthoritativeSchedule(generated,combined):dedupeEvents(combined);
   events.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
+  const forecastOverrides={};
+  for(const e of submitted){
+    const value=String(e.forecast??'');
+    const keys=[String(e.id||''),`${canonicalType(e)}|${String(e.releasePeriod||'')}`,canonicalType(e)].filter(Boolean);
+    for(const k of keys)forecastOverrides[k]=value;
+  }
+  await env.GH_MARKET_DATA.put(FORECAST_OVERRIDES_KEY,JSON.stringify(forecastOverrides));
   await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(events));
   return json({ok:true,count:events.length,events,backupCreated:Boolean(current.length),updatedAt:new Date().toISOString()},200,{'cache-control':'no-store'});
 }
