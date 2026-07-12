@@ -30,15 +30,15 @@ WGC_PAGE = "https://www.gold.org/goldhub/data/gold-reserves-by-country"
 # omitted during a manual GitHub upload. Data are a conservative WGC/IMF IFS
 # snapshot and are intentionally kept separate from every news-engine key/file.
 EMBEDDED_BASELINE: list[dict[str, Any]] = [
-    {"country": "United States", "holdingsTonnes": 8133.46, "monthlyChangeTonnes": 0.0, "period": "2026-03-31", "shareOfReservesPct": 83.3, "sharePeriod": "2026 latest available"},
-    {"country": "China", "holdingsTonnes": 2322.0, "monthlyChangeTonnes": 8.0, "period": "2026-04", "shareOfReservesPct": 9.0, "sharePeriod": "2026 latest available"},
-    {"country": "India", "holdingsTonnes": 880.52, "monthlyChangeTonnes": None, "period": "2026-03-31", "shareOfReservesPct": 18.5, "sharePeriod": "2026 latest available"},
-    {"country": "Türkiye", "holdingsTonnes": 534.85, "monthlyChangeTonnes": None, "period": "2026-03-31", "shareOfReservesPct": 40.0, "sharePeriod": "2026 latest available"},
-    {"country": "Russia", "holdingsTonnes": 2304.7, "monthlyChangeTonnes": -6.0, "period": "2026-04", "shareOfReservesPct": 40.6, "sharePeriod": "2026 latest available"},
-    {"country": "Poland", "holdingsTonnes": 595.0, "monthlyChangeTonnes": 14.0, "period": "2026-04", "shareOfReservesPct": 30.0, "sharePeriod": "2026 latest available"},
-    {"country": "Singapore", "holdingsTonnes": 204.1, "monthlyChangeTonnes": None, "period": "latest available", "shareOfReservesPct": 6.1, "sharePeriod": "2026 latest available"},
-    {"country": "Kazakhstan", "holdingsTonnes": 353.59, "monthlyChangeTonnes": None, "period": "2026-03-31", "shareOfReservesPct": 78.0, "sharePeriod": "2026 latest available"},
-    {"country": "Malaysia", "holdingsTonnes": 43.86, "monthlyChangeTonnes": None, "period": "2026-03-31", "shareOfReservesPct": 5.0, "sharePeriod": "2026 latest available"},
+    {"country": "United States", "holdingsTonnes": 8133.46, "monthlyChangeTonnes": 0.0, "period": "2026-03-31"},
+    {"country": "China", "holdingsTonnes": 2322.0, "monthlyChangeTonnes": 8.0, "period": "2026-04"},
+    {"country": "India", "holdingsTonnes": 880.52, "monthlyChangeTonnes": None, "period": "2026-03-31"},
+    {"country": "Türkiye", "holdingsTonnes": 534.85, "monthlyChangeTonnes": None, "period": "2026-03-31"},
+    {"country": "Russia", "holdingsTonnes": 2304.7, "monthlyChangeTonnes": -6.0, "period": "2026-04"},
+    {"country": "Poland", "holdingsTonnes": 595.0, "monthlyChangeTonnes": 14.0, "period": "2026-04"},
+    {"country": "Singapore", "holdingsTonnes": 204.1, "monthlyChangeTonnes": None, "period": "latest available"},
+    {"country": "Kazakhstan", "holdingsTonnes": 353.59, "monthlyChangeTonnes": None, "period": "2026-03-31"},
+    {"country": "Malaysia", "holdingsTonnes": 43.86, "monthlyChangeTonnes": None, "period": "2026-03-31"},
 ]
 
 COUNTRIES = {
@@ -66,8 +66,6 @@ def baseline_payload() -> dict[str, Any]:
         row = dict(item)
         row["sourceLabel"] = "World Gold Council / IMF IFS baseline snapshot"
         row["sourceUrl"] = WGC_PAGE
-        if row.get("shareOfReservesPct") is not None:
-            row["shareSourceLabel"] = "World Gold Council / IMF IFS"
         records.append(row)
     return {
         "source": "World Gold Council / IMF IFS",
@@ -200,10 +198,6 @@ def main() -> int:
                 old["period"] = period
             old["sourceUrl"] = url
             old["sourceLabel"] = "WGC/IMF-based public country summary"
-            # Gold share is a separate quarterly WGC/IMF field. Preserve the latest
-            # verified snapshot unless a future official parser supplies a new value.
-            if old.get("shareOfReservesPct") is not None:
-                old["shareOfReservesPct"] = round(float(old["shareOfReservesPct"]), 1)
             existing_records[country] = old
             refreshed.append(country)
         except Exception as exc:
@@ -220,7 +214,6 @@ def main() -> int:
         "summary": build_summary(records),
         "status": "ready",
         "sourceMode": "partial_live_refresh" if refreshed else "embedded_or_saved_snapshot",
-        "shareDefinition": "Gold value as a percentage of total official reserves, calculated by the World Gold Council using end-of-quarter gold prices and IMF IFS reserves data.",
         "refresh": {
             "countriesUpdated": refreshed,
             "countriesRetainedFromSnapshot": [name for name in COUNTRIES if name not in refreshed],

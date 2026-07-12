@@ -3,6 +3,7 @@
   const SNAPSHOT_API='/api/market-snapshot';
   const ETF_DATA='/api/etf-engine';
   const GOLD_RESERVES_API='/api/gold-reserves-engine';
+  const RATE_EXPECTATION_API='/api/rate-expectation-engine';
   const sessions=[
     {name:'Sydney',short:'SYD',tz:'Australia/Sydney',open:8,close:17},
     {name:'Tokyo',short:'TKY',tz:'Asia/Tokyo',open:8,close:17},
@@ -96,13 +97,28 @@
       const net=Number(d.summary?.netMonthlyChangeTonnes),hasNet=Number.isFinite(net);
       summary.innerHTML=`<div><span>Tracked official holders</span><strong>${rows.length}</strong></div><div class="reserve-signal ${hasNet?(net>0?'up':net<0?'down':'flat'):'flat'}"><b>${hasNet?(net>0?'▲ +':net<0?'▼ ':'• ')+net.toFixed(2)+' t':'Monthly data'}</b><span>${esc(d.summary?.signal||'Official holdings')}</span></div><small>Updated ${esc(d.updatedAt?new Date(d.updatedAt).toLocaleDateString('en-MY'):'pending')} · WGC / IMF IFS</small>`;
       const featured=rows.slice(0,6);
-      if(grid)grid.innerHTML=featured.map(x=>`<article><span>${esc(x.country)}</span><strong>${Number(x.holdingsTonnes).toLocaleString('en-US',{maximumFractionDigits:2})} t</strong><em class="${Number(x.monthlyChangeTonnes)>0?'up':Number(x.monthlyChangeTonnes)<0?'down':'flat'}">${Number.isFinite(Number(x.monthlyChangeTonnes))?`${Number(x.monthlyChangeTonnes)>0?'+':''}${Number(x.monthlyChangeTonnes).toFixed(2)} t monthly`:'Monthly change pending'}</em><small>${Number.isFinite(Number(x.shareOfReservesPct))?`Gold share ${Number(x.shareOfReservesPct).toFixed(1)}%`:'Gold share pending'}</small></article>`).join('');
-      if(table)table.innerHTML=`<div class="history-scroll"><table><thead><tr><th>Country</th><th>Holdings</th><th>Monthly change</th><th title="Gold value as a percentage of total official reserves">Gold share</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.country)}</td><td>${Number(x.holdingsTonnes).toLocaleString('en-US',{maximumFractionDigits:2})} t</td><td>${Number.isFinite(Number(x.monthlyChangeTonnes))?`${Number(x.monthlyChangeTonnes)>0?'+':''}${Number(x.monthlyChangeTonnes).toFixed(2)} t`:'—'}</td><td>${Number.isFinite(Number(x.shareOfReservesPct))?Number(x.shareOfReservesPct).toFixed(1)+'%':'—'}</td></tr>`).join('')}</tbody></table></div><a class="reserve-source" href="${esc(d.sourceUrl||'https://www.gold.org/goldhub/data/gold-reserves-by-country')}" target="_blank" rel="noopener">Official source: World Gold Council / IMF IFS ↗</a>`;
+      if(grid)grid.innerHTML=featured.map(x=>`<article><span>${esc(x.country)}</span><strong>${Number(x.holdingsTonnes).toLocaleString('en-US',{maximumFractionDigits:2})} t</strong><em class="${Number(x.monthlyChangeTonnes)>0?'up':Number(x.monthlyChangeTonnes)<0?'down':'flat'}">${Number.isFinite(Number(x.monthlyChangeTonnes))?`${Number(x.monthlyChangeTonnes)>0?'+':''}${Number(x.monthlyChangeTonnes).toFixed(2)} t monthly`:'Monthly change pending'}</em></article>`).join('');
+      if(table)table.innerHTML=`<div class="history-scroll"><table><thead><tr><th>Country</th><th>Holdings</th><th>Monthly change</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.country)}</td><td>${Number(x.holdingsTonnes).toLocaleString('en-US',{maximumFractionDigits:2})} t</td><td>${Number.isFinite(Number(x.monthlyChangeTonnes))?`${Number(x.monthlyChangeTonnes)>0?'+':''}${Number(x.monthlyChangeTonnes).toFixed(2)} t`:'—'}</td></tr>`).join('')}</tbody></table></div><a class="reserve-source" href="${esc(d.sourceUrl||'https://www.gold.org/goldhub/data/gold-reserves-by-country')}" target="_blank" rel="noopener">Official source: World Gold Council / IMF IFS ↗</a>`;
     }catch(e){
       if(summary)summary.innerHTML=`<div class="market-empty compact">${esc(e.message)}</div>`;
       if(grid)grid.innerHTML='';
     }
   }
+
+  async function loadRateExpectation(){
+    const box=document.getElementById('rateExpectationBody');
+    if(!box)return;
+    try{
+      const r=await fetch(RATE_EXPECTATION_API,{cache:'no-store'}),d=await r.json();
+      if(!r.ok)throw new Error(d.error||'Rate expectation unavailable');
+      const cut=Number(d.probabilities?.cut),hold=Number(d.probabilities?.hold),hike=Number(d.probabilities?.hike);
+      const valid=[cut,hold,hike].every(Number.isFinite);
+      const entries=[['Rate cut',cut,'cut'],['No change',hold,'hold'],['Rate hike',hike,'hike']];
+      const leader=valid?[...entries].sort((a,b)=>b[1]-a[1])[0]:null;
+      box.innerHTML=`<div class="rate-expectation-top"><div><span>Next FOMC meeting</span><strong>${esc(d.meetingDate||'TBA')}</strong><small>${esc(d.currentTargetRange?`Current target ${d.currentTargetRange}`:'Market-implied probabilities')}</small></div><div class="rate-bias ${leader?leader[2]:'hold'}"><b>${leader?`${leader[0]} ${leader[1].toFixed(1)}%`:'Awaiting update'}</b><span>${leader?(leader[2]==='cut'?'Typically supportive for gold':leader[2]==='hike'?'Typically negative for gold':'Neutral policy expectation'):'Add the latest CME FedWatch probabilities'}</span></div></div>${valid?`<div class="rate-probability-grid">${entries.map(([name,val,key])=>`<article class="${key}"><div><span>${name}</span><strong>${val.toFixed(1)}%</strong></div><i><b style="width:${Math.max(0,Math.min(100,val))}%"></b></i></article>`).join('')}</div>`:`<div class="market-empty compact">Live CME probabilities require a FedWatch data subscription. Update <b>assets/data/rate-expectation.json</b> with the latest cut / hold / hike values.</div>`}<div class="rate-source-row"><small>Updated ${esc(d.updatedAt?new Date(d.updatedAt).toLocaleString('en-MY'):'pending')}</small><a href="${esc(d.sourceUrl||'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html')}" target="_blank" rel="noopener">CME FedWatch →</a></div>`;
+    }catch(e){box.innerHTML=`<div class="market-empty compact">${esc(e.message)}</div>`;}
+  }
+
   function setupReserveToggle(){const b=document.getElementById('toggleReserveTable'),h=document.getElementById('goldReservesTable');if(!b||!h)return;b.addEventListener('click',()=>{h.hidden=!h.hidden;b.textContent=h.hidden?'View Countries →':'Hide Countries ↑';});}
 
   renderSessions();
@@ -112,6 +128,7 @@
   setupEtfToggle();
   loadGoldReserves();
   setupReserveToggle();
+  loadRateExpectation();
   setInterval(renderSessions,1000);
   setInterval(updateCountdowns,1000);
   setInterval(loadSnapshot,2500);
