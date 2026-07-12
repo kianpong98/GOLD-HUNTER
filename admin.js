@@ -49,16 +49,25 @@
   async function unlock(){pin=$('#adminPin').value.trim();$('#loginStatus').textContent='检查中…';try{await load();sessionStorage.setItem('ghAdminPin',pin);$('#loginPanel').hidden=true;$('#dashboard').hidden=false;$('#loginStatus').textContent='';}catch(e){$('#loginStatus').textContent=e.message;}}
   $('#unlockAdmin').addEventListener('click',unlock);$('#adminPin').addEventListener('keydown',e=>{if(e.key==='Enter')unlock();});$('#adminPin').value=sessionStorage.getItem('ghAdminPin')||'';
   $('#searchInput').addEventListener('input',render);$('#filterSelect').addEventListener('change',render);$('#refreshData').addEventListener('click',async()=>{collect();$('#saveStatus').textContent='重新读取中…';try{await load();$('#saveStatus').textContent='已读取最新数据。';}catch(e){$('#saveStatus').textContent=e.message;}});
-  $('#saveEvents').addEventListener('click',async()=>{collect();const st=$('#saveStatus'),btn=$('#saveEvents');st.textContent='保存中…';btn.disabled=true;try{
-    const eventRes=await fetch(`${API}?v=${Date.now()}`,{method:'POST',headers:{'content-type':'application/json','x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'},body:JSON.stringify({events})});
-    const eventData=await eventRes.json();
-    if(!eventRes.ok)throw new Error(eventData.error||'新闻数据保存失败');
-    const verifyRes=await fetch(`${API}?verify=${Date.now()}`,{cache:'no-store',headers:{'x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'}}),verify=await verifyRes.json();
-    if(!verifyRes.ok)throw new Error(verify.error||'保存后验证失败');
-    const byId=new Map((verify.events||[]).map(e=>[String(e.id||''),String(e.forecast??'').trim()]));
-    const mismatch=events.find(e=>String(e.id||'')&&byId.get(String(e.id))!==String(e.forecast??'').trim());
-    if(mismatch)throw new Error(`保存验证失败：${mismatch.name} 的 Forecast 仍未更新。`);
-    st.textContent=`已直接写入并验证 ${events.length} 项新闻数据。网站会立即至 30 秒内更新。`;
+  $('#saveEvents').addEventListener('click',async()=>{collect();const st=$('#saveStatus'),btn=$('#saveEvents');st.textContent='保存 Forecast 中…';btn.disabled=true;try{
+    const saveRes=await fetch(`/api/admin-forecasts?v=${Date.now()}`,{method:'POST',headers:{'content-type':'application/json','x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'},body:JSON.stringify({events:events.map(e=>({id:e.id,type:e.type,releasePeriod:e.releasePeriod,name:e.name,forecast:e.forecast}))})});
+    const saveData=await saveRes.json();
+    if(!saveRes.ok)throw new Error(saveData.error||'Forecast KV 保存失败');
+    const overrideRes=await fetch(`/api/admin-forecasts?verify=${Date.now()}`,{cache:'no-store',headers:{'x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'}}),overrideData=await overrideRes.json();
+    if(!overrideRes.ok)throw new Error(overrideData.error||'Forecast KV 验证失败');
+    const overrides=overrideData.overrides||{};
+    const mismatch=events.find(e=>{
+      const type=String(e.type||'').toLowerCase().replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'');
+      const key=`${type}|${String(e.releasePeriod||'')}`;
+      return String(overrides[key]??overrides[String(e.id||'')]??'').trim()!==String(e.forecast??'').trim();
+    });
+    if(mismatch)throw new Error(`独立 KV 验证失败：${mismatch.name}。`);
+    const publicRes=await fetch(`${API}?verify=${Date.now()}`,{cache:'no-store',headers:{'cache-control':'no-cache','pragma':'no-cache'}}),publicData=await publicRes.json();
+    if(!publicRes.ok)throw new Error(publicData.error||'网站数据验证失败');
+    const publicMap=new Map((publicData.events||[]).map(e=>[`${String(e.type||'')}|${String(e.releasePeriod||'')}`,String(e.forecast??'').trim()]));
+    const publicMismatch=events.find(e=>publicMap.get(`${String(e.type||'')}|${String(e.releasePeriod||'')}`)!==String(e.forecast??'').trim());
+    if(publicMismatch)throw new Error(`KV 已保存，但网站 API 尚未读到 ${publicMismatch.name}。请确认 Production 部署与 KV binding。`);
+    st.textContent=`已保存并由网站 API 验证 ${events.length} 项 Forecast。`;
     try{localStorage.setItem('gh-market-events-updated',String(Date.now()));}catch{}await load();
   }catch(e){st.textContent=e.message;}finally{btn.disabled=false;}});
   $('#logoutAdmin').addEventListener('click',()=>{sessionStorage.removeItem('ghAdminPin');location.reload();});
