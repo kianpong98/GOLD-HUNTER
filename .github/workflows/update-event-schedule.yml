@@ -42,6 +42,15 @@ jobs:
           events=json.load(open('data/generated-events.json',encoding='utf-8'))
           assert len(events)>=8, f'Only {len(events)} events generated'
           assert all(e.get('datetime') and e.get('type') for e in events)
+          allowed={'cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc','fomc_minutes'}
+          assert all(e.get('type') in allowed for e in events), 'Unexpected event type in official schedule'
+          keys=[]
+          for e in events:
+              typ=e['type']; period=str(e.get('releasePeriod') or str(e.get('datetime',''))[:10])
+              keys.append((typ,period))
+              # Schedule file must never contain user/data state.
+              assert not e.get('actual') and not e.get('lastRelease') and not e.get('releaseHistory') and not e.get('releaseForecasts')
+          assert len(keys)==len(set(keys)), f'Duplicate official schedule keys: {[k for k in set(keys) if keys.count(k)>1]}'
           print('Generated events:',len(events))
           PY
       - name: Commit schedule
