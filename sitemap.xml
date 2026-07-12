@@ -2,12 +2,80 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://goldhunter.site/</loc>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.00</priority>
   </url>
   <url>
     <loc>https://goldhunter.site/calendar.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/economic-news.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/gold-etf-holdings.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/central-bank-gold-reserves.html</loc>
+    <lastmod>2026-07-12</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/fed-rate-expectation.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/gold-swing-trading.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/zh.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/huangjin-xinwen.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/huangjin-etf-chicang.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/meilianchu-lilv-yuqi.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/yanghang-huangjin-chubei.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://goldhunter.site/huangjin-boduan-jiaoyi.html</loc>
+    <lastmod>2026-07-12</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
   </url>
 </urlset>
