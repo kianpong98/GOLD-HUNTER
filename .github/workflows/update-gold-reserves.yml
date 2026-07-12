@@ -1,0 +1,67 @@
+name: Update central bank gold reserves
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/news-engine]
+    paths:
+      - '.github/workflows/update-gold-reserves.yml'
+      - 'scripts/update_gold_reserves.py'
+  schedule:
+    - cron: '20 2 3,10,17,24 * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install requests openpyxl
+      - name: Download official reserve holdings
+        run: python scripts/update_gold_reserves.py
+      - name: Validate output without destroying old data
+        run: |
+          python - <<'PY'
+          import json
+          p='assets/data/central-bank-gold-reserves.json'
+          d=json.load(open(p,encoding='utf-8'))
+          assert isinstance(d.get('records'),list)
+          if d['records']:
+              assert len(d['records']) >= 5
+              assert all(x.get('country') and float(x.get('holdingsTonnes')) > 0 for x in d['records'])
+              print('Reserve records:',len(d['records']),'updated:',d.get('updatedAt'))
+          else:
+              print('No first snapshot yet; existing news/forecast data is untouched.')
+          PY
+      - name: Commit reserve snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/data/central-bank-gold-reserves.json
+          if git diff --cached --quiet; then echo "No reserve changes."; exit 0; fi
+          git commit -m "Update central bank gold reserves"
+          BRANCH="${GITHUB_REF_NAME}"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 2))
+          done
+          exit 1
