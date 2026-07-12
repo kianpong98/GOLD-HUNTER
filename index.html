@@ -171,6 +171,12 @@
       <div id="etfChart" class="etf-chart" aria-label="SPDR Gold ETF 30-day holdings chart"></div>
       <div id="etfHistory" class="etf-history" hidden></div>
     </div>
+    <div class="market-reserves-card">
+      <div class="market-card-head"><div><span>CENTRAL BANK GOLD</span><h3>Official reserve holdings</h3></div><button id="toggleReserveTable" class="market-link-button" type="button">View Countries →</button></div>
+      <div id="goldReservesSummary" class="gold-reserves-summary"><div class="market-loading">Loading official reserves…</div></div>
+      <div id="goldReservesGrid" class="gold-reserves-grid"></div>
+      <div id="goldReservesTable" class="gold-reserves-table" hidden></div>
+    </div>
     <div class="market-sessions-card">
       <div class="market-card-head"><div><span>LIVE MARKET</span><h3>Sessions, Gold &amp; DXY</h3></div><span id="marketSnapshotUpdated" class="market-updated">Connecting…</span></div>
       <div id="marketSessionGrid" class="market-session-grid"></div>

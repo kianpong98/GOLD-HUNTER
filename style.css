@@ -1009,3 +1009,14 @@ body.home-page .hero{padding-top:220px!important;}
 .release-insight small{grid-column:3;font-size:.65rem;color:#8f8f8f}
 .event-only-values{grid-template-columns:1fr 1.6fr}
 @media(max-width:640px){.release-insight{grid-template-columns:auto auto;gap:.3rem .5rem;padding:.45rem .55rem}.release-insight span:last-of-type,.release-insight small{grid-column:1/-1}.event-only-values{grid-template-columns:1fr}.event-only-values div:last-child b{font-size:.72rem}}
+
+/* V8.2 additive central-bank gold reserves module */
+.market-reserves-card{border:1px solid rgba(216,178,72,.2);border-radius:24px;background:linear-gradient(150deg,rgba(255,255,255,.055),rgba(255,255,255,.018));padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.gold-reserves-summary{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-top:4px}
+.gold-reserves-summary>div:first-child{display:grid;gap:3px}.gold-reserves-summary span,.gold-reserves-summary small{font-size:10px;color:#9d9586}.gold-reserves-summary strong{font-size:30px;color:#fff;font-variant-numeric:tabular-nums}
+.reserve-signal{display:grid;justify-items:end;gap:2px}.reserve-signal b{font-size:14px}.reserve-signal.up b,.gold-reserves-grid em.up{color:#76dba0}.reserve-signal.down b,.gold-reserves-grid em.down{color:#ff8c78}.reserve-signal.flat b,.gold-reserves-grid em.flat{color:#d8b64b}
+.gold-reserves-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:16px}
+.gold-reserves-grid article{display:grid;gap:5px;padding:13px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:rgba(0,0,0,.2)}
+.gold-reserves-grid span{font-size:11px;color:#b6ad9d}.gold-reserves-grid strong{font-size:18px;color:#fff;font-variant-numeric:tabular-nums}.gold-reserves-grid em{font-style:normal;font-size:10px}
+.gold-reserves-table{margin-top:15px}.gold-reserves-table table{width:100%;border-collapse:collapse}.gold-reserves-table th,.gold-reserves-table td{padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px}.gold-reserves-table th{color:#d8b64b}.reserve-source{display:inline-block;margin-top:10px;color:#d8b64b;font-size:11px;text-decoration:none}
+@media(max-width:760px){.market-reserves-card{padding:13px;border-radius:17px}.gold-reserves-summary strong{font-size:24px}.gold-reserves-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.gold-reserves-grid article{padding:11px}.gold-reserves-grid strong{font-size:15px}}

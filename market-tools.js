@@ -2,6 +2,7 @@
   const EVENTS_API='/api/market-events';
   const SNAPSHOT_API='/api/market-snapshot';
   const ETF_DATA='/api/etf-engine';
+  const GOLD_RESERVES_API='/api/gold-reserves-engine';
   const sessions=[
     {name:'Sydney',short:'SYD',tz:'Australia/Sydney',open:8,close:17},
     {name:'Tokyo',short:'TKY',tz:'Asia/Tokyo',open:8,close:17},
@@ -85,11 +86,32 @@
   async function loadEtf(){const summary=document.getElementById('etfSummary'),history=document.getElementById('etfHistory');if(!summary&&!history)return;try{const r=await fetch(ETF_DATA,{cache:'no-store'}),d=await r.json();const records=(d.records||[]).slice(0,30).sort((a,b)=>String(a.date).localeCompare(String(b.date)));if(!records.length)throw new Error('Awaiting official SPDR daily sync');const latest=records.at(-1),prior=records.at(-2),change=prior?Number(latest.holdings)-Number(prior.holdings):Number(latest.change||0);summary.innerHTML=`<div><span>Current holdings</span><strong>${Number(latest.holdings).toFixed(2)} t</strong></div><div class="etf-daily ${change>0?'up':change<0?'down':'flat'}"><b>${change>0?'▲':change<0?'▼':'•'} ${change>0?'+':''}${change.toFixed(2)} t</b><span>${change>0?'Net inflow':change<0?'Net outflow':'Unchanged'}</span></div><small>Updated ${esc(latest.date)}</small>`;drawEtfChart(records);if(history)history.innerHTML=`<div class="history-scroll"><table><thead><tr><th>Date</th><th>Holdings</th><th>Daily change</th></tr></thead><tbody>${[...records].reverse().map((x,i,a)=>{const next=a[i+1],c=next?Number(x.holdings)-Number(next.holdings):Number(x.change||0);return `<tr><td>${esc(x.date)}</td><td>${Number(x.holdings).toFixed(2)} t</td><td>${(()=>{const n=Number(c);return `<span class=\"etf-change ${n>0?'up':n<0?'down':'flat'}\">${n>0?'▲':n<0?'▼':'•'} ${n>0?'+':''}${n.toFixed(2)} t</span>`})()}</td></tr>`}).join('')}</tbody></table></div>`;}catch(e){if(summary)summary.innerHTML=`<div class="market-empty compact">${esc(e.message)}</div>`;drawEtfChart([]);}}
   function setupEtfToggle(){const b=document.getElementById('toggleEtfHistory'),h=document.getElementById('etfHistory');if(!b||!h)return;b.addEventListener('click',()=>{h.hidden=!h.hidden;b.textContent=h.hidden?'View 30 Days →':'Hide 30 Days ↑';});}
 
+  async function loadGoldReserves(){
+    const summary=document.getElementById('goldReservesSummary'),grid=document.getElementById('goldReservesGrid'),table=document.getElementById('goldReservesTable');
+    if(!summary&&!grid&&!table)return;
+    try{
+      const r=await fetch(GOLD_RESERVES_API,{cache:'no-store'}),d=await r.json();
+      const rows=Array.isArray(d.records)?d.records:[];
+      if(!rows.length)throw new Error(d.message||'Awaiting first official monthly sync');
+      const net=Number(d.summary?.netMonthlyChangeTonnes),hasNet=Number.isFinite(net);
+      summary.innerHTML=`<div><span>Tracked official holders</span><strong>${rows.length}</strong></div><div class="reserve-signal ${hasNet?(net>0?'up':net<0?'down':'flat'):'flat'}"><b>${hasNet?(net>0?'▲ +':net<0?'▼ ':'• ')+net.toFixed(2)+' t':'Monthly data'}</b><span>${esc(d.summary?.signal||'Official holdings')}</span></div><small>Updated ${esc(d.updatedAt?new Date(d.updatedAt).toLocaleDateString('en-MY'):'pending')} · WGC / IMF IFS</small>`;
+      const featured=rows.slice(0,6);
+      if(grid)grid.innerHTML=featured.map(x=>`<article><span>${esc(x.country)}</span><strong>${Number(x.holdingsTonnes).toLocaleString('en-US',{maximumFractionDigits:2})} t</strong><em class="${Number(x.monthlyChangeTonnes)>0?'up':Number(x.monthlyChangeTonnes)<0?'down':'flat'}">${Number.isFinite(Number(x.monthlyChangeTonnes))?`${Number(x.monthlyChangeTonnes)>0?'+':''}${Number(x.monthlyChangeTonnes).toFixed(2)} t monthly`:'Monthly change pending'}</em></article>`).join('');
+      if(table)table.innerHTML=`<div class="history-scroll"><table><thead><tr><th>Country</th><th>Holdings</th><th>Monthly change</th><th>Gold share</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.country)}</td><td>${Number(x.holdingsTonnes).toLocaleString('en-US',{maximumFractionDigits:2})} t</td><td>${Number.isFinite(Number(x.monthlyChangeTonnes))?`${Number(x.monthlyChangeTonnes)>0?'+':''}${Number(x.monthlyChangeTonnes).toFixed(2)} t`:'—'}</td><td>${Number.isFinite(Number(x.shareOfReservesPct))?Number(x.shareOfReservesPct).toFixed(1)+'%':'—'}</td></tr>`).join('')}</tbody></table></div><a class="reserve-source" href="${esc(d.sourceUrl||'https://www.gold.org/goldhub/data/gold-reserves-by-country')}" target="_blank" rel="noopener">Official source: World Gold Council / IMF IFS ↗</a>`;
+    }catch(e){
+      if(summary)summary.innerHTML=`<div class="market-empty compact">${esc(e.message)}</div>`;
+      if(grid)grid.innerHTML='';
+    }
+  }
+  function setupReserveToggle(){const b=document.getElementById('toggleReserveTable'),h=document.getElementById('goldReservesTable');if(!b||!h)return;b.addEventListener('click',()=>{h.hidden=!h.hidden;b.textContent=h.hidden?'View Countries →':'Hide Countries ↑';});}
+
   renderSessions();
   loadEvents();
   loadSnapshot();
   loadEtf();
   setupEtfToggle();
+  loadGoldReserves();
+  setupReserveToggle();
   setInterval(renderSessions,1000);
   setInterval(updateCountdowns,1000);
   setInterval(loadSnapshot,2500);
