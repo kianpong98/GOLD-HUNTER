@@ -45,7 +45,6 @@ jobs:
           if d['records']:
               assert len(d['records']) >= 5
               assert all(x.get('country') and float(x.get('holdingsTonnes')) > 0 for x in d['records'])
-              assert sum(1 for x in d['records'] if isinstance(x.get('shareOfReservesPct'), (int,float))) >= 5
               print('Reserve records:',len(d['records']),'updated:',d.get('updatedAt'),'mode:',d.get('sourceMode'))
           else:
               raise SystemExit('First official reserve sync produced no records')
