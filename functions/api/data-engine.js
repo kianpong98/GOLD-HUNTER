@@ -1,6 +1,6 @@
 const EVENTS_KEY = 'gold-market-events-v3';
 const FORECAST_OVERRIDES_KEY='market-forecast-overrides-v1';
-const ADMIN_FORECAST_OVERRIDES_KEY='market-admin-forecast-overrides-v3';
+const ADMIN_EVENT_OVERRIDES_KEY='market-admin-event-overrides-v4';
 const EVENTS_BACKUP_KEY = 'gold-market-events-v3-backup';
 const BLS_CACHE_KEY = 'official-bls-cache-v1';
 
@@ -539,14 +539,14 @@ export async function onRequestGet({request,env}){
   // This prevents public visitors from repeatedly hammering official upstream sources.
   const forceRefresh=Boolean(wantsAdmin&&requestUrl.searchParams.get('force')==='1');
   const stored=(await readStored(env,request)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
-  let forecastOverrides={};
+  let forecastOverrides={},adminEventOverrides={};
   if(env.GH_MARKET_DATA){
     try{
-      const legacy=await env.GH_MARKET_DATA.get(FORECAST_OVERRIDES_KEY,{type:'json'})||{};
-      const admin=await env.GH_MARKET_DATA.get(ADMIN_FORECAST_OVERRIDES_KEY,{type:'json'})||{};
-      forecastOverrides={...legacy,...admin};
+      forecastOverrides=await env.GH_MARKET_DATA.get(FORECAST_OVERRIDES_KEY,{type:'json'})||{};
+      adminEventOverrides=await env.GH_MARKET_DATA.get(ADMIN_EVENT_OVERRIDES_KEY,{type:'json'})||{};
       delete forecastOverrides.__updatedAt;
-    }catch{forecastOverrides={};}
+      delete adminEventOverrides.__updatedAt;
+    }catch{forecastOverrides={};adminEventOverrides={};}
   }
   const staticOfficial=await fetchStaticOfficial(request);
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null},fedFomc={metrics:{},histories:{},savedAt:null};
@@ -628,7 +628,19 @@ export async function onRequestGet({request,env}){
   });
   for(const e of events){
     const keys=[`${canonicalType(e)}|${String(e.releasePeriod||'')}`,String(e.id||'')].filter(Boolean);
-    for(const k of keys){if(Object.prototype.hasOwnProperty.call(forecastOverrides,k)){e.forecast=String(forecastOverrides[k]??'');break;}}
+    for(const k of keys){
+      if(Object.prototype.hasOwnProperty.call(adminEventOverrides,k)){
+        const o=adminEventOverrides[k];
+        if(o&&typeof o==='object'){
+          e.forecast=String(o.forecast??'');
+          if(o.datetime)e.datetime=String(o.datetime);
+        }else{
+          e.forecast=String(o??'');
+        }
+        break;
+      }
+      if(Object.prototype.hasOwnProperty.call(forecastOverrides,k)){e.forecast=String(forecastOverrides[k]??'');break;}
+    }
   }
   if(archiveChanged&&env.GH_MARKET_DATA){
     await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(sanitizeEvents(persistable)));

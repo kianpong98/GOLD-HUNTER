@@ -1,4 +1,4 @@
-const KEY='market-admin-forecast-overrides-v3';
+const KEY='market-admin-event-overrides-v4';
 
 function json(data,status=200){
   return new Response(JSON.stringify(data),{status,headers:{
@@ -40,7 +40,7 @@ export async function onRequestPost({request,env}){
   delete next.__updatedAt;
   let count=0;
   for(const e of rows){
-    const value=clean(e?.forecast,80);
+    const value={forecast:clean(e?.forecast,80),datetime:clean(e?.datetime,50),updatedAt:new Date().toISOString()};
     const keys=eventKeys(e);
     if(!keys.length)continue;
     for(const key of keys)next[key]=value;
@@ -49,7 +49,7 @@ export async function onRequestPost({request,env}){
   next.__updatedAt=new Date().toISOString();
   await env.GH_MARKET_DATA.put(KEY,JSON.stringify(next));
   const verify=await env.GH_MARKET_DATA.get(KEY,{type:'json'})||{};
-  const mismatch=rows.find(e=>eventKeys(e).some(k=>String(verify[k]??'')!==clean(e?.forecast,80)));
+  const mismatch=rows.find(e=>eventKeys(e).some(k=>{const row=verify[k];return !row||String(row.forecast??'')!==clean(e?.forecast,80)||String(row.datetime??'')!==clean(e?.datetime,50);}));
   if(mismatch)return json({error:`KV verification failed for ${clean(mismatch.name||mismatch.id,120)}.`},500);
   return json({ok:true,count,updatedAt:verify.__updatedAt,overrides:verify});
 }
