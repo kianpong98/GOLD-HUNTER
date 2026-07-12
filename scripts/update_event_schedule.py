@@ -222,6 +222,16 @@ def load_existing() -> list[dict[str, Any]]:
     return []
 
 
+SOURCE_TYPES = {
+    "bls_cpi": {"cpi_yoy", "core_cpi_yoy"},
+    "bls_ppi": {"ppi_yoy", "core_ppi_yoy"},
+    "bls_jobs": {"nfp", "unemployment", "avg_hourly_earnings"},
+    "bea": {"gdp", "pce", "core_pce"},
+    "retail": {"retail_sales"},
+    "fomc": {"fomc", "fomc_minutes"},
+    "jobless": {"jobless_claims"},
+}
+
 def main() -> None:
     existing = load_existing()
     existing_by_key = {(str(e.get("type", "")), str(e.get("releasePeriod", ""))): e for e in existing}
@@ -236,14 +246,16 @@ def main() -> None:
         ("fomc", parse_fomc),
         ("jobless", generate_jobless),
     ]
+    successful_sources: set[str] = set()
     for name, task in tasks:
         try:
             events.extend(task())
+            successful_sources.add(name)
         except Exception as exc:
             errors[name] = str(exc)
 
-    # Preserve all still-relevant seed/existing events when an upstream schedule page
-    # temporarily fails or omits a release. This guarantees full news coverage.
+    # Existing/seed rows are state carriers, not authoritative schedule rows.
+    # Preserve a missing auto event only when its own official schedule source failed.
     preserved = list(existing)
     if SEED.exists():
         try:
@@ -284,8 +296,15 @@ def main() -> None:
         return f"{event_type}|{minute}|{str(event.get('name','')).strip().lower()}"
 
     generated_keys = {canonical_key(e) for e in events}
+    successful_types = set().union(*(SOURCE_TYPES[name] for name in successful_sources)) if successful_sources else set()
     for old in preserved:
+        old_type = canonical_type(old)
         key = canonical_key(old)
+        # When the official source succeeded, reject legacy/seed ghost rows that are
+        # absent from the freshly generated official schedule. This removes false
+        # dates such as duplicate FOMC decisions.
+        if old_type in successful_types:
+            continue
         if key not in generated_keys and new_time_ok(old.get("datetime")):
             events.append(old)
             generated_keys.add(key)

@@ -255,6 +255,47 @@ function mergeHistoryRows(...lists){
   }
   return [...byKey.values()].sort((a,b)=>String(b.period).localeCompare(String(a.period))).slice(0,100);
 }
+function mergeEventState(scheduleRow,...stateRows){
+  const rows=stateRows.filter(Boolean);
+  const history=mergeHistoryRows(...rows.map(r=>r.releaseHistory));
+  const releaseForecasts=Object.assign({},...rows.slice().reverse().map(r=>r.releaseForecasts||{}));
+  const pick=(field)=>rows.find(r=>r?.[field])?.[field];
+  return {
+    ...scheduleRow,
+    id:eventKey(scheduleRow),
+    type:canonicalType(scheduleRow),
+    forecast:pick('forecast')||scheduleRow.forecast||'',
+    previous:pick('previous')||scheduleRow.previous||'',
+    actual:pick('actual')||scheduleRow.actual||'',
+    lastRelease:pick('lastRelease')||scheduleRow.lastRelease||null,
+    releaseHistory:history,
+    releaseForecasts,
+    archivedPeriod:pick('archivedPeriod')||scheduleRow.archivedPeriod||'',
+    archivedAt:pick('archivedAt')||scheduleRow.archivedAt||''
+  };
+}
+function applyAuthoritativeSchedule(generated,stored){
+  const official=dedupeEvents(generated);
+  if(!official.length)return dedupeEvents(stored);
+  const storedRows=dedupeEvents(stored);
+  const byKey=new Map();
+  for(const row of storedRows){
+    const key=eventKey(row);
+    if(!byKey.has(key))byKey.set(key,[]);
+    byKey.get(key).push(row);
+  }
+  const officialKeys=new Set(official.map(eventKey));
+  const result=official.map(row=>mergeEventState(row,...(byKey.get(eventKey(row))||[])));
+  // Only event types that can legitimately have multiple unscheduled occurrences
+  // may survive outside the official whitelist. Numeric macro events and FOMC rows
+  // must exist in generated-events.json or they are stale/false schedule ghosts.
+  for(const row of storedRows){
+    const type=canonicalType(row);
+    if(officialKeys.has(eventKey(row)))continue;
+    if(!AUTO_TYPES.has(type)&&type!=='fomc_minutes')result.push(row);
+  }
+  return dedupeEvents(result);
+}
 function dedupeEvents(input){
   const out=new Map();
   for(const raw of Array.isArray(input)?input:[]){
@@ -291,11 +332,11 @@ async function readStored(env,request){
     const value=await env.GH_MARKET_DATA.get(EVENTS_KEY,{type:'json'});
     if(Array.isArray(value))stored=value;
   }
-  // Always merge generated schedule with every stored row before deduplication.
-  // The canonical type+releasePeriod id collapses legacy duplicates while retaining
-  // user-entered current forecasts and all historical forecast maps.
-  const source=generated.length?[...generated,...stored]:(stored.length?stored:SEED_EVENTS);
-  return dedupeEvents(source);
+  // generated-events.json is the authoritative whitelist for scheduled macro rows.
+  // Stored KV rows may enrich matching schedule rows, but may not create extra
+  // numeric/FOMC dates. This prevents stale false events from reappearing.
+  if(generated.length)return applyAuthoritativeSchedule(generated,stored);
+  return dedupeEvents(stored.length?stored:SEED_EVENTS);
 }
 function monthKey(row){return `${row.year}-${String(Number(row.period?.replace('M',''))).padStart(2,'0')}`;}
 function newestRows(series){return (series?.data||[]).filter(r=>/^M\d\d$/.test(r.period)).sort((a,b)=>monthKey(b).localeCompare(monthKey(a)));}
@@ -585,7 +626,11 @@ export async function onRequestPost({request,env}){
   // Backup the last known-good KV payload before every admin/workflow write.
   if(current.length)await env.GH_MARKET_DATA.put(EVENTS_BACKUP_KEY,JSON.stringify(current));
   // Never allow a partial workflow/admin payload to erase user-managed fields.
-  const events=dedupeEvents([...submitted,...current]);
+  // Also enforce the static official schedule whitelist on every write, so stale
+  // legacy rows cannot be persisted back into KV by Cleanup or Admin.
+  const generated=await fetchStaticEvents(request);
+  const combined=dedupeEvents([...submitted,...current]);
+  const events=generated.length?applyAuthoritativeSchedule(generated,combined):combined;
   events.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
   await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(events));
   return json({ok:true,count:events.length,events,backupCreated:Boolean(current.length),updatedAt:new Date().toISOString()},200,{'cache-control':'no-store'});
