@@ -1,0 +1,66 @@
+name: Connector health check
+
+on:
+  schedule:
+    - cron: '12 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connector-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch live market engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 20 --max-time 180 \
+            -o market-events.json "https://goldhunter.site/api/market-events?health=$(date +%s)"
+
+      - name: Validate connectors and coverage
+        run: |
+          python - <<'PY'
+          import json, os
+          d=json.load(open('market-events.json',encoding='utf-8'))
+          events=d.get('events') or []
+          sources=d.get('officialSources') or {}
+          numeric={'cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc'}
+          missing=[]; duplicates=[]; seen=set()
+          for e in events:
+              typ=str(e.get('type','')).strip().lower()
+              stamp=str(e.get('datetime','')) if typ=='fed_speech' else str(e.get('releasePeriod') or e.get('datetime',''))[:10]
+              key=(typ,stamp)
+              if key in seen: duplicates.append(key)
+              seen.add(key)
+              if typ in numeric and str(e.get('previous','')).strip() in {'','—','-'}:
+                  missing.append(f"{e.get('name') or typ} [{e.get('releasePeriod','')}]" )
+          summary=[
+              '# Gold Hunter connector health',
+              f"- Events: **{len(events)}**",
+              f"- KV configured: **{d.get('kvConfigured')}**",
+              f"- Official data updated: **{d.get('officialUpdatedAt') or 'unknown'}**",
+              f"- BLS: **{sources.get('bls')}**",
+              f"- FRED: **{sources.get('fred')}**",
+              f"- DOL: **{sources.get('dol')}**",
+              f"- BEA: **{sources.get('bea')}**",
+              f"- Federal Reserve: **{sources.get('federalReserve')}**",
+              f"- Duplicate live rows: **{len(duplicates)}**",
+              f"- Numeric events missing Previous: **{len(missing)}**",
+          ]
+          if missing: summary += ['', '## Missing Previous', *[f'- {x}' for x in missing]]
+          if duplicates: summary += ['', '## Duplicate keys (run Cleanup duplicate news)', *[f'- `{x[0]} | {x[1]}`' for x in sorted(set(duplicates))]]
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as f: f.write('\n'.join(summary)+'\n')
+          assert events, 'No market events returned'
+          assert d.get('kvConfigured') is True, 'Cloudflare KV is not configured'
+          # Duplicates and missing Previous are health warnings. Cleanup/sync workflows repair them;
+          # they should not make connector health itself red.
+          print('\n'.join(summary))
+          PY

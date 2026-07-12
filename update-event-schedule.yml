@@ -1,0 +1,76 @@
+name: Update official release schedule
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feature/news-engine
+    paths:
+      - '.github/workflows/update-event-schedule.yml'
+      - 'scripts/update_event_schedule.py'
+  schedule:
+    - cron: '17 0 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 python-dateutil
+      - name: Sync future official release dates
+        run: python scripts/update_event_schedule.py
+      - name: Validate generated schedule
+        run: |
+          python - <<'PY'
+          import json
+          events=json.load(open('data/generated-events.json',encoding='utf-8'))
+          assert len(events)>=8, f'Only {len(events)} events generated'
+          assert all(e.get('datetime') and e.get('type') for e in events)
+          allowed={'cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc','fomc_minutes'}
+          assert all(e.get('type') in allowed for e in events), 'Unexpected event type in official schedule'
+          keys=[]
+          for e in events:
+              typ=e['type']; period=str(e.get('releasePeriod') or str(e.get('datetime',''))[:10])
+              keys.append((typ,period))
+              # Schedule file must never contain user/data state.
+              assert not e.get('actual') and not e.get('lastRelease') and not e.get('releaseHistory') and not e.get('releaseForecasts')
+          assert len(keys)==len(set(keys)), f'Duplicate official schedule keys: {[k for k in set(keys) if keys.count(k)>1]}'
+          print('Generated events:',len(events))
+          PY
+      - name: Commit schedule
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/generated-events.json
+          if git diff --cached --quiet; then
+            echo "No schedule changes."
+            exit 0
+          fi
+          git commit -m "Update official release schedule"
+          BRANCH="${GITHUB_REF_NAME}"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 2))
+          done
+          exit 1
