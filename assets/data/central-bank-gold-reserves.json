@@ -1,8 +1,8 @@
 {
   "source": "World Gold Council / IMF IFS",
   "sourceUrl": "https://www.gold.org/goldhub/data/gold-reserves-by-country",
-  "updatedAt": "2026-07-12T10:43:38.643110Z",
-  "checkedAt": "2026-07-12T10:43:38.643110Z",
+  "updatedAt": "2026-07-12T10:58:08.569888Z",
+  "checkedAt": "2026-07-12T10:58:08.569888Z",
   "records": [
     {
       "country": "United States",
@@ -84,7 +84,6 @@
   },
   "status": "ready",
   "sourceMode": "partial_live_refresh",
-  "shareDefinition": "Gold value as a percentage of total official reserves, calculated by the World Gold Council using end-of-quarter gold prices and IMF IFS reserves data.",
   "refresh": {
     "countriesUpdated": [
       "China",
