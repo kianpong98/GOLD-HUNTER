@@ -1,5 +1,5 @@
 (()=>{
-  const API='/api/market-events'; const FORECAST_API='/api/forecast-overrides'; const SYNC_INTERVAL_MS=5*60*1000; let pin='',events=[],meta={},nextSyncAt=0,autoRefreshBusy=false;
+  const API='/api/market-events'; const SYNC_INTERVAL_MS=5*60*1000; let pin='',events=[],meta={},nextSyncAt=0,autoRefreshBusy=false;
   const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const statusText=e=>e.eventOnly?'Event time only':e.actual?'Actual received':e.officialAuto?(e.previousStatus==='ready'?'Official connected':'Awaiting official sync'):'Manual / fallback';
   function visibleEvents(){const q=$('#searchInput').value.trim().toLowerCase(),f=$('#filterSelect').value,now=Date.now();return events.map((e,i)=>({e,i})).filter(({e})=>{
@@ -50,19 +50,15 @@
   $('#unlockAdmin').addEventListener('click',unlock);$('#adminPin').addEventListener('keydown',e=>{if(e.key==='Enter')unlock();});$('#adminPin').value=sessionStorage.getItem('ghAdminPin')||'';
   $('#searchInput').addEventListener('input',render);$('#filterSelect').addEventListener('change',render);$('#refreshData').addEventListener('click',async()=>{collect();$('#saveStatus').textContent='重新读取中…';try{await load();$('#saveStatus').textContent='已读取最新数据。';}catch(e){$('#saveStatus').textContent=e.message;}});
   $('#saveEvents').addEventListener('click',async()=>{collect();const st=$('#saveStatus'),btn=$('#saveEvents');st.textContent='保存中…';btn.disabled=true;try{
-    const overrides={};
-    for(const e of events){const value=String(e.forecast??'').trim();const type=String(e.type||'').trim();const period=String(e.releasePeriod||'').trim();const id=String(e.id||'').trim();if(id)overrides[id]=value;if(type){overrides[type]=value;if(period)overrides[`${type}|${period}`]=value;}}
-    const [eventRes,forecastRes]=await Promise.all([
-      fetch(`${API}?v=${Date.now()}`,{method:'POST',headers:{'content-type':'application/json','x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'},body:JSON.stringify({events})}),
-      fetch(`${FORECAST_API}?v=${Date.now()}`,{method:'POST',headers:{'content-type':'application/json','x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'},body:JSON.stringify({overrides})})
-    ]);
-    const eventData=await eventRes.json(),forecastData=await forecastRes.json();
+    const eventRes=await fetch(`${API}?v=${Date.now()}`,{method:'POST',headers:{'content-type':'application/json','x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'},body:JSON.stringify({events})});
+    const eventData=await eventRes.json();
     if(!eventRes.ok)throw new Error(eventData.error||'新闻数据保存失败');
-    if(!forecastRes.ok)throw new Error(forecastData.error||'Forecast 独立保存失败');
-    const verifyRes=await fetch(`${FORECAST_API}?verify=${Date.now()}`,{cache:'no-store',headers:{'cache-control':'no-cache','pragma':'no-cache'}}),verify=await verifyRes.json();
-    const mismatch=events.find(e=>{const expected=String(e.forecast??'').trim(),keys=[String(e.id||''),`${String(e.type||'')}|${String(e.releasePeriod||'')}`,String(e.type||'')].filter(Boolean);return !keys.some(k=>Object.prototype.hasOwnProperty.call(verify.overrides||{},k)&&String(verify.overrides[k]??'')===expected);});
-    if(mismatch)throw new Error(`保存验证失败：${mismatch.name} 的 Forecast 尚未写入 KV。`);
-    st.textContent=`已保存并验证 ${events.length} 项 Forecast。网站会立即至 30 秒内更新。`;
+    const verifyRes=await fetch(`${API}?verify=${Date.now()}`,{cache:'no-store',headers:{'x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'}}),verify=await verifyRes.json();
+    if(!verifyRes.ok)throw new Error(verify.error||'保存后验证失败');
+    const byId=new Map((verify.events||[]).map(e=>[String(e.id||''),String(e.forecast??'').trim()]));
+    const mismatch=events.find(e=>String(e.id||'')&&byId.get(String(e.id))!==String(e.forecast??'').trim());
+    if(mismatch)throw new Error(`保存验证失败：${mismatch.name} 的 Forecast 仍未更新。`);
+    st.textContent=`已直接写入并验证 ${events.length} 项新闻数据。网站会立即至 30 秒内更新。`;
     try{localStorage.setItem('gh-market-events-updated',String(Date.now()));}catch{}await load();
   }catch(e){st.textContent=e.message;}finally{btn.disabled=false;}});
   $('#logoutAdmin').addEventListener('click',()=>{sessionStorage.removeItem('ghAdminPin');location.reload();});
