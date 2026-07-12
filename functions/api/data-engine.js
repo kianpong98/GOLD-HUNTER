@@ -637,7 +637,7 @@ export async function onRequestGet({request,env}){
   if(connectorSources.fred.status!=='live')degraded.push('FRED');
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
-  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, max-age=0'});
+  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
@@ -652,8 +652,24 @@ export async function onRequestPost({request,env}){
   // Also enforce the static official schedule whitelist on every write, so stale
   // legacy rows cannot be persisted back into KV by Cleanup or Admin.
   const generated=await fetchStaticEvents(request);
-  const combined=dedupeEvents([...submitted,...current]);
-  const events=generated.length?applyAuthoritativeSchedule(generated,combined):combined;
+  // Merge current state first, then explicitly overlay the complete Admin submission.
+  // This makes Forecast edits authoritative immediately, including replacing or clearing a value.
+  const currentByKey=new Map(current.map(e=>[eventKey(e),e]));
+  const submittedKeys=new Set(submitted.map(e=>eventKey(e)));
+  const combined=submitted.map(e=>{
+    const old=currentByKey.get(eventKey(e))||{};
+    return {...old,...e,
+      forecast:e.forecast,
+      datetime:e.datetime,
+      releaseForecasts:{...(old.releaseForecasts||{}),...(e.releaseForecasts||{})},
+      releaseHistory:mergeHistoryRows(old.releaseHistory,e.releaseHistory),
+      lastRelease:e.lastRelease||old.lastRelease||null,
+      previous:e.previous||old.previous||'',
+      actual:e.actual||old.actual||''
+    };
+  });
+  for(const e of current){if(!submittedKeys.has(eventKey(e)))combined.push(e);}
+  const events=generated.length?applyAuthoritativeSchedule(generated,combined):dedupeEvents(combined);
   events.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
   await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(events));
   return json({ok:true,count:events.length,events,backupCreated:Boolean(current.length),updatedAt:new Date().toISOString()},200,{'cache-control':'no-store'});
