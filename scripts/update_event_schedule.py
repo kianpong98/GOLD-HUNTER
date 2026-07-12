@@ -178,8 +178,11 @@ def parse_fomc() -> list[dict[str, Any]]:
     text = " ".join(BeautifulSoup(get("https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"), "html.parser").get_text(" ", strip=True).split())
     events: list[dict[str, Any]] = []
     # Matches blocks such as "July 28-29" under a year heading. Capture current/next year around each match.
-    for match in re.finditer(r"\b(January|March|April|May|June|July|September|October|November|December)\s+(\d{1,2})(?:\s*[–-]\s*(\d{1,2}))?", text, re.I):
-        month_name, start_day, end_day = match.group(1), int(match.group(2)), int(match.group(3) or match.group(2))
+    for match in re.finditer(r"\b(January|March|April|May|June|July|September|October|November|December)\s+(\d{1,2})\s*[–-]\s*(\d{1,2})", text, re.I):
+        # Regular scheduled FOMC meetings are date ranges. Requiring the range
+        # prevents minute-release text such as 'Released July 08, 2026' from
+        # being misclassified as a new interest-rate decision.
+        month_name, start_day, end_day = match.group(1), int(match.group(2)), int(match.group(3))
         prefix = text[max(0, match.start() - 300):match.start()]
         years = re.findall(r"\b20(?:2[5-9]|3\d)\b", prefix)
         year = int(years[-1]) if years else TODAY.year
@@ -310,29 +313,22 @@ def main() -> None:
             events.append(old)
             generated_keys.add(key)
 
-    # Prefer freshly generated official rows over legacy/seed duplicates, while
-    # retaining Admin forecast and archived Last Release data from the old row.
+    # generated-events.json is schedule-only. Forecast, Actual, Previous and
+    # history live exclusively in Cloudflare KV and are merged by the API.
+    # Never copy user/data state into the committed schedule file.
     dedup: dict[str, dict[str, Any]] = {}
     for event in events:
         event = dict(event)
         event["type"] = canonical_type(event)
         key = canonical_key(event)
-        prior = dedup.get(key)
-        old = existing_by_key.get((str(event.get("type", "")), str(event.get("releasePeriod", ""))))
-        merged = dict(event)
-        carry = old or prior
-        if carry:
-            merged["forecast"] = str(carry.get("forecast") or merged.get("forecast") or "")
-            for field in ("lastRelease", "releaseHistory", "releaseForecasts", "archivedPeriod", "archivedAt", "previous", "actual"):
-                if carry.get(field):
-                    merged[field] = carry[field]
-        # Keep the first official/generated row; only enrich it with carried state.
+        schedule_only = {k: v for k, v in event.items() if k not in {
+            "forecast", "previous", "actual", "lastRelease", "releaseHistory",
+            "releaseForecasts", "archivedPeriod", "archivedAt"
+        }}
+        schedule_only["forecast"] = ""
+        schedule_only["previous"] = ""
         if key not in dedup:
-            dedup[key] = merged
-        else:
-            for field in ("forecast", "lastRelease", "releaseHistory", "releaseForecasts", "archivedPeriod", "archivedAt", "previous", "actual"):
-                if not dedup[key].get(field) and merged.get(field):
-                    dedup[key][field] = merged[field]
+            dedup[key] = schedule_only
     result = sorted(dedup.values(), key=lambda e: e.get("datetime", ""))
     if not result:
         raise SystemExit(f"No events generated; preserving old file. Errors: {errors}")
