@@ -109,13 +109,55 @@
     const box=document.getElementById('rateExpectationBody');
     if(!box)return;
     try{
-      const r=await fetch(RATE_EXPECTATION_API,{cache:'no-store'}),d=await r.json();
+      let r=await fetch(RATE_EXPECTATION_API,{cache:'no-store'});
+      if(!r.ok)r=await fetch('/assets/data/rate-expectation.json?v=8.8',{cache:'no-store'});
+      const d=await r.json();
       if(!r.ok)throw new Error(d.error||'Rate expectation unavailable');
-      const cut=Number(d.probabilities?.cut),hold=Number(d.probabilities?.hold),hike=Number(d.probabilities?.hike);
-      const valid=[cut,hold,hike].every(Number.isFinite);
-      const entries=[['Rate cut',cut,'cut'],['No change',hold,'hold'],['Rate hike',hike,'hike']];
-      const leader=valid?[...entries].sort((a,b)=>b[1]-a[1])[0]:null;
-      box.innerHTML=`<div class="rate-expectation-top"><div><span>Next FOMC meeting</span><strong>${esc(d.meetingDate||'TBA')}</strong><small>${esc(d.currentTargetRange?`Current target ${d.currentTargetRange}`:'Market-implied probabilities')}</small></div><div class="rate-bias ${leader?leader[2]:'hold'}"><b>${leader?`${leader[0]} ${leader[1].toFixed(1)}%`:'Awaiting update'}</b><span>${leader?(leader[2]==='cut'?'Typically supportive for gold':leader[2]==='hike'?'Typically negative for gold':'Neutral policy expectation'):'Add the latest CME FedWatch probabilities'}</span></div></div>${valid?`<div class="rate-probability-grid">${entries.map(([name,val,key])=>`<article class="${key}"><div><span>${name}</span><strong>${val.toFixed(1)}%</strong></div><i><b style="width:${Math.max(0,Math.min(100,val))}%"></b></i></article>`).join('')}</div>`:`<div class="market-empty compact">Live CME probabilities require a FedWatch data subscription. Update <b>assets/data/rate-expectation.json</b> with the latest cut / hold / hike values.</div>`}<div class="rate-source-row"><small>Updated ${esc(d.updatedAt?new Date(d.updatedAt).toLocaleString('en-MY'):'pending')}</small><a href="${esc(d.sourceUrl||'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html')}" target="_blank" rel="noopener">CME FedWatch →</a></div>`;
+      const outcomes=(Array.isArray(d.outcomes)?d.outcomes:[])
+        .map(x=>({...x,probability:Number(x.probability)}))
+        .filter(x=>x.targetRange&&Number.isFinite(x.probability))
+        .sort((a,b)=>b.probability-a.probability);
+      if(!outcomes.length)throw new Error('Rate probabilities are awaiting update');
+      const leader=outcomes[0];
+      const dir=leader.direction==='cut'?'cut':leader.direction==='hike'?'hike':'hold';
+      const impact=dir==='cut'?'Supportive for gold':dir==='hike'?'Pressure for gold':'Neutral for gold';
+      const impactText=dir==='cut'?'Lower-rate expectations usually reduce the opportunity cost of holding gold.':dir==='hike'?'Higher-rate expectations usually support yields and the U.S. dollar.':'Markets currently expect policy to remain unchanged.';
+      const total=outcomes.reduce((n,x)=>n+x.probability,0);
+      box.innerHTML=`
+        <div class="rate-hero">
+          <div class="rate-meeting">
+            <span>${esc(d.meetingLabel||'Next FOMC decision')}</span>
+            <strong>${esc(d.meetingDate||'TBA')}</strong>
+            <small>Current target range&nbsp; ${esc(d.currentTargetRange||'—')}</small>
+          </div>
+          <div class="rate-primary ${dir}">
+            <span>Highest probability</span>
+            <strong>${esc(leader.targetRange)}</strong>
+            <b>${leader.probability.toFixed(0)}%</b>
+            <small>${esc(leader.move||'Market-implied outcome')}</small>
+          </div>
+        </div>
+        <div class="rate-range-list">
+          ${outcomes.map((x,i)=>{
+            const k=x.direction==='cut'?'cut':x.direction==='hike'?'hike':'hold';
+            return `<article class="rate-range-row ${k} ${i===0?'is-leading':''}">
+              <div class="rate-range-copy">
+                <span>${esc(x.move||'Target range')}</span>
+                <strong>${esc(x.targetRange)}</strong>
+              </div>
+              <div class="rate-range-meter"><i><b style="width:${Math.max(0,Math.min(100,x.probability))}%"></b></i><small>${x.probability.toFixed(0)}% probability</small></div>
+              <em>${x.probability.toFixed(0)}%</em>
+            </article>`;
+          }).join('')}
+        </div>
+        <div class="rate-insight ${dir}">
+          <div><span>Gold impact</span><strong>${impact}</strong></div>
+          <p>${impactText}</p>
+        </div>
+        <div class="rate-source-row">
+          <small>Updated ${esc(d.updatedAt?new Date(d.updatedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}):'pending')} · Total ${total.toFixed(0)}%</small>
+          <a href="${esc(d.sourceUrl||'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html')}" target="_blank" rel="noopener">View source ↗</a>
+        </div>`;
     }catch(e){box.innerHTML=`<div class="market-empty compact">${esc(e.message)}</div>`;}
   }
 
