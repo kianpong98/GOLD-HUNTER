@@ -667,24 +667,25 @@ export async function onRequestGet({request,env}){
   const fredHasErrors=Boolean(fred.error||fred.refreshError||fred.stale||Object.keys(fred.errors||{}).length);
   const fredLive=!fredHasErrors;
   const connectorSources={
-    staticCache:{status:Object.keys(staticOfficial.metrics||{}).length?'cached':'offline',lastSuccess:staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null},
-    bls:{status:sourceStatus(bls,blsLive),lastSuccess:bls.savedAt?new Date(bls.savedAt).toISOString():null},
-    fred:{status:sourceStatus(fred,fredLive),lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
-    dol:{status:official.metrics?.jobless_claims?.actual?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
-    bea:{status:(official.metrics?.gdp?.actual&&official.metrics?.pce?.actual&&official.metrics?.core_pce?.actual)?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null},
-    federalReserve:{status:official.metrics?.fomc?.actual?((!fedFomc.error&&!fedFomc.refreshError&&!fedFomc.stale)?'live':'cached'):'offline',lastSuccess:(fedFomc.savedAt||fred.savedAt)?new Date(fedFomc.savedAt||fred.savedAt).toISOString():null},
-    cloudflareKv:{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?new Date().toISOString():null}
+    staticCache:{status:Object.keys(staticOfficial.metrics||{}).length?'cached':'offline',lastSuccess:staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null,lastChecked:staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null},
+    bls:{status:sourceStatus(bls,blsLive),lastSuccess:bls.savedAt?new Date(bls.savedAt).toISOString():null,lastChecked:(bls.liveCheckAt||bls.savedAt)?new Date(bls.liveCheckAt||bls.savedAt).toISOString():null},
+    fred:{status:sourceStatus(fred,fredLive),lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null,lastChecked:(fred.liveCheckAt||fred.savedAt)?new Date(fred.liveCheckAt||fred.savedAt).toISOString():null},
+    dol:{status:official.metrics?.jobless_claims?.actual?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null,lastChecked:(fred.liveCheckAt||fred.savedAt)?new Date(fred.liveCheckAt||fred.savedAt).toISOString():null},
+    bea:{status:(official.metrics?.gdp?.actual&&official.metrics?.pce?.actual&&official.metrics?.core_pce?.actual)?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null,lastChecked:(fred.liveCheckAt||fred.savedAt)?new Date(fred.liveCheckAt||fred.savedAt).toISOString():null},
+    federalReserve:{status:official.metrics?.fomc?.actual?((!fedFomc.error&&!fedFomc.refreshError&&!fedFomc.stale)?'live':'cached'):'offline',lastSuccess:(fedFomc.savedAt||fred.savedAt)?new Date(fedFomc.savedAt||fred.savedAt).toISOString():null,lastChecked:(fedFomc.liveCheckAt||fedFomc.savedAt||fred.liveCheckAt||fred.savedAt)?new Date(fedFomc.liveCheckAt||fedFomc.savedAt||fred.liveCheckAt||fred.savedAt).toISOString():null},
+    cloudflareKv:{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?new Date().toISOString():null,lastChecked:env.GH_MARKET_DATA?new Date().toISOString():null}
   };
   const degraded=[];
   if(connectorSources.bls.status!=='live')degraded.push('BLS');
   if(connectorSources.fred.status!=='live')degraded.push('FRED');
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
-  return json({engineVersion:'10.2.0',events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  const responseNow=new Date().toISOString();
+  return json({engineVersion:'10.2.4-kv-efficient',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
-    engineVersion:'10.2.3-kv-efficient',
+    engineVersion:'10.2.4-kv-efficient',
     step:'start',
     timestamp:new Date().toISOString(),
     kvBound:Boolean(env&&env.GH_MARKET_DATA)
@@ -733,7 +734,7 @@ export async function onRequestPost({request,env}){
     }
 
     const updatedAt=new Date().toISOString();
-    const payload={version:'10.2.3-kv-efficient',updatedAt,overrides};
+    const payload={version:'10.2.4-kv-efficient',updatedAt,overrides};
     const serialized=JSON.stringify(payload);
     debug.overrideCount=Object.keys(overrides).length;
     debug.payloadBytes=new TextEncoder().encode(serialized).length;
@@ -745,7 +746,7 @@ export async function onRequestPost({request,env}){
     if(existing&&sameMeaningfulData(existing,payload)){
       debug.step='complete-no-change';
       debug.writeSkipped=true;
-      return json({ok:true,unchanged:true,version:'10.2.3-kv-efficient',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
+      return json({ok:true,unchanged:true,version:'10.2.4-kv-efficient',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
     }
 
     debug.step='kv-put';
@@ -757,12 +758,12 @@ export async function onRequestPost({request,env}){
     debug.readbackVersion=verify?.version||null;
 
     debug.step='verify-readback';
-    if(!verify||verify.version!=='10.2.3-kv-efficient'){
+    if(!verify||verify.version!=='10.2.4-kv-efficient'){
       return json({error:'KV write verification failed.',debug},500,{'cache-control':'no-store'});
     }
 
     debug.step='complete';
-    return json({ok:true,version:'10.2.3-kv-efficient',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
+    return json({ok:true,version:'10.2.4-kv-efficient',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
   }catch(error){
     debug.failedAt=debug.step;
     debug.exception={
