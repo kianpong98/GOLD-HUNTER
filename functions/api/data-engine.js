@@ -1,6 +1,5 @@
 const EVENTS_KEY = 'gold-market-events-v3';
-const FORECAST_OVERRIDES_KEY='market-forecast-overrides-v1';
-const ADMIN_EVENT_OVERRIDES_KEY='market-admin-event-overrides-v4';
+const ADMIN_OVERRIDES_KEY='news-admin-overrides-v1';
 const EVENTS_BACKUP_KEY = 'gold-market-events-v3-backup';
 const BLS_CACHE_KEY = 'official-bls-cache-v1';
 
@@ -539,14 +538,12 @@ export async function onRequestGet({request,env}){
   // This prevents public visitors from repeatedly hammering official upstream sources.
   const forceRefresh=Boolean(wantsAdmin&&requestUrl.searchParams.get('force')==='1');
   const stored=(await readStored(env,request)).filter(e=>!REMOVED_TYPES.has(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
-  let forecastOverrides={},adminEventOverrides={};
+  let adminOverrides={};
   if(env.GH_MARKET_DATA){
     try{
-      forecastOverrides=await env.GH_MARKET_DATA.get(FORECAST_OVERRIDES_KEY,{type:'json'})||{};
-      adminEventOverrides=await env.GH_MARKET_DATA.get(ADMIN_EVENT_OVERRIDES_KEY,{type:'json'})||{};
-      delete forecastOverrides.__updatedAt;
-      delete adminEventOverrides.__updatedAt;
-    }catch{forecastOverrides={};adminEventOverrides={};}
+      const payload=await env.GH_MARKET_DATA.get(ADMIN_OVERRIDES_KEY,{type:'json'})||{};
+      adminOverrides=(payload&&typeof payload.overrides==='object')?payload.overrides:{};
+    }catch{adminOverrides={};}
   }
   const staticOfficial=await fetchStaticOfficial(request);
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null},fedFomc={metrics:{},histories:{},savedAt:null};
@@ -565,7 +562,18 @@ export async function onRequestGet({request,env}){
   const now=Date.now();
   let archiveChanged=false;
   const persistable=stored.map(e=>({...e}));
-  const events=dedupeEvents(persistable.filter(e=>Number(e.impact)>=4&&!REMOVED_TYPES.has(e.type))).map(e=>{
+  const prepared=dedupeEvents(persistable.filter(e=>Number(e.impact)>=4&&!REMOVED_TYPES.has(e.type))).map(e=>{
+    const keys=[`${canonicalType(e)}|${String(e.releasePeriod||'')}`,String(e.id||'')].filter(Boolean);
+    let override=null;
+    for(const key of keys){if(Object.prototype.hasOwnProperty.call(adminOverrides,key)){override=adminOverrides[key];break;}}
+    if(override&&typeof override==='object'){
+      if(Object.prototype.hasOwnProperty.call(override,'forecast'))e.forecast=String(override.forecast??'');
+      if(override.datetime)e.datetime=String(override.datetime);
+      if(override.releaseForecasts&&typeof override.releaseForecasts==='object')e.releaseForecasts={...(e.releaseForecasts||{}),...override.releaseForecasts};
+    }
+    return e;
+  });
+  const events=prepared.map(e=>{
     const m=official.metrics?.[e.type];
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
@@ -626,22 +634,6 @@ export async function onRequestGet({request,env}){
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
-  for(const e of events){
-    const keys=[`${canonicalType(e)}|${String(e.releasePeriod||'')}`,String(e.id||'')].filter(Boolean);
-    for(const k of keys){
-      if(Object.prototype.hasOwnProperty.call(adminEventOverrides,k)){
-        const o=adminEventOverrides[k];
-        if(o&&typeof o==='object'){
-          e.forecast=String(o.forecast??'');
-          if(o.datetime)e.datetime=String(o.datetime);
-        }else{
-          e.forecast=String(o??'');
-        }
-        break;
-      }
-      if(Object.prototype.hasOwnProperty.call(forecastOverrides,k)){e.forecast=String(forecastOverrides[k]??'');break;}
-    }
-  }
   if(archiveChanged&&env.GH_MARKET_DATA){
     await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(sanitizeEvents(persistable)));
   }
@@ -664,47 +656,37 @@ export async function onRequestGet({request,env}){
   if(connectorSources.fred.status!=='live')degraded.push('FRED');
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
-  return json({events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'10.2.0',events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
   if(!env.GH_MARKET_DATA)return json({error:'GH_MARKET_DATA KV binding is not configured in Cloudflare.'},503,{'cache-control':'no-store'});
   let body;try{body=await request.json();}catch{return json({error:'Invalid request.'},400);}
-  const submitted=sanitizeEvents(body?.events); if(!submitted.length)return json({error:'No valid 4-star or 5-star events.'},400);
-  const existing=await env.GH_MARKET_DATA.get(EVENTS_KEY,{type:'json'});
-  const current=Array.isArray(existing)?sanitizeEvents(existing):[];
-  // Backup the last known-good KV payload before every admin/workflow write.
-  if(current.length)await env.GH_MARKET_DATA.put(EVENTS_BACKUP_KEY,JSON.stringify(current));
-  // Never allow a partial workflow/admin payload to erase user-managed fields.
-  // Also enforce the static official schedule whitelist on every write, so stale
-  // legacy rows cannot be persisted back into KV by Cleanup or Admin.
-  const generated=await fetchStaticEvents(request);
-  // Merge current state first, then explicitly overlay the complete Admin submission.
-  // This makes Forecast edits authoritative immediately, including replacing or clearing a value.
-  const currentByKey=new Map(current.map(e=>[eventKey(e),e]));
-  const submittedKeys=new Set(submitted.map(e=>eventKey(e)));
-  const combined=submitted.map(e=>{
-    const old=currentByKey.get(eventKey(e))||{};
-    return {...old,...e,
-      forecast:e.forecast,
-      datetime:e.datetime,
-      releaseForecasts:{...(old.releaseForecasts||{}),...(e.releaseForecasts||{})},
-      releaseHistory:mergeHistoryRows(old.releaseHistory,e.releaseHistory),
-      lastRelease:e.lastRelease||old.lastRelease||null,
-      previous:e.previous||old.previous||'',
-      actual:e.actual||old.actual||''
+  const rows=Array.isArray(body?.events)?body.events:[];
+  if(!rows.length)return json({error:'No events supplied.'},400);
+  const overrides={};
+  for(const raw of rows.slice(0,500)){
+    const type=canonicalType(raw);
+    const period=clean(raw?.releasePeriod,30);
+    const id=clean(raw?.id,160);
+    const value={
+      forecast:clean(raw?.forecast,80),
+      datetime:clean(raw?.datetime,50),
+      releaseForecasts:{},
+      updatedAt:new Date().toISOString()
     };
-  });
-  for(const e of current){if(!submittedKeys.has(eventKey(e)))combined.push(e);}
-  const events=generated.length?applyAuthoritativeSchedule(generated,combined):dedupeEvents(combined);
-  events.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
-  const forecastOverrides={};
-  for(const e of submitted){
-    const value=String(e.forecast??'');
-    const keys=[String(e.id||''),`${canonicalType(e)}|${String(e.releasePeriod||'')}`,canonicalType(e)].filter(Boolean);
-    for(const k of keys)forecastOverrides[k]=value;
+    if(raw?.releaseForecasts&&typeof raw.releaseForecasts==='object'){
+      for(const [k,v] of Object.entries(raw.releaseForecasts).slice(0,100)){
+        const periodKey=clean(k,30); if(periodKey)value.releaseForecasts[periodKey]=clean(v,80);
+      }
+    }
+    const keys=[type&&period?`${type}|${period}`:'',id].filter(Boolean);
+    for(const key of keys)overrides[key]=value;
   }
-  await env.GH_MARKET_DATA.put(FORECAST_OVERRIDES_KEY,JSON.stringify(forecastOverrides));
-  await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(events));
-  return json({ok:true,count:events.length,events,backupCreated:Boolean(current.length),updatedAt:new Date().toISOString()},200,{'cache-control':'no-store'});
+  const updatedAt=new Date().toISOString();
+  const payload={version:'10.2.0',updatedAt,overrides};
+  await env.GH_MARKET_DATA.put(ADMIN_OVERRIDES_KEY,JSON.stringify(payload));
+  const verify=await env.GH_MARKET_DATA.get(ADMIN_OVERRIDES_KEY,{type:'json'});
+  if(!verify||verify.version!=='10.2.0')return json({error:'KV write verification failed.'},500);
+  return json({ok:true,version:'10.2.0',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{}},200,{'cache-control':'no-store'});
 }
