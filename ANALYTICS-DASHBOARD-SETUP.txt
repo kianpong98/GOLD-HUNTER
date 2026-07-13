@@ -1,0 +1,38 @@
+GOLD HUNTER ANALYTICS DASHBOARD SETUP
+
+Dashboard URL:
+https://goldhunter.site/analytics-dashboard.html
+
+This dashboard uses a secure Cloudflare Pages Function and Google Analytics Data API.
+It will not expose your service-account private key in the browser.
+
+1) Find your GA4 PROPERTY ID
+GA4 Admin > Property settings / Property details.
+Use the numeric Property ID. Do NOT use Measurement ID G-RMTE7H8TP1 and do NOT use the Data Stream ID.
+
+2) Create a Google Cloud service account
+- Open Google Cloud Console.
+- Enable "Google Analytics Data API".
+- Create a service account and JSON key.
+- Copy client_email and private_key from the JSON.
+
+3) Grant the service account access in GA4
+GA4 Admin > Property access management > Add users.
+Add the service account client_email as Viewer.
+
+4) Add Cloudflare Pages environment variables
+Cloudflare > Workers & Pages > goldhunter.site project > Settings > Variables and Secrets.
+Add these as encrypted secrets for Production:
+
+GA4_PROPERTY_ID = numeric property ID
+GA4_CLIENT_EMAIL = service account client_email
+GA4_PRIVATE_KEY = complete private_key, including BEGIN/END lines
+DASHBOARD_KEY = choose your private dashboard password
+
+5) Redeploy the latest commit.
+Open /analytics-dashboard.html and enter DASHBOARD_KEY.
+
+IMPORTANT
+- Mark whatsapp_click as a Key event in GA4, otherwise the Key Events number may include other starred events or remain 0.
+- Create the event-scoped custom dimension button_location before the button-location report can populate.
+- GA4 standard reporting is not realtime and can take several hours.
