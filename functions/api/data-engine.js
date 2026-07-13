@@ -659,34 +659,85 @@ export async function onRequestGet({request,env}){
   return json({engineVersion:'10.2.0',events,updatedAt:new Date().toISOString(),officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
-  if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401,{'cache-control':'no-store'});
-  if(!env.GH_MARKET_DATA)return json({error:'GH_MARKET_DATA KV binding is not configured in Cloudflare.'},503,{'cache-control':'no-store'});
-  let body;try{body=await request.json();}catch{return json({error:'Invalid request.'},400);}
-  const rows=Array.isArray(body?.events)?body.events:[];
-  if(!rows.length)return json({error:'No events supplied.'},400);
-  const overrides={};
-  for(const raw of rows.slice(0,500)){
-    const type=canonicalType(raw);
-    const period=clean(raw?.releasePeriod,30);
-    const id=clean(raw?.id,160);
-    const value={
-      forecast:clean(raw?.forecast,80),
-      datetime:clean(raw?.datetime,50),
-      releaseForecasts:{},
-      updatedAt:new Date().toISOString()
-    };
-    if(raw?.releaseForecasts&&typeof raw.releaseForecasts==='object'){
-      for(const [k,v] of Object.entries(raw.releaseForecasts).slice(0,100)){
-        const periodKey=clean(k,30); if(periodKey)value.releaseForecasts[periodKey]=clean(v,80);
-      }
+  const debug={
+    engineVersion:'10.2.2-debug',
+    step:'start',
+    timestamp:new Date().toISOString(),
+    kvBound:Boolean(env&&env.GH_MARKET_DATA)
+  };
+  try{
+    debug.step='authorize';
+    if(!authorized(request,env))return json({error:'Incorrect PIN, or ADMIN_PIN is not configured.',debug},401,{'cache-control':'no-store'});
+
+    debug.step='check-kv-binding';
+    if(!env.GH_MARKET_DATA)return json({error:'GH_MARKET_DATA KV binding is not configured in Cloudflare.',debug},503,{'cache-control':'no-store'});
+
+    debug.step='parse-request-json';
+    let body;
+    try{
+      body=await request.json();
+    }catch(error){
+      debug.exception={name:error?.name||'Error',message:error?.message||String(error)};
+      return json({error:'Invalid request JSON.',debug},400,{'cache-control':'no-store'});
     }
-    const keys=[type&&period?`${type}|${period}`:'',id].filter(Boolean);
-    for(const key of keys)overrides[key]=value;
+
+    debug.step='validate-events';
+    const rows=Array.isArray(body?.events)?body.events:[];
+    debug.receivedEventCount=rows.length;
+    if(!rows.length)return json({error:'No events supplied.',debug},400,{'cache-control':'no-store'});
+
+    debug.step='build-overrides';
+    const overrides={};
+    for(const raw of rows.slice(0,500)){
+      const type=canonicalType(raw);
+      const period=clean(raw?.releasePeriod,30);
+      const id=clean(raw?.id,160);
+      const value={
+        forecast:clean(raw?.forecast,80),
+        datetime:clean(raw?.datetime,50),
+        releaseForecasts:{},
+        updatedAt:new Date().toISOString()
+      };
+      if(raw?.releaseForecasts&&typeof raw.releaseForecasts==='object'){
+        for(const [k,v] of Object.entries(raw.releaseForecasts).slice(0,100)){
+          const periodKey=clean(k,30);
+          if(periodKey)value.releaseForecasts[periodKey]=clean(v,80);
+        }
+      }
+      const keys=[type&&period?`${type}|${period}`:'',id].filter(Boolean);
+      for(const key of keys)overrides[key]=value;
+    }
+
+    const updatedAt=new Date().toISOString();
+    const payload={version:'10.2.2-debug',updatedAt,overrides};
+    const serialized=JSON.stringify(payload);
+    debug.overrideCount=Object.keys(overrides).length;
+    debug.payloadBytes=new TextEncoder().encode(serialized).length;
+    debug.kvKey=ADMIN_OVERRIDES_KEY;
+
+    debug.step='kv-put';
+    await env.GH_MARKET_DATA.put(ADMIN_OVERRIDES_KEY,serialized);
+
+    debug.step='kv-readback';
+    const verify=await env.GH_MARKET_DATA.get(ADMIN_OVERRIDES_KEY,{type:'json'});
+    debug.readbackPresent=Boolean(verify);
+    debug.readbackVersion=verify?.version||null;
+
+    debug.step='verify-readback';
+    if(!verify||verify.version!=='10.2.2-debug'){
+      return json({error:'KV write verification failed.',debug},500,{'cache-control':'no-store'});
+    }
+
+    debug.step='complete';
+    return json({ok:true,version:'10.2.2-debug',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
+  }catch(error){
+    debug.failedAt=debug.step;
+    debug.exception={
+      name:error?.name||'Error',
+      message:error?.message||String(error),
+      stack:String(error?.stack||'').split('\\n').slice(0,8).join('\\n')
+    };
+    console.error('Gold Hunter forecast save failed',debug);
+    return json({error:'Forecast save failed inside Cloudflare Function.',debug},500,{'cache-control':'no-store'});
   }
-  const updatedAt=new Date().toISOString();
-  const payload={version:'10.2.0',updatedAt,overrides};
-  await env.GH_MARKET_DATA.put(ADMIN_OVERRIDES_KEY,JSON.stringify(payload));
-  const verify=await env.GH_MARKET_DATA.get(ADMIN_OVERRIDES_KEY,{type:'json'});
-  if(!verify||verify.version!=='10.2.0')return json({error:'KV write verification failed.'},500);
-  return json({ok:true,version:'10.2.0',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{}},200,{'cache-control':'no-store'});
 }
