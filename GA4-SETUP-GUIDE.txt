@@ -1,66 +1,50 @@
-GOLD HUNTER ANALYTICS PRO v1.0
+GOLD HUNTER GA4 ANALYTICS PRO
 Measurement ID: G-RMTE7H8TP1
 
-TRACKED EVENTS
+DEPLOYMENT
+1. Upload this complete folder/ZIP to GitHub or Cloudflare Pages.
+2. Wait for Cloudflare deployment to finish.
+3. Open goldhunter.site in an Incognito window and click a WhatsApp button.
+4. In GA4 go to Reports > Realtime. Look for whatsapp_click.
+
+KEY EVENT
+Admin > Data display > Events
+- Open Recent events.
+- When whatsapp_click appears, click the star beside it to mark it as a Key event.
+You may also create a key event named whatsapp_click before data arrives if your GA4 interface offers that option.
+
+CUSTOM DIMENSIONS
+Admin > Data display > Custom definitions > Create custom dimension.
+Scope for every item below: Event.
+
+Display name       Event parameter
+Button Location    button_location
+WhatsApp Type      whatsapp_type
+First Source       first_source
+First Medium       first_medium
+First Campaign     first_campaign
+Last Source        last_source
+Last Medium        last_medium
+Last Campaign      last_campaign
+Page Section       page_section
+Gallery Type       gallery_type
+Section ID         section_id
+Button Text        button_text
+Scroll Percent     scroll_percent
+
+EVENTS INCLUDED
 - whatsapp_click
+- show_more
+- gallery_open
+- video_play
 - scroll_depth
 - section_view
-- gallery_show_more
-- gallery_item_open
-- video_play
-- page_engaged_time
-- analytics_ready
+- page_engagement
 
-WHATSAPP PARAMETERS
-- button_location
-- button_text
-- whatsapp_type
-- destination_domain
-- page_section
-- journey_path
-- first_source / first_medium / first_campaign
-- last_source / last_medium / last_campaign
-- landing_page
+SOURCE TRACKING
+The script stores first-touch source in localStorage and records the current/last source.
+Use campaign links such as:
+https://goldhunter.site/?utm_source=instagram&utm_medium=social&utm_campaign=july_membership&utm_content=bio
 
-IMPORTANT GA4 ADMIN STEPS (one-time)
-1. Admin > Events / Key events
-   Mark whatsapp_click as a Key event.
-
-2. Admin > Data display > Custom definitions > Create custom dimensions:
-   Event-scoped:
-   - button_location
-   - whatsapp_type
-   - first_source
-   - first_medium
-   - first_campaign
-   - last_source
-   - last_medium
-   - last_campaign
-   - page_section
-   - gallery_type
-   - section_id
-
-3. Reports > Realtime
-   Open the website, click WhatsApp, and confirm whatsapp_click appears.
-
-SOURCE LINKS TO USE IN MARKETING
-Instagram example:
-https://goldhunter.site/?utm_source=instagram&utm_medium=social&utm_campaign=profile_link
-
-Facebook ad example:
-https://goldhunter.site/?utm_source=facebook&utm_medium=paid_social&utm_campaign=membership&utm_content=ad_1
-
-TikTok example:
-https://goldhunter.site/?utm_source=tiktok&utm_medium=social&utm_campaign=bio_link
-
-Xiaohongshu example:
-https://goldhunter.site/?utm_source=xiaohongshu&utm_medium=social&utm_campaign=profile_link
-
-Google Ads example:
-https://goldhunter.site/?utm_source=google&utm_medium=cpc&utm_campaign=gold_membership&utm_content=search_ad
-
-NOTES
-- GA4 automatically supplies country, city, device category, browser and operating system.
-- First-touch attribution is saved in localStorage; last meaningful touch is updated when UTM/referrer data exists.
-- No personal WhatsApp number or message content is sent as an analytics parameter.
-- Microsoft Clarity was not added because it requires a unique Clarity Project ID.
+Recommended utm_source values:
+instagram, facebook, tiktok, xiaohongshu, google, whatsapp
