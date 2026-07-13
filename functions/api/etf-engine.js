@@ -9,6 +9,12 @@ export async function onRequestGet({request,env}){
   if(env.GH_MARKET_DATA){try{const d=await env.GH_MARKET_DATA.get(KV_KEY,{type:'json'});if(valid(d))kvData=d;}catch{}}
   const chosen=staticData||kvData;
   if(!chosen)return json({records:[],source:'SPDR Gold Shares',sourceUrl:'https://www.spdrgoldshares.com/usa/gld/',updatedAt:null,status:'awaiting_sync',message:'ETF data is waiting for the official daily sync.'},200);
-  if(env.GH_MARKET_DATA&&staticData){try{await env.GH_MARKET_DATA.put(KV_KEY,JSON.stringify(staticData),{expirationTtl:2592000});}catch{}}
+  if(env.GH_MARKET_DATA&&staticData){
+    try{
+      const staticSig=JSON.stringify(staticData);
+      const kvSig=kvData?JSON.stringify(kvData):'';
+      if(staticSig!==kvSig)await env.GH_MARKET_DATA.put(KV_KEY,staticSig,{expirationTtl:2592000});
+    }catch{}
+  }
   return json({...chosen,status:'ready'});
 }

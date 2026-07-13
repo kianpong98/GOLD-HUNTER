@@ -52,8 +52,8 @@ async function stooqDxy(){
 }
 async function firstSuccess(tasks){const errors=[];for(const task of tasks){try{return await task()}catch(e){errors.push(e.message)}}throw new Error(errors.join(' | '));}
 export async function onRequestGet({request,env}){
-  let stale=await staticQuoteCache(request);
-  if(env.GH_MARKET_DATA){try{const kv=await env.GH_MARKET_DATA.get(CACHE_KEY,{type:'json'});if(kv)stale=kv}catch{}}
+  let stale=await staticQuoteCache(request),kvCache=null;
+  if(env.GH_MARKET_DATA){try{kvCache=await env.GH_MARKET_DATA.get(CACHE_KEY,{type:'json'});if(kvCache)stale=kvCache}catch{}}
   const [g,d]=await Promise.allSettled([
     firstSuccess([()=>yahooQuote('XAUUSD=X','gold'),()=>yahooQuote('GC=F','gold'),goldApi]),
     firstSuccess([()=>yahooQuote('DX-Y.NYB','dxy'),()=>yahooQuote('DX=F','dxy'),()=>yahooQuote('^DXY','dxy'),stooqDxy])
@@ -63,6 +63,15 @@ export async function onRequestGet({request,env}){
   const dxy=d.status==='fulfilled'?d.value:stale?.dxy||null;
   const out={gold,dxy,updatedAt:now,partial:g.status==='rejected'||d.status==='rejected',usingCache:{gold:g.status==='rejected'&&Boolean(gold),dxy:d.status==='rejected'&&Boolean(dxy)},errors:{gold:g.status==='rejected'?g.reason?.message:null,dxy:d.status==='rejected'?d.reason?.message:null}};
   if(!gold&&!dxy)return json({error:'All quote sources unavailable',...out},503);
-  if(env.GH_MARKET_DATA){try{await env.GH_MARKET_DATA.put(CACHE_KEY,JSON.stringify(out),{expirationTtl:604800})}catch{}}
+  if(env.GH_MARKET_DATA){
+    try{
+      const last=Date.parse(kvCache?.updatedAt||0)||0;
+      const oldSig=JSON.stringify({gold:kvCache?.gold?.price,dxy:kvCache?.dxy?.price,partial:kvCache?.partial});
+      const newSig=JSON.stringify({gold:out?.gold?.price,dxy:out?.dxy?.price,partial:out?.partial});
+      if(!kvCache||Date.now()-last>=5*60*1000){
+        await env.GH_MARKET_DATA.put(CACHE_KEY,JSON.stringify(out),{expirationTtl:604800});
+      }
+    }catch{}
+  }
   return json(out);
 }

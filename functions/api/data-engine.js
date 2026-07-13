@@ -121,7 +121,7 @@ async function fetchFred(env,forceRefresh=false){
   for(const [type,metric] of Object.entries(metrics)){if(metric?.actual)mergedMetrics[type]=metric;}
   for(const [type,rows] of Object.entries(histories)){if(Array.isArray(rows)&&rows.length){const byPeriod=new Map();for(const row of [...rows,...(mergedHistories[type]||[])]){if(row?.period&&row?.actual&&!byPeriod.has(String(row.period)))byPeriod.set(String(row.period),row);}mergedHistories[type]=[...byPeriod.values()].sort((a,b)=>String(b.period).localeCompare(String(a.period))).slice(0,10);}}
   const result={savedAt:Date.now(),metrics:mergedMetrics,histories:mergedHistories,errors,source:'FRED / official source series',partial:Boolean(Object.keys(errors).length)};
-  if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(FRED_CACHE_KEY,JSON.stringify(result),{expirationTtl:2592000});
+  if(env.GH_MARKET_DATA){const saved=await putJsonIfChanged(env.GH_MARKET_DATA,FRED_CACHE_KEY,result,{expirationTtl:2592000},stale);if(!saved.written&&saved.current)return {...saved.current,liveCheckAt:Date.now()};}
   return result;
   }catch(error){if(stale)return {...stale,stale:true,refreshError:error.message};throw error;}
 }
@@ -162,7 +162,7 @@ async function fetchFederalReserveFomc(env,forceRefresh=false){
     const history=rows.slice(0,10);
     const metric={actual:history[0].actual,previous:history[0].previous,period:history[0].period,observationDate:history[0].period,history,source:'Federal Reserve FOMC statement'};
     const result={savedAt:Date.now(),metrics:{fomc:metric},histories:{fomc:history},source:'Federal Reserve official statements'};
-    if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(FED_FOMC_CACHE_KEY,JSON.stringify(result),{expirationTtl:2592000});
+    if(env.GH_MARKET_DATA){const saved=await putJsonIfChanged(env.GH_MARKET_DATA,FED_FOMC_CACHE_KEY,result,{expirationTtl:2592000},stale);if(!saved.written&&saved.current)return {...saved.current,liveCheckAt:Date.now()};}
     return result;
   }catch(error){if(stale)return {...stale,stale:true,refreshError:error.message};throw error;}
 }
@@ -208,6 +208,30 @@ const headers={
 };
 const json=(data,status=200,extra={})=>new Response(JSON.stringify(data),{status,headers:{...headers,...extra}});
 const clean=(v,max=500)=>typeof v==='string'?v.trim().slice(0,max):'';
+function stableValue(value){
+  if(Array.isArray(value))return value.map(stableValue);
+  if(value&&typeof value==='object'){
+    const out={};
+    for(const key of Object.keys(value).sort()){
+      if(['savedAt','updatedAt','timestamp','refreshError','stale','liveCheckAt'].includes(key))continue;
+      out[key]=stableValue(value[key]);
+    }
+    return out;
+  }
+  return value;
+}
+function stableJson(value){return JSON.stringify(stableValue(value));}
+function sameMeaningfulData(a,b){
+  try{return stableJson(a)===stableJson(b)}catch{return false}
+}
+async function putJsonIfChanged(namespace,key,next,options,previous=null){
+  if(!namespace)return {written:false,reason:'unbound'};
+  let current=previous;
+  if(current===null){try{current=await namespace.get(key,{type:'json'})}catch{current=null}}
+  if(current&&sameMeaningfulData(current,next))return {written:false,reason:'unchanged',current};
+  await namespace.put(key,JSON.stringify(next),options);
+  return {written:true,reason:'changed',current:next};
+}
 function authorized(request,env){const supplied=request.headers.get('x-admin-pin')||'';return Boolean(env.ADMIN_PIN&&supplied&&supplied===env.ADMIN_PIN);}
 const TYPE_ALIASES={
   cpi:'cpi_yoy',consumer_price_index:'cpi_yoy',headline_cpi:'cpi_yoy',
@@ -450,7 +474,7 @@ async function fetchBls(env,forceRefresh=false){
   for(const [type,metric] of Object.entries(metrics)){if(metric?.actual)mergedMetrics[type]=metric;}
   for(const [type,rows] of Object.entries(histories)){if(Array.isArray(rows)&&rows.length){const byPeriod=new Map();for(const row of [...rows,...(mergedHistories[type]||[])]){if(row?.period&&row?.actual&&!byPeriod.has(String(row.period)))byPeriod.set(String(row.period),row);}mergedHistories[type]=[...byPeriod.values()].sort((a,b)=>String(b.period).localeCompare(String(a.period))).slice(0,10);}}
   const result={savedAt:Date.now(),metrics:mergedMetrics,histories:mergedHistories,source:'BLS Public Data API'};
-  if(env.GH_MARKET_DATA)await env.GH_MARKET_DATA.put(BLS_CACHE_KEY,JSON.stringify(result),{expirationTtl:2592000});
+  if(env.GH_MARKET_DATA){const saved=await putJsonIfChanged(env.GH_MARKET_DATA,BLS_CACHE_KEY,result,{expirationTtl:2592000},stale);if(!saved.written&&saved.current)return {...saved.current,liveCheckAt:Date.now()};}
   return result;
   }catch(error){if(stale)return {...stale,stale:true,refreshError:error.message};throw error;}
 }
@@ -635,7 +659,7 @@ export async function onRequestGet({request,env}){
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
   if(archiveChanged&&env.GH_MARKET_DATA){
-    await env.GH_MARKET_DATA.put(EVENTS_KEY,JSON.stringify(sanitizeEvents(persistable)));
+    await putJsonIfChanged(env.GH_MARKET_DATA,EVENTS_KEY,sanitizeEvents(persistable),undefined);
   }
   const hasMetrics=source=>Boolean(Object.keys(source?.metrics||{}).length);
   const sourceStatus=(source,liveOk)=>liveOk?'live':hasMetrics(source)?'cached':'offline';
@@ -660,7 +684,7 @@ export async function onRequestGet({request,env}){
 }
 export async function onRequestPost({request,env}){
   const debug={
-    engineVersion:'10.2.2-debug',
+    engineVersion:'10.2.3-kv-efficient',
     step:'start',
     timestamp:new Date().toISOString(),
     kvBound:Boolean(env&&env.GH_MARKET_DATA)
@@ -709,11 +733,20 @@ export async function onRequestPost({request,env}){
     }
 
     const updatedAt=new Date().toISOString();
-    const payload={version:'10.2.2-debug',updatedAt,overrides};
+    const payload={version:'10.2.3-kv-efficient',updatedAt,overrides};
     const serialized=JSON.stringify(payload);
     debug.overrideCount=Object.keys(overrides).length;
     debug.payloadBytes=new TextEncoder().encode(serialized).length;
     debug.kvKey=ADMIN_OVERRIDES_KEY;
+
+    debug.step='kv-read-existing';
+    let existing=null;
+    try{existing=await env.GH_MARKET_DATA.get(ADMIN_OVERRIDES_KEY,{type:'json'});}catch{}
+    if(existing&&sameMeaningfulData(existing,payload)){
+      debug.step='complete-no-change';
+      debug.writeSkipped=true;
+      return json({ok:true,unchanged:true,version:'10.2.3-kv-efficient',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
+    }
 
     debug.step='kv-put';
     await env.GH_MARKET_DATA.put(ADMIN_OVERRIDES_KEY,serialized);
@@ -724,12 +757,12 @@ export async function onRequestPost({request,env}){
     debug.readbackVersion=verify?.version||null;
 
     debug.step='verify-readback';
-    if(!verify||verify.version!=='10.2.2-debug'){
+    if(!verify||verify.version!=='10.2.3-kv-efficient'){
       return json({error:'KV write verification failed.',debug},500,{'cache-control':'no-store'});
     }
 
     debug.step='complete';
-    return json({ok:true,version:'10.2.2-debug',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
+    return json({ok:true,version:'10.2.3-kv-efficient',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
   }catch(error){
     debug.failedAt=debug.step;
     debug.exception={
