@@ -1,0 +1,66 @@
+GOLD HUNTER ANALYTICS PRO v1.0
+Measurement ID: G-RMTE7H8TP1
+
+TRACKED EVENTS
+- whatsapp_click
+- scroll_depth
+- section_view
+- gallery_show_more
+- gallery_item_open
+- video_play
+- page_engaged_time
+- analytics_ready
+
+WHATSAPP PARAMETERS
+- button_location
+- button_text
+- whatsapp_type
+- destination_domain
+- page_section
+- journey_path
+- first_source / first_medium / first_campaign
+- last_source / last_medium / last_campaign
+- landing_page
+
+IMPORTANT GA4 ADMIN STEPS (one-time)
+1. Admin > Events / Key events
+   Mark whatsapp_click as a Key event.
+
+2. Admin > Data display > Custom definitions > Create custom dimensions:
+   Event-scoped:
+   - button_location
+   - whatsapp_type
+   - first_source
+   - first_medium
+   - first_campaign
+   - last_source
+   - last_medium
+   - last_campaign
+   - page_section
+   - gallery_type
+   - section_id
+
+3. Reports > Realtime
+   Open the website, click WhatsApp, and confirm whatsapp_click appears.
+
+SOURCE LINKS TO USE IN MARKETING
+Instagram example:
+https://goldhunter.site/?utm_source=instagram&utm_medium=social&utm_campaign=profile_link
+
+Facebook ad example:
+https://goldhunter.site/?utm_source=facebook&utm_medium=paid_social&utm_campaign=membership&utm_content=ad_1
+
+TikTok example:
+https://goldhunter.site/?utm_source=tiktok&utm_medium=social&utm_campaign=bio_link
+
+Xiaohongshu example:
+https://goldhunter.site/?utm_source=xiaohongshu&utm_medium=social&utm_campaign=profile_link
+
+Google Ads example:
+https://goldhunter.site/?utm_source=google&utm_medium=cpc&utm_campaign=gold_membership&utm_content=search_ad
+
+NOTES
+- GA4 automatically supplies country, city, device category, browser and operating system.
+- First-touch attribution is saved in localStorage; last meaningful touch is updated when UTM/referrer data exists.
+- No personal WhatsApp number or message content is sent as an analytics parameter.
+- Microsoft Clarity was not added because it requires a unique Clarity Project ID.

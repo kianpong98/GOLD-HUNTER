@@ -1,0 +1,10 @@
+Gold Hunter News Engine v10.2.4 — Engine Cleanup & Monitoring
+
+- One active News Engine: functions/api/data-engine.js
+- market-events.js and admin-forecasts.js are route/compatibility entry points, not duplicate engines.
+- Removed obsolete v10.2.0–v10.2.3 release-note files.
+- Unified GET, POST and Admin version labels to 10.2.4-kv-efficient.
+- Added Last checked, Last data change and per-source check/change timestamps.
+- Shows KV write protection status (change-only).
+- Does not add extra KV writes for monitoring.
+- Public website pages, SEO, Calendar design, ETF, Fed Rate, Gold Reserve and Quotes are unchanged.
