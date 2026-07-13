@@ -21,11 +21,11 @@
   }
   function updateStats(){const waiting=events.filter(e=>e.previousStatus==='awaiting_official'||(e.released&&!e.actual&&!e.eventOnly)).length;$('#totalCount').textContent=events.length;$('#readyCount').textContent=events.filter(e=>e.officialAuto&&e.previousStatus==='ready').length;$('#waitingCount').textContent=waiting;$('#forecastCount').textContent=events.filter(e=>e.forecast).length;
     const cs=meta.connectorSources||{};const legacy=meta.officialSources||{};
-    const normalize=(key,fallback)=>cs[key]||{status:fallback?'live':'offline',lastSuccess:meta.officialUpdatedAt||null};
+    const normalize=(key,fallback)=>cs[key]||{status:fallback?'live':'offline',lastSuccess:meta.officialUpdatedAt||null,lastChecked:meta.lastCheckedAt||meta.updatedAt||null};
     const items=[['Static Cache',normalize('staticCache',legacy.staticCache)],['BLS',normalize('bls',legacy.bls)],['FRED',normalize('fred',legacy.fred)],['Department of Labor',normalize('dol',legacy.dol)],['BEA',normalize('bea',legacy.bea)],['Federal Reserve',normalize('federalReserve',legacy.federalReserve)],['Cloudflare KV',normalize('cloudflareKv',meta.kvConfigured)]];
     const label={live:'● Live',cached:'● Cached',offline:'● Offline'};
-    $('#sourceGrid').innerHTML=items.map(([n,v])=>`<div class="source ${v.status==='live'?'ok':'bad'}"><b>${label[v.status]||label.offline}</b>${n}<small style="display:block;opacity:.72;margin-top:5px">Last success: ${fmt(v.lastSuccess)}</small></div>`).join('');
-    $('#syncLine').textContent=`页面更新：${fmt(meta.updatedAt)} · 官方数据更新：${fmt(meta.officialUpdatedAt)}${meta.officialError?' · '+meta.officialError:''}`;updateSyncMonitor(items);}
+    $('#sourceGrid').innerHTML=items.map(([n,v])=>`<div class="source ${v.status==='live'?'ok':'bad'}"><b>${label[v.status]||label.offline}</b>${n}<small style="display:block;opacity:.72;margin-top:5px">Last checked: ${fmt(v.lastChecked||meta.lastCheckedAt||meta.updatedAt)}</small><small style="display:block;opacity:.72;margin-top:3px">Last data change: ${fmt(v.lastSuccess)}</small></div>`).join('');
+    $('#syncLine').textContent=`Last checked：${fmt(meta.lastCheckedAt||meta.updatedAt)} · Last data change：${fmt(meta.lastDataChangeAt||meta.officialUpdatedAt)} · KV write protection：${meta.kvWriteProtection?.enabled?'ON (change only)':'Unknown'}${meta.officialError?' · '+meta.officialError:''}`;updateSyncMonitor(items);}
   function latestSuccess(items){const vals=items.map(([,v])=>new Date(v.lastSuccess||0).getTime()).filter(Number.isFinite);return vals.length?Math.max(...vals):0;}
   function mytClock(ts){return new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(ts))+' MYT';}
   function duration(ms){const t=Math.max(0,Math.floor(ms/1000)),h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=t%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;}
@@ -36,11 +36,11 @@
     const set=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
     set('nextSyncTime',mytClock(nextSyncAt)); set('nextSyncCountdown',duration(nextSyncAt-now));
     set('lastSuccessfulSync',latest?mytClock(latest):'No record'); set('lastSuccessfulAge',latest?`${duration(now-latest)} ago`:'No record');
-    set('retrySourceCount',String(nonLive)); set('healthScore',`${health}%`); const bar=document.getElementById('healthBar');if(bar)bar.style.width=`${health}%`;
+    set('retrySourceCount',String(nonLive)); set('lastCheckedAt',meta.lastCheckedAt?mytClock(meta.lastCheckedAt):'No record'); set('lastDataChangeAt',meta.lastDataChangeAt?mytClock(meta.lastDataChangeAt):'No record'); set('kvWriteMode',meta.kvWriteProtection?.enabled?'ON':'Unknown'); set('healthScore',`${health}%`); const bar=document.getElementById('healthBar');if(bar)bar.style.width=`${health}%`;
   }
   function tickSyncMonitor(){
     const now=Date.now(); if(nextSyncAt&&now>=nextSyncAt){nextSyncAt+=SYNC_INTERVAL_MS;if(pin&&!autoRefreshBusy){autoRefreshBusy=true;load().catch(()=>{}).finally(()=>autoRefreshBusy=false);}}
-    const cs=meta.connectorSources||{},legacy=meta.officialSources||{};const normalize=(key,fallback)=>cs[key]||{status:fallback?'live':'offline',lastSuccess:meta.officialUpdatedAt||null};
+    const cs=meta.connectorSources||{},legacy=meta.officialSources||{};const normalize=(key,fallback)=>cs[key]||{status:fallback?'live':'offline',lastSuccess:meta.officialUpdatedAt||null,lastChecked:meta.lastCheckedAt||meta.updatedAt||null};
     const items=[['Static Cache',normalize('staticCache',legacy.staticCache)],['BLS',normalize('bls',legacy.bls)],['FRED',normalize('fred',legacy.fred)],['Department of Labor',normalize('dol',legacy.dol)],['BEA',normalize('bea',legacy.bea)],['Federal Reserve',normalize('federalReserve',legacy.federalReserve)],['Cloudflare KV',normalize('cloudflareKv',meta.kvConfigured)]];updateSyncMonitor(items);
   }
   const fmt=v=>v?new Date(v).toLocaleString('zh-CN',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'尚无记录';
@@ -53,14 +53,14 @@
     const saveRes=await fetch(`${API}?save=${Date.now()}`,{method:'POST',headers:{'content-type':'application/json','x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'},body:JSON.stringify({events:events.map(e=>({id:e.id,type:e.type,releasePeriod:e.releasePeriod,name:e.name,forecast:e.forecast,datetime:e.datetime,releaseForecasts:e.releaseForecasts||{}}))})});
     const saveData=await saveRes.json();
     if(!saveRes.ok)throw new Error(saveData.error||'Forecast KV 保存失败');
-    if(saveData.version!=='10.2.0')throw new Error('Cloudflare 仍在运行旧版 Function；请确认最新部署已上线。');
+    if(saveData.version!=='10.2.4-kv-efficient')throw new Error('Cloudflare 仍在运行旧版 Function；请确认最新部署已上线。');
     await new Promise(r=>setTimeout(r,1200));
     const publicRes=await fetch(`${API}?verify=${Date.now()}`,{cache:'no-store',headers:{'cache-control':'no-cache','pragma':'no-cache'}}),publicData=await publicRes.json();
-    if(!publicRes.ok)throw new Error(publicData.error||'网站数据验证失败');if(publicData.engineVersion!=='10.2.0')throw new Error('网站 API 仍是旧版本；Cloudflare Production 尚未部署 v10.2.0。');
+    if(!publicRes.ok)throw new Error(publicData.error||'网站数据验证失败');if(publicData.engineVersion!=='10.2.4-kv-efficient')throw new Error('网站 API 仍是旧版本；Cloudflare Production 尚未部署 v10.2.0。');
     const publicMap=new Map((publicData.events||[]).map(e=>[`${String(e.type||'')}|${String(e.releasePeriod||'')}`,{forecast:String(e.forecast??'').trim(),datetime:String(e.datetime??'').trim()}]));
     const publicMismatch=events.find(e=>{const row=publicMap.get(`${String(e.type||'')}|${String(e.releasePeriod||'')}`);return !row||row.forecast!==String(e.forecast??'').trim()||row.datetime!==String(e.datetime??'').trim();});
     if(publicMismatch)throw new Error(`KV 已保存，但网站 API 尚未读到 ${publicMismatch.name}。请确认 Production 部署与 KV binding。`);
-    st.textContent=`已保存并验证 ${events.length} 项 Forecast（News Engine v10.2.0）。`;
+    st.textContent=`已保存并验证 ${events.length} 项 Forecast（News Engine v10.2.4）。`;
     try{localStorage.setItem('gh-market-events-updated',String(Date.now()));}catch{}await load();
   }catch(e){st.textContent=e.message;}finally{btn.disabled=false;}});
   $('#logoutAdmin').addEventListener('click',()=>{sessionStorage.removeItem('ghAdminPin');location.reload();});
