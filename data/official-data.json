@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-07-13T18:04:50.471457+00:00",
+  "updatedAt": "2026-07-13T21:30:54.064601+00:00",
   "metrics": {
     "jobless_claims": {
       "actual": "215K",
@@ -70,7 +70,7 @@
           "previous": "190K"
         }
       ],
-      "fetchedAt": "2026-07-13T18:04:49.013173+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.710978+00:00"
     },
     "fomc": {
       "actual": "3.5–3.75%",
@@ -205,7 +205,7 @@
           "previous": "4.7%"
         }
       ],
-      "fetchedAt": "2026-07-13T18:04:49.021069+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.713242+00:00"
     },
     "cpi_yoy": {
       "actual": "4.2%",
@@ -264,7 +264,7 @@
         }
       ],
       "source": "U.S. Bureau of Labor Statistics",
-      "fetchedAt": "2026-07-13T18:04:48.796848+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.510437+00:00"
     },
     "core_cpi_yoy": {
       "actual": "2.9%",
@@ -323,7 +323,7 @@
         }
       ],
       "source": "U.S. Bureau of Labor Statistics",
-      "fetchedAt": "2026-07-13T18:04:48.797034+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.510621+00:00"
     },
     "ppi_yoy": {
       "actual": "6.5%",
@@ -382,7 +382,7 @@
         }
       ],
       "source": "U.S. Bureau of Labor Statistics",
-      "fetchedAt": "2026-07-13T18:04:48.797203+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.510786+00:00"
     },
     "core_ppi_yoy": {
       "actual": "5.1%",
@@ -441,7 +441,7 @@
         }
       ],
       "source": "U.S. Bureau of Labor Statistics",
-      "fetchedAt": "2026-07-13T18:04:48.797364+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.510982+00:00"
     },
     "nfp": {
       "actual": "57K",
@@ -500,7 +500,7 @@
         }
       ],
       "source": "U.S. Bureau of Labor Statistics",
-      "fetchedAt": "2026-07-13T18:04:48.797508+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.511133+00:00"
     },
     "unemployment": {
       "actual": "4.2%",
@@ -559,7 +559,7 @@
         }
       ],
       "source": "U.S. Bureau of Labor Statistics",
-      "fetchedAt": "2026-07-13T18:04:48.797662+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.511266+00:00"
     },
     "avg_hourly_earnings": {
       "actual": "0.3%",
@@ -618,7 +618,7 @@
         }
       ],
       "source": "U.S. Bureau of Labor Statistics",
-      "fetchedAt": "2026-07-13T18:04:48.797817+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.511409+00:00"
     },
     "pce": {
       "actual": "4.1%",
@@ -688,7 +688,7 @@
         }
       ],
       "source": "FRED (official-source series)",
-      "fetchedAt": "2026-07-13T18:04:48.989871+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.748779+00:00"
     },
     "core_pce": {
       "actual": "3.4%",
@@ -758,7 +758,7 @@
         }
       ],
       "source": "FRED (official-source series)",
-      "fetchedAt": "2026-07-13T18:04:49.059311+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.715483+00:00"
     },
     "retail_sales": {
       "actual": "0.9%",
@@ -828,7 +828,7 @@
         }
       ],
       "source": "FRED (official-source series)",
-      "fetchedAt": "2026-07-13T18:04:48.996425+00:00"
+      "fetchedAt": "2026-07-13T21:30:52.832491+00:00"
     }
   },
   "errors": {},
