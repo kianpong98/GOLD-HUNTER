@@ -1,0 +1,26 @@
+{
+  "meetingDate": "2026-07-30",
+  "meetingLabel": "Next FOMC decision",
+  "currentTargetRange": "3.75%–4.00%",
+  "outcomes": [
+    {
+      "targetRange": "3.50%–3.75%",
+      "probability": 78,
+      "move": "25 bps cut",
+      "direction": "cut"
+    },
+    {
+      "targetRange": "3.75%–4.00%",
+      "probability": 22,
+      "move": "No change",
+      "direction": "hold"
+    }
+  ],
+  "updatedAt": "2026-07-12T11:00:00Z",
+  "source": "CME FedWatch",
+  "sourceUrl": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
+  "note": "Probabilities are market-implied estimates and may change during the trading day.",
+  "meetingDateTime": "2026-07-30T02:00:00+08:00",
+  "meetingTimezone": "Asia/Kuala_Lumpur",
+  "meetingTimezoneLabel": "Malaysia Time (MYT)"
+}
