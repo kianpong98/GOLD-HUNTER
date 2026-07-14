@@ -41,7 +41,7 @@ jobs:
       - name: Install official-data reader
         run: pip install requests
 
-      - name: Read and validate CME FedWatch (safe retry)
+      - name: Read, validate, and checkpoint CME FedWatch
         env:
           CME_FEDWATCH_ACCESS_TOKEN: ${{ secrets.CME_FEDWATCH_ACCESS_TOKEN }}
           CME_FEDWATCH_API_URL: ${{ secrets.CME_FEDWATCH_API_URL }}
@@ -61,6 +61,8 @@ jobs:
           assert d.get('source')=='CME FedWatch'
           assert d.get('kvWrite') is False
           assert d.get('meetingDate') and d.get('currentTargetRange')
+          assert d.get('githubChecked') is True, 'GitHub heartbeat was not recorded'
+          assert d.get('sourceMode') in {'official-github-sync','github-verified-fallback'}, d.get('sourceMode')
           print('FedWatch validation passed:', d['meetingDate'], d['currentTargetRange'], rows, 'total', total)
           PY
 
