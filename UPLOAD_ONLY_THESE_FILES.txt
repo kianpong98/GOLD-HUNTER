@@ -1,0 +1,21 @@
+Upload these files to GitHub main and keep the same paths:
+
+analytics.js
+market-tools.js
+calendar.html
+central-bank-gold-reserves.html
+economic-news.html
+fed-rate-expectation.html
+gold-etf-holdings.html
+gold-swing-trading.html
+huangjin-boduan-jiaoyi.html
+huangjin-etf-chicang.html
+huangjin-xinwen.html
+index.html
+meilianchu-lilv-yuqi.html
+yanghang-huangjin-chubei.html
+zh.html
+
+Documentation only (optional):
+ANALYTICS_SPRINT1.md
+UPLOAD_ONLY_THESE_FILES.txt
