@@ -27,7 +27,7 @@ OUT = Path("assets/data/rate-expectation.json")
 DEBUG_DIR = Path("artifacts/fedwatch-debug")
 CME_PAGE = "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html"
 DEFAULT_API = "https://markets.api.cmegroup.com/fedwatch/v1/forecasts"
-ENGINE_VERSION = "fedwatch-github-sync-1"
+ENGINE_VERSION = "fedwatch-github-sync-1.1"
 MIN_CHECKPOINT_HOURS = 6
 
 
@@ -303,7 +303,8 @@ def main() -> None:
         "officialDataChangedAt": updated_at,
         "source": "CME FedWatch",
         "sourceUrl": CME_PAGE,
-        "sourceMode": result.get("mode"),
+        "sourceMode": "official-github-sync",
+        "sourceTransport": result.get("mode"),
         "sourceStatus": "live",
         "live": True,
         "exactOfficialValues": True,

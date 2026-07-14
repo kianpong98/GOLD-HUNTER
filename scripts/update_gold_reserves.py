@@ -213,7 +213,10 @@ def main() -> int:
         "records": records,
         "summary": build_summary(records),
         "status": "ready",
-        "sourceMode": "partial_live_refresh" if refreshed else "embedded_or_saved_snapshot",
+        "sourceMode": "official-github-partial-sync" if refreshed else "verified-static-snapshot",
+        "sourceStatus": "live" if refreshed else "cached",
+        "engineVersion": "gold-reserves-stable-1.1",
+        "kvWrite": False,
         "refresh": {
             "countriesUpdated": refreshed,
             "countriesRetainedFromSnapshot": [name for name in COUNTRIES if name not in refreshed],
