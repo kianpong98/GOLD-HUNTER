@@ -83,14 +83,18 @@
   }
 
   async function loadAnalytics(){
-    const st=$('#analyticsStatus');
+    const st=$('#analyticsStatus'),badge=$('#analyticsBadge'),headline=$('#analyticsHeadline');
     try{
       const r=await fetch(`/api/analytics-dashboard?t=${Date.now()}`,{headers:{'x-admin-pin':pin},cache:'no-store'}),d=await r.json();
       if(!r.ok)throw new Error(d.error||'Analytics unavailable');
-      if(!d.configured){st.textContent=d.message||'GA4 dashboard is not configured yet.';return;}
+      if(!d.configured){
+        st.textContent=d.message||'GA4 dashboard is not configured yet.';headline.textContent='GA4 Data API 尚未连接；网站现有追踪代码不会受影响。';badge.textContent='NOT CONFIGURED';badge.className='badge warn';return d;
+      }
+      if(d.error)throw new Error(d.error);
       const o=d.overview||{};$('#aVisitors').textContent=metric(o.activeUsers);$('#aWhatsapp').textContent=metric(o.whatsappClicks);$('#aSessions').textContent=metric(o.sessions);$('#aConversion').textContent=o.sessions?`${(o.whatsappClicks/o.sessions*100).toFixed(1)}%`:'0%';
-      $('#aTopPages').innerHTML=listHtml(d.topPages);$('#aSources').innerHTML=listHtml(d.trafficSources);$('#aNews').innerHTML=listHtml(d.topNews);st.textContent=`Analytics updated: ${fmt(d.updatedAt)}`;
-    }catch(e){st.textContent=e.message;}
+      $('#aTopPages').innerHTML=listHtml(d.topPages);$('#aSources').innerHTML=listHtml(d.trafficSources);$('#aNews').innerHTML=listHtml(d.topNews);
+      const topPage=d.topPages?.[0]?.dimensions?.[0]||'No page data',topSource=d.trafficSources?.[0]?.dimensions?.[0]||'No source data';headline.textContent=`Top content: ${topPage} · Top source: ${topSource}`;st.textContent=`Analytics updated: ${fmt(d.updatedAt)}`;badge.textContent='CONNECTED';badge.className='badge ok';return d;
+    }catch(e){st.textContent=e.message;headline.textContent='Analytics API 暂时无法读取。';badge.textContent='ERROR';badge.className='badge warn';throw e;}
   }
   async function loadDataHealth(){
     const nowIso=new Date().toISOString();
@@ -119,6 +123,24 @@
     const healthList=document.getElementById('dataHealthCards');if(healthList)healthList.innerHTML=fetched.map(x=>{const d=x.data||{},checked=d.lastCheckedAt||d.checkedAt||d.updatedAt;return `<div class="mini-row"><span>${x.ok?'●':'▲'} ${esc(x.name)}<small style="display:block;opacity:.65">Checked: ${checked?fmt(checked):'No timestamp'}</small><small style="display:block;opacity:.55">Engine: ${esc(d.engineVersion||'—')}</small></span><b style="color:${x.ok?'#83d79f':'#ef7777'}">${x.ok?'Available':'Offline'}</b></div>`}).join('');
   }
 
+  const auditCard=(name,status,message)=>`<div class="audit-item"><div class="audit-item-top"><strong>${esc(name)}</strong><span class="audit-pill ${status.toLowerCase()}">${status}</span></div><span class="audit-message">${esc(message)}</span></div>`;
+  async function runSystemAudit(){
+    const btn=$('#runAudit'),summary=$('#auditSummary'),box=$('#auditResults');btn.disabled=true;summary.textContent='Audit 进行中…';box.innerHTML='';
+    const checks=[];
+    const get=async(name,url,headers={})=>{try{const r=await fetch(`${url}${url.includes('?')?'&':'?'}audit=${Date.now()}`,{cache:'no-store',headers:{'cache-control':'no-cache',...headers}});let d={};try{d=await r.json();}catch{}return {name,ok:r.ok,data:d,error:r.ok?'':(d.error||`HTTP ${r.status}`)};}catch(e){return {name,ok:false,data:{},error:e.message};}};
+    try{
+      const [news,etf,fed,gold,analytics]=await Promise.all([
+        get('Economic News','/api/market-events'),get('ETF Holdings','/api/etf-engine'),get('Fed Rate','/api/rate-expectation-engine'),get('Central Bank Gold','/api/gold-reserves-engine'),get('Analytics','/api/analytics-dashboard',{'x-admin-pin':pin})
+      ]);
+      if(!news.ok)checks.push(['Economic News','FAIL',news.error]);else{const d=news.data||{},hist=(d.events||[]).filter(e=>Array.isArray(e.history)&&e.history.length).length,ver=String(d.engineVersion||'');checks.push(['Economic News',ver.startsWith('stable-data-')?'PASS':'WARNING',`${(d.events||[]).length} events · history ${hist}/${(d.events||[]).length} · ${ver||'unknown engine'}`]);checks.push(['Forecast / KV',d.kvConfigured===false?'FAIL':'PASS',d.kvConfigured===false?'KV binding missing':'Forecast storage binding ready; audit did not write data']);}
+      if(!etf.ok)checks.push(['ETF Holdings','FAIL',etf.error]);else{const d=etf.data||{},good=String(d.engineVersion||'').startsWith('etf-stable')&&d.kvWrite!==true&&d.officialDate;checks.push(['ETF Holdings',good?'PASS':'WARNING',`${d.latestHoldings??'—'} t · official ${d.officialDate||'unknown'} · ${d.sourceStatus||d.status||'unknown'}`]);}
+      if(!gold.ok)checks.push(['Central Bank Gold','FAIL',gold.error]);else{const d=gold.data||{},good=String(d.engineVersion||'').startsWith('gold-reserves')&&d.kvWrite!==true&&(d.records||[]).length>0;checks.push(['Central Bank Gold',good?'PASS':'WARNING',`${(d.records||[]).length} countries · ${d.sourceMode||'unknown source'} · ${d.sourceStatus||d.status||'unknown'}`]);}
+      if(!fed.ok)checks.push(['Fed Rate','FAIL',fed.error]);else{const d=fed.data||{},total=(d.outcomes||[]).reduce((s,x)=>s+Number(x.probability||0),0),mode=d.sourceMode||'unknown',valid=Math.abs(total-100)<=1&&(d.outcomes||[]).length>=2;const official=mode==='official-github-sync'&&d.live===true,status=!valid?'FAIL':official?'PASS':mode==='manual-admin-fallback'?'WARNING':'WARNING';checks.push(['Fed Rate',status,`${mode} · probability total ${total.toFixed(1)}%${official?' · CME live':' · fallback/manual active'}`]);}
+      if(!analytics.ok)checks.push(['Analytics','FAIL',analytics.error]);else if(!analytics.data?.configured)checks.push(['Analytics','WARNING','GA4 Data API variables are not configured']);else if(analytics.data?.error)checks.push(['Analytics','WARNING',analytics.data.error]);else checks.push(['Analytics','PASS',`${analytics.data.overview?.activeUsers||0} visitors today · ${analytics.data.overview?.whatsappClicks||0} WhatsApp clicks`]);
+      const pass=checks.filter(x=>x[1]==='PASS').length,warn=checks.filter(x=>x[1]==='WARNING').length,fail=checks.filter(x=>x[1]==='FAIL').length;box.innerHTML=checks.map(x=>auditCard(...x)).join('');summary.textContent=`Audit completed: ${pass} PASS · ${warn} WARNING · ${fail} FAIL · ${mytClock(new Date().toISOString())}`;
+    }catch(e){summary.textContent=`Audit failed: ${e.message}`;}finally{btn.disabled=false;}
+  }
+
   async function load(){const r=await fetch(API,{headers:{'x-admin-pin':pin},cache:'no-store'}),d=await r.json();if(!r.ok)throw new Error(d.error||'无法打开后台');events=d.events||[];meta=d;nextSyncAt=Math.ceil(Date.now()/SYNC_INTERVAL_MS)*SYNC_INTERVAL_MS;render();}
   async function unlock(){pin=$('#adminPin').value.trim();$('#loginStatus').textContent='检查中…';try{await load();await Promise.allSettled([loadAnalytics(),loadDataHealth(),loadFedEditor()]);sessionStorage.setItem('ghAdminPin',pin);$('#loginPanel').hidden=true;$('#dashboard').hidden=false;$('#loginStatus').textContent='';}catch(e){$('#loginStatus').textContent=e.message;}}
   $('#unlockAdmin').addEventListener('click',unlock);$('#adminPin').addEventListener('keydown',e=>{if(e.key==='Enter')unlock();});$('#adminPin').value=sessionStorage.getItem('ghAdminPin')||'';
@@ -138,6 +160,7 @@
     try{localStorage.setItem('gh-market-events-updated',String(Date.now()));}catch{}await load();
   }catch(e){st.textContent=e.message;}finally{btn.disabled=false;}});
 
+  $('#runAudit').addEventListener('click',runSystemAudit);
   $('#saveFedManual').addEventListener('click',saveFedManual);$('#reloadFedManual').addEventListener('click',loadFedEditor);
   $('#logoutAdmin').addEventListener('click',()=>{sessionStorage.removeItem('ghAdminPin');location.reload();});
   setInterval(tickSyncMonitor,1000);setInterval(()=>{if(pin){loadAnalytics();loadDataHealth();}},5*60*1000);
