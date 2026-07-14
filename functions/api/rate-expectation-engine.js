@@ -1,5 +1,5 @@
-const STATIC_URL = '/assets/data/rate-expectation.json?v=fedwatch-github-sync-1.1';
-const ENGINE_VERSION = 'fedwatch-github-sync-1.1';
+const STATIC_URL = '/assets/data/rate-expectation.json?v=fedwatch-github-sync-1.3-status-safe';
+const ENGINE_VERSION = 'fedwatch-github-sync-1.3-status-safe';
 
 const headers = {
   'content-type': 'application/json; charset=utf-8',
@@ -32,14 +32,23 @@ export async function onRequestGet({ request }) {
 
     const sourceChecked = Date.parse(data.lastCheckedAt || data.updatedAt || 0);
     const ageMinutes = Number.isFinite(sourceChecked) ? Math.round((Date.now() - sourceChecked) / 60000) : null;
-    const githubSynced = data.sourceMode === 'official-github-sync';
-    const sourceStatus = !githubSynced ? 'awaiting-sync' : ageMinutes === null ? 'cached' : ageMinutes <= 180 ? 'live' : ageMinutes <= 1440 ? 'cached' : 'stale';
+    const officialFetchSucceeded = data.officialFetchSucceeded === true || data.sourceMode === 'official-github-sync';
+    const githubChecked = data.githubChecked === true || ['official-github-sync', 'github-verified-fallback'].includes(data.sourceMode);
+    const githubSynced = data.githubSynced === true || githubChecked;
+    let sourceStatus = 'awaiting-sync';
+    if (officialFetchSucceeded) {
+      sourceStatus = ageMinutes === null ? 'cached' : ageMinutes <= 180 ? 'live' : ageMinutes <= 1440 ? 'cached' : 'stale';
+    } else if (githubChecked) {
+      sourceStatus = ageMinutes !== null && ageMinutes > 1440 ? 'stale' : 'cached';
+    }
     return json({
       ...data,
       engineVersion: ENGINE_VERSION,
       sourceStatus,
-      live: sourceStatus === 'live',
+      live: officialFetchSucceeded && sourceStatus === 'live',
+      githubChecked,
       githubSynced,
+      officialFetchSucceeded,
       lastApiCheckedAt: lastCheckedAt,
       sourceAgeMinutes: ageMinutes,
       cacheMode: 'GitHub Actions verified CME snapshot; read-only Cloudflare edge cache',
