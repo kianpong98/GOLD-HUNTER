@@ -32,7 +32,7 @@ import requests
 
 OUT = Path("assets/data/rate-expectation.json")
 DEBUG_DIR = Path("artifacts/fed-rate-calculation-debug")
-ENGINE_VERSION = "fed-futures-calculated-2.0-free-no-kv"
+ENGINE_VERSION = "fed-futures-calculated-2.1-validation-safe-no-kv"
 MIN_CHECKPOINT_HOURS = 6
 
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
@@ -302,7 +302,12 @@ def main() -> int:
             "currentTargetRange": display_range(target_low, target_high),
             "outcomes": outcomes,
         }
-        changed = core != {key: existing.get(key) for key in core}
+        changed = (
+            core != {key: existing.get(key) for key in core}
+            or existing.get("engineVersion") != ENGINE_VERSION
+            or existing.get("sourceMode") != "free-futures-calculation"
+            or existing.get("calculationSucceeded") is not True
+        )
         prior_checked = existing.get("lastCheckedAt") or existing.get("updatedAt")
         checkpoint_due = True
         if prior_checked:
@@ -367,7 +372,13 @@ def main() -> int:
                     due = checked_at-datetime.fromisoformat(str(prior_checked).replace("Z", "+00:00")) >= timedelta(hours=MIN_CHECKPOINT_HOURS)
                 except ValueError:
                     pass
-            if due:
+            migration_due = (
+                existing.get("engineVersion") != ENGINE_VERSION
+                or existing.get("sourceMode") != "calculation-fallback"
+                or existing.get("githubChecked") is not True
+                or existing.get("githubSynced") is not True
+            )
+            if due or migration_due:
                 fallback = {
                     **existing,
                     "lastCheckedAt": checked_at.isoformat().replace("+00:00", "Z"),
