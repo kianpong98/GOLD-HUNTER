@@ -1,12 +1,11 @@
-const STATIC_URL = '/assets/data/rate-expectation.json?v=fedwatch-github-sync-1.3-status-safe';
-const ENGINE_VERSION = 'fedwatch-github-sync-1.3-status-safe';
+const STATIC_URL = '/assets/data/rate-expectation.json?v=fed-futures-calculated-2.0-free-no-kv';
+const ENGINE_VERSION = 'fed-futures-calculated-2.0-free-no-kv';
 
 const headers = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'public, max-age=60, s-maxage=180, stale-while-revalidate=900',
   'access-control-allow-origin': '*',
 };
-
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers });
 
 function valid(data) {
@@ -18,7 +17,7 @@ function valid(data) {
 }
 
 export async function onRequestGet({ request }) {
-  const lastCheckedAt = new Date().toISOString();
+  const lastApiCheckedAt = new Date().toISOString();
   try {
     const url = new URL(STATIC_URL, new URL(request.url).origin);
     url.searchParams.set('_', String(Math.floor(Date.now() / 180000)));
@@ -26,32 +25,26 @@ export async function onRequestGet({ request }) {
       headers: { accept: 'application/json' },
       cf: { cacheTtl: 180, cacheEverything: true },
     });
-    if (!response.ok) throw new Error(`FedWatch static HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`Rate snapshot HTTP ${response.status}`);
     const data = await response.json();
-    if (!valid(data)) throw new Error('FedWatch static snapshot failed validation');
+    if (!valid(data)) throw new Error('Rate snapshot failed validation');
 
-    const sourceChecked = Date.parse(data.lastCheckedAt || data.updatedAt || 0);
-    const ageMinutes = Number.isFinite(sourceChecked) ? Math.round((Date.now() - sourceChecked) / 60000) : null;
-    const officialFetchSucceeded = data.officialFetchSucceeded === true || data.sourceMode === 'official-github-sync';
-    const githubChecked = data.githubChecked === true || ['official-github-sync', 'github-verified-fallback'].includes(data.sourceMode);
-    const githubSynced = data.githubSynced === true || githubChecked;
-    let sourceStatus = 'awaiting-sync';
-    if (officialFetchSucceeded) {
-      sourceStatus = ageMinutes === null ? 'cached' : ageMinutes <= 180 ? 'live' : ageMinutes <= 1440 ? 'cached' : 'stale';
-    } else if (githubChecked) {
-      sourceStatus = ageMinutes !== null && ageMinutes > 1440 ? 'stale' : 'cached';
-    }
+    const checked = Date.parse(data.lastCheckedAt || data.updatedAt || 0);
+    const ageMinutes = Number.isFinite(checked) ? Math.round((Date.now() - checked) / 60000) : null;
+    const calculationSucceeded = data.calculationSucceeded === true || data.sourceMode === 'free-futures-calculation';
+    let sourceStatus = calculationSucceeded
+      ? (ageMinutes === null ? 'cached' : ageMinutes <= 180 ? 'live' : ageMinutes <= 1440 ? 'cached' : 'stale')
+      : (ageMinutes !== null && ageMinutes > 1440 ? 'stale' : 'cached');
+
     return json({
       ...data,
       engineVersion: ENGINE_VERSION,
       sourceStatus,
-      live: officialFetchSucceeded && sourceStatus === 'live',
-      githubChecked,
-      githubSynced,
-      officialFetchSucceeded,
-      lastApiCheckedAt: lastCheckedAt,
+      live: calculationSucceeded && sourceStatus === 'live',
+      calculationSucceeded,
+      lastApiCheckedAt,
       sourceAgeMinutes: ageMinutes,
-      cacheMode: 'GitHub Actions verified CME snapshot; read-only Cloudflare edge cache',
+      cacheMode: 'GitHub Actions futures calculation; read-only Cloudflare edge cache',
       kvWrite: false,
     });
   } catch (error) {
@@ -60,11 +53,12 @@ export async function onRequestGet({ request }) {
       meetingDate: null,
       currentTargetRange: null,
       outcomes: [],
-      source: 'CME FedWatch',
-      sourceUrl: 'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html',
+      source: '30-Day Fed Funds futures implied estimate',
+      sourceUrl: 'https://www.cmegroup.com/markets/interest-rates/stirs/30-day-federal-fund.html',
       sourceStatus: 'offline',
       live: false,
-      lastApiCheckedAt: lastCheckedAt,
+      calculationSucceeded: false,
+      lastApiCheckedAt,
       kvWrite: false,
       error: String(error?.message || error),
     }, 503);
