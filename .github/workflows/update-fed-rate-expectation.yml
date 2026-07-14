@@ -1,15 +1,17 @@
-name: Update free Fed Funds futures probabilities (CME method)
+name: Update CME FedWatch probabilities (official-first)
 
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/news-engine]
+    branches:
+      - main
+      - feature/news-engine
     paths:
       - '.github/workflows/update-fed-rate-expectation.yml'
       - 'scripts/update_fed_rate_expectation.py'
       - 'functions/api/rate-expectation-engine.js'
   schedule:
-    # Recalculate every 30 minutes on weekdays. A commit is made only when
+    # Every 30 minutes on weekdays. The script commits only when official
     # probabilities change, plus one six-hour freshness checkpoint.
     - cron: '7,37 * * * 1-5'
 
@@ -23,7 +25,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v4
@@ -36,62 +38,53 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install data reader
+      - name: Install official-data reader
         run: pip install requests
 
-      - name: Calculate and validate futures-implied probabilities
+      - name: Read, validate, and checkpoint CME FedWatch
+        env:
+          CME_FEDWATCH_ACCESS_TOKEN: ${{ secrets.CME_FEDWATCH_ACCESS_TOKEN }}
+          CME_FEDWATCH_API_URL: ${{ secrets.CME_FEDWATCH_API_URL }}
         run: python scripts/update_fed_rate_expectation.py
 
-      - name: Validate website snapshot (non-blocking)
+      - name: Validate website snapshot
         run: |
           python - <<'PY'
           import json
+          from datetime import datetime, timezone
           p='assets/data/rate-expectation.json'
-          try:
-              d=json.load(open(p,encoding='utf-8'))
-              rows=d.get('outcomes',[])
-              issues=[]
-              if len(rows)<2: issues.append('Need at least two target-rate outcomes')
-              try:
-                  total=round(sum(float(x['probability']) for x in rows),1)
-              except Exception:
-                  total=0
-                  issues.append('Probabilities are not numeric')
-              if not 98.5<=total<=101.5: issues.append(f'Invalid probability total: {total}')
-              if not d.get('meetingDate'): issues.append('Missing meetingDate')
-              if not d.get('currentTargetRange'): issues.append('Missing currentTargetRange')
-              if d.get('kvWrite') is not False: issues.append('kvWrite must be false')
-              if d.get('engineVersion')!='fed-futures-calculated-2.3-cme-method-no-kv':
-                  issues.append(f"Unexpected engineVersion: {d.get('engineVersion')}")
-              if d.get('sourceMode') not in {'free-futures-calculation','calculation-fallback'}:
-                  issues.append(f"Unexpected sourceMode: {d.get('sourceMode')}")
-              if issues:
-                  print('::warning title=Fed snapshot validation::'+' | '.join(issues))
-              else:
-                  print('Rate probability validation passed:', d['sourceMode'], rows, 'total', total)
-          except Exception as exc:
-              print(f'::warning title=Fed snapshot validation error::{type(exc).__name__}: {exc}')
+          d=json.load(open(p,encoding='utf-8'))
+          rows=d.get('outcomes',[])
+          assert len(rows)>=2, 'Need at least two official target-rate outcomes'
+          total=round(sum(float(x['probability']) for x in rows),1)
+          assert 98.5<=total<=101.5, f'Invalid probability total: {total}'
+          assert d.get('source') in {'CME FedWatch','CME FedWatch verified snapshot'}
+          assert d.get('kvWrite') is False
+          assert d.get('meetingDate') and d.get('currentTargetRange')
+          assert d.get('githubChecked') is True, 'GitHub heartbeat was not recorded'
+          assert d.get('sourceMode') in {'official-github-sync','github-verified-fallback','verified-static-fallback'}, d.get('sourceMode')
+          print('FedWatch validation passed:', d['meetingDate'], d['currentTargetRange'], rows, 'total', total)
           PY
 
-      - name: Upload calculation diagnostic
-        if: always()
+      - name: Upload CME diagnostic when a run fails
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: fed-rate-calculation-${{ github.run_id }}
-          path: artifacts/fed-rate-calculation-debug/
+          name: fedwatch-debug-${{ github.run_id }}
+          path: artifacts/fedwatch-debug/
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Commit only validated changes
+      - name: Commit only verified changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/data/rate-expectation.json
           if git diff --cached --quiet; then
-            echo "Probabilities unchanged. No commit needed."
+            echo "CME probabilities unchanged. No commit needed."
             exit 0
           fi
-          git commit -m "Update futures-implied Fed rate probabilities"
+          git commit -m "Update CME FedWatch probabilities"
           BRANCH="${GITHUB_REF_NAME}"
           for attempt in 1 2 3 4 5; do
             git fetch origin "$BRANCH"
