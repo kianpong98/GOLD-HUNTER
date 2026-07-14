@@ -1,17 +1,15 @@
-name: Update CME FedWatch probabilities
+name: Update free Fed Funds futures probabilities
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-      - feature/news-engine
+    branches: [main, feature/news-engine]
     paths:
       - '.github/workflows/update-fed-rate-expectation.yml'
       - 'scripts/update_fed_rate_expectation.py'
       - 'functions/api/rate-expectation-engine.js'
   schedule:
-    # Every 30 minutes on weekdays. The script commits only when official
+    # Recalculate every 30 minutes on weekdays. A commit is made only when
     # probabilities change, plus one six-hour freshness checkpoint.
     - cron: '7,37 * * * 1-5'
 
@@ -25,7 +23,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 12
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v4
@@ -38,53 +36,48 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install official-data reader
+      - name: Install data reader
         run: pip install requests
 
-      - name: Read, validate, and checkpoint CME FedWatch
-        env:
-          CME_FEDWATCH_ACCESS_TOKEN: ${{ secrets.CME_FEDWATCH_ACCESS_TOKEN }}
-          CME_FEDWATCH_API_URL: ${{ secrets.CME_FEDWATCH_API_URL }}
+      - name: Calculate and validate futures-implied probabilities
         run: python scripts/update_fed_rate_expectation.py
 
       - name: Validate website snapshot
         run: |
           python - <<'PY'
           import json
-          from datetime import datetime, timezone
           p='assets/data/rate-expectation.json'
           d=json.load(open(p,encoding='utf-8'))
           rows=d.get('outcomes',[])
-          assert len(rows)>=2, 'Need at least two official target-rate outcomes'
+          assert len(rows)>=2, 'Need at least two target-rate outcomes'
           total=round(sum(float(x['probability']) for x in rows),1)
           assert 98.5<=total<=101.5, f'Invalid probability total: {total}'
-          assert d.get('source')=='CME FedWatch'
-          assert d.get('kvWrite') is False
           assert d.get('meetingDate') and d.get('currentTargetRange')
-          assert d.get('githubChecked') is True, 'GitHub heartbeat was not recorded'
-          assert d.get('sourceMode') in {'official-github-sync','github-verified-fallback'}, d.get('sourceMode')
-          print('FedWatch validation passed:', d['meetingDate'], d['currentTargetRange'], rows, 'total', total)
+          assert d.get('kvWrite') is False
+          assert d.get('engineVersion')=='fed-futures-calculated-2.0-free-no-kv'
+          assert d.get('sourceMode') in {'free-futures-calculation','calculation-fallback'}
+          print('Rate probability validation passed:', d['sourceMode'], rows, 'total', total)
           PY
 
-      - name: Upload CME diagnostic when a run fails
-        if: failure()
+      - name: Upload calculation diagnostic
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fedwatch-debug-${{ github.run_id }}
-          path: artifacts/fedwatch-debug/
+          name: fed-rate-calculation-${{ github.run_id }}
+          path: artifacts/fed-rate-calculation-debug/
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Commit only verified changes
+      - name: Commit only validated changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/data/rate-expectation.json
           if git diff --cached --quiet; then
-            echo "CME probabilities unchanged. No commit needed."
+            echo "Probabilities unchanged. No commit needed."
             exit 0
           fi
-          git commit -m "Update CME FedWatch probabilities"
+          git commit -m "Update futures-implied Fed rate probabilities"
           BRANCH="${GITHUB_REF_NAME}"
           for attempt in 1 2 3 4 5; do
             git fetch origin "$BRANCH"
