@@ -1,3 +1,4 @@
+const VERSION='ga4-data-api-1.1-batched-stable';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{
   'content-type':'application/json;charset=UTF-8',
   'cache-control':'private, no-store, max-age=0',
@@ -13,7 +14,8 @@ const b64url=input=>{
 const pemToBuf=pem=>{
   const body=String(pem||'').replace(/\\n/g,'\n').replace(/-----BEGIN PRIVATE KEY-----/g,'').replace(/-----END PRIVATE KEY-----/g,'').replace(/\s/g,'');
   if(!body)throw new Error('GA4_PRIVATE_KEY is empty or invalid');
-  return Uint8Array.from(atob(body),c=>c.charCodeAt(0)).buffer;
+  try{return Uint8Array.from(atob(body),c=>c.charCodeAt(0)).buffer;}
+  catch{throw new Error('GA4_PRIVATE_KEY could not be decoded');}
 };
 
 async function accessToken(env){
@@ -33,104 +35,104 @@ async function accessToken(env){
     headers:{'content-type':'application/x-www-form-urlencoded'},
     body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:`${unsigned}.${signature}`})
   });
-  const data=await response.json().catch(()=>({}));
+  const text=await response.text();
+  let data={}; try{data=JSON.parse(text);}catch{}
   if(!response.ok)throw new Error(data.error_description||data.error||`Google OAuth failed (${response.status})`);
+  if(!data.access_token)throw new Error('Google OAuth returned no access token');
   return data.access_token;
 }
 
-async function gaRequest(env,token,method,body){
-  const response=await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA4_PROPERTY_ID}:${method}`,{
-    method:'POST',
-    headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},
-    body:JSON.stringify(body)
-  });
-  const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(data.error?.message||`${method} failed (${response.status})`);
+async function googlePost(url,token,body){
+  const response=await fetch(url,{method:'POST',headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},body:JSON.stringify(body)});
+  const text=await response.text();
+  let data={}; try{data=JSON.parse(text);}catch{}
+  if(!response.ok)throw new Error(data.error?.message||`Google API failed (${response.status})`);
   return data;
 }
-const runReport=(env,token,body)=>gaRequest(env,token,'runReport',body);
-const runRealtime=(env,token,body)=>gaRequest(env,token,'runRealtimeReport',body);
-const rows=data=>(data?.rows||[]).map(row=>({
-  dimensions:(row.dimensionValues||[]).map(v=>v.value||''),
-  metrics:(row.metricValues||[]).map(v=>Number(v.value||0))
-}));
+async function batchReports(env,token,requests){
+  return googlePost(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA4_PROPERTY_ID}:batchRunReports`,token,{requests});
+}
+async function realtimeReport(env,token,body){
+  return googlePost(`https://analyticsdata.googleapis.com/v1beta/properties/${env.GA4_PROPERTY_ID}:runRealtimeReport`,token,body);
+}
+const rows=data=>(data?.rows||[]).map(row=>({dimensions:(row.dimensionValues||[]).map(v=>v.value||''),metrics:(row.metricValues||[]).map(v=>Number(v.value||0))}));
 const metric=(data,index=0)=>rows(data)[0]?.metrics?.[index]||0;
 const dateRange=(startDate,endDate='today')=>[{startDate,endDate}];
 const exactEvent=name=>({filter:{fieldName:'eventName',stringFilter:{matchType:'EXACT',value:name,caseSensitive:false}}});
+function overview(data={}){const m=rows(data)[0]?.metrics||[];return {activeUsers:m[0]||0,sessions:m[1]||0,pageViews:m[2]||0,engagedSessions:m[3]||0,engagementRate:m[4]||0,avgSessionSeconds:Math.round(m[5]||0),eventCount:m[6]||0};}
 
-async function safe(label,fn,diagnostics){
-  try{return await fn();}
-  catch(error){diagnostics.push({report:label,error:String(error?.message||error)});return null;}
-}
-
-function overview(data={}){
-  const m=rows(data)[0]?.metrics||[];
-  return {activeUsers:m[0]||0,sessions:m[1]||0,pageViews:m[2]||0,engagedSessions:m[3]||0,engagementRate:m[4]||0,avgSessionSeconds:Math.round(m[5]||0),eventCount:m[6]||0};
-}
-
-export async function onRequestOptions(){
-  return new Response(null,{status:204,headers:{'access-control-allow-methods':'GET,OPTIONS','access-control-allow-headers':'x-admin-pin,content-type','access-control-max-age':'86400'}});
-}
+export async function onRequestOptions(){return new Response(null,{status:204,headers:{'access-control-allow-methods':'GET,OPTIONS','access-control-allow-headers':'x-admin-pin,content-type','access-control-max-age':'86400'}});}
 
 export async function onRequestGet({request,env}){
   if(!env.ADMIN_PIN||request.headers.get('x-admin-pin')!==env.ADMIN_PIN)return json({error:'Unauthorized'},401);
   const missing=['GA4_PROPERTY_ID','GA4_CLIENT_EMAIL','GA4_PRIVATE_KEY'].filter(k=>!env[k]);
-  if(missing.length)return json({configured:false,status:'not-configured',missing,message:`Missing Cloudflare secrets: ${missing.join(', ')}`});
+  if(missing.length)return json({configured:false,status:'not-configured',version:VERSION,missing,message:`Missing Cloudflare secrets: ${missing.join(', ')}`});
 
   const diagnostics=[];
+  const reports={};
   try{
     const token=await accessToken(env);
     const standardMetrics=[{name:'activeUsers'},{name:'sessions'},{name:'screenPageViews'},{name:'engagedSessions'},{name:'engagementRate'},{name:'averageSessionDuration'},{name:'eventCount'}];
-    const [today,yesterday,seven,thirty,topPages,traffic,devices,countries,waToday,waSeven,waThirty,realtime,realtimePages,realtimeCountries,realtimeDevices,topEvents,topSections,topButtons,topNews,scrollDepth]=await Promise.all([
-      safe('overviewToday',()=>runReport(env,token,{dateRanges:dateRange('today'),metrics:standardMetrics}),diagnostics),
-      safe('overviewYesterday',()=>runReport(env,token,{dateRanges:dateRange('yesterday','yesterday'),metrics:standardMetrics}),diagnostics),
-      safe('overview7Days',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),metrics:standardMetrics}),diagnostics),
-      safe('overview30Days',()=>runReport(env,token,{dateRanges:dateRange('30daysAgo'),metrics:standardMetrics}),diagnostics),
-      safe('topPages',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'pagePath'},{name:'pageTitle'}],metrics:[{name:'screenPageViews'},{name:'activeUsers'},{name:'averageSessionDuration'}],orderBys:[{metric:{metricName:'screenPageViews'},desc:true}],limit:12}),diagnostics),
-      safe('trafficSources',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'sessionDefaultChannelGroup'}],metrics:[{name:'activeUsers'},{name:'sessions'},{name:'engagedSessions'}],orderBys:[{metric:{metricName:'sessions'},desc:true}],limit:12}),diagnostics),
-      safe('devices',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'deviceCategory'}],metrics:[{name:'activeUsers'},{name:'sessions'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:8}),diagnostics),
-      safe('countries',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'country'}],metrics:[{name:'activeUsers'},{name:'sessions'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:10}),diagnostics),
-      safe('whatsappToday',()=>runReport(env,token,{dateRanges:dateRange('today'),metrics:[{name:'eventCount'}],dimensionFilter:exactEvent('whatsapp_click')}),diagnostics),
-      safe('whatsapp7Days',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),metrics:[{name:'eventCount'}],dimensionFilter:exactEvent('whatsapp_click')}),diagnostics),
-      safe('whatsapp30Days',()=>runReport(env,token,{dateRanges:dateRange('30daysAgo'),metrics:[{name:'eventCount'}],dimensionFilter:exactEvent('whatsapp_click')}),diagnostics),
-      safe('realtime',()=>runRealtime(env,token,{metrics:[{name:'activeUsers'}]}),diagnostics),
-      safe('realtimePages',()=>runRealtime(env,token,{dimensions:[{name:'unifiedScreenName'}],metrics:[{name:'activeUsers'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:5}),diagnostics),
-      safe('realtimeCountries',()=>runRealtime(env,token,{dimensions:[{name:'country'}],metrics:[{name:'activeUsers'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:5}),diagnostics),
-      safe('realtimeDevices',()=>runRealtime(env,token,{dimensions:[{name:'deviceCategory'}],metrics:[{name:'activeUsers'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:5}),diagnostics),
-      safe('topEvents',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'eventName'}],metrics:[{name:'eventCount'},{name:'activeUsers'}],orderBys:[{metric:{metricName:'eventCount'},desc:true}],limit:15}),diagnostics),
-      safe('topSections',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'customEvent:page_section'}],metrics:[{name:'eventCount'},{name:'activeUsers'}],dimensionFilter:exactEvent('section_view'),orderBys:[{metric:{metricName:'eventCount'},desc:true}],limit:12}),diagnostics),
-      safe('topButtons',()=>runReport(env,token,{dateRanges:dateRange('30daysAgo'),dimensions:[{name:'customEvent:button_location'}],metrics:[{name:'eventCount'}],dimensionFilter:exactEvent('whatsapp_click'),orderBys:[{metric:{metricName:'eventCount'},desc:true}],limit:10}),diagnostics),
-      safe('topNews',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'customEvent:news_type'}],metrics:[{name:'eventCount'},{name:'activeUsers'}],dimensionFilter:exactEvent('news_interest'),orderBys:[{metric:{metricName:'eventCount'},desc:true}],limit:10}),diagnostics),
-      safe('scrollDepth',()=>runReport(env,token,{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'customEvent:percent_scrolled'}],metrics:[{name:'eventCount'},{name:'activeUsers'}],dimensionFilter:exactEvent('scroll_depth'),orderBys:[{dimension:{dimensionName:'customEvent:percent_scrolled',orderType:'NUMERIC'}}],limit:10}),diagnostics)
-    ]);
+    const definitions=[
+      ['today',{dateRanges:dateRange('today'),metrics:standardMetrics}],
+      ['yesterday',{dateRanges:dateRange('yesterday','yesterday'),metrics:standardMetrics}],
+      ['seven',{dateRanges:dateRange('7daysAgo'),metrics:standardMetrics}],
+      ['thirty',{dateRanges:dateRange('30daysAgo'),metrics:standardMetrics}],
+      ['topPages',{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'pagePath'},{name:'pageTitle'}],metrics:[{name:'screenPageViews'},{name:'activeUsers'},{name:'averageSessionDuration'}],orderBys:[{metric:{metricName:'screenPageViews'},desc:true}],limit:12}],
+      ['traffic',{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'sessionDefaultChannelGroup'}],metrics:[{name:'activeUsers'},{name:'sessions'},{name:'engagedSessions'}],orderBys:[{metric:{metricName:'sessions'},desc:true}],limit:12}],
+      ['devices',{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'deviceCategory'}],metrics:[{name:'activeUsers'},{name:'sessions'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:8}],
+      ['countries',{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'country'}],metrics:[{name:'activeUsers'},{name:'sessions'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:10}],
+      ['waToday',{dateRanges:dateRange('today'),metrics:[{name:'eventCount'}],dimensionFilter:exactEvent('whatsapp_click')}],
+      ['waSeven',{dateRanges:dateRange('7daysAgo'),metrics:[{name:'eventCount'}],dimensionFilter:exactEvent('whatsapp_click')}],
+      ['waThirty',{dateRanges:dateRange('30daysAgo'),metrics:[{name:'eventCount'}],dimensionFilter:exactEvent('whatsapp_click')}],
+      ['topEvents',{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'eventName'}],metrics:[{name:'eventCount'},{name:'activeUsers'}],orderBys:[{metric:{metricName:'eventCount'},desc:true}],limit:15}],
+      ['topSections',{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'customEvent:page_section'}],metrics:[{name:'eventCount'},{name:'activeUsers'}],dimensionFilter:exactEvent('section_view'),orderBys:[{metric:{metricName:'eventCount'},desc:true}],limit:12}],
+      ['topButtons',{dateRanges:dateRange('30daysAgo'),dimensions:[{name:'customEvent:button_location'}],metrics:[{name:'eventCount'}],dimensionFilter:exactEvent('whatsapp_click'),orderBys:[{metric:{metricName:'eventCount'},desc:true}],limit:10}],
+      ['topNews',{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'customEvent:news_type'}],metrics:[{name:'eventCount'},{name:'activeUsers'}],dimensionFilter:exactEvent('news_interest'),orderBys:[{metric:{metricName:'eventCount'},desc:true}],limit:10}],
+      ['scrollDepth',{dateRanges:dateRange('7daysAgo'),dimensions:[{name:'customEvent:percent_scrolled'}],metrics:[{name:'eventCount'},{name:'activeUsers'}],dimensionFilter:exactEvent('scroll_depth'),limit:10}]
+    ];
 
-    const todayOverview=overview(today), yesterdayOverview=overview(yesterday), sevenOverview=overview(seven), thirtyOverview=overview(thirty);
-    const whatsapp={today:metric(waToday),sevenDays:metric(waSeven),thirtyDays:metric(waThirty)};
+    // GA4 allows up to 5 reports per batch. Run batches sequentially to stay below
+    // Cloudflare's simultaneous outbound connection limit.
+    for(let i=0;i<definitions.length;i+=5){
+      const chunk=definitions.slice(i,i+5);
+      try{
+        const data=await batchReports(env,token,chunk.map(x=>x[1]));
+        const returned=data.reports||[];
+        chunk.forEach((x,index)=>{reports[x[0]]=returned[index]||null;});
+      }catch(error){
+        chunk.forEach(x=>{reports[x[0]]=null;diagnostics.push({report:x[0],error:String(error?.message||error)});});
+      }
+    }
+
+    const realtime={};
+    const realtimeDefs=[
+      ['summary',{metrics:[{name:'activeUsers'}]}],
+      ['pages',{dimensions:[{name:'unifiedScreenName'}],metrics:[{name:'activeUsers'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:5}],
+      ['countries',{dimensions:[{name:'country'}],metrics:[{name:'activeUsers'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:5}],
+      ['devices',{dimensions:[{name:'deviceCategory'}],metrics:[{name:'activeUsers'}],orderBys:[{metric:{metricName:'activeUsers'},desc:true}],limit:5}]
+    ];
+    for(const [name,body] of realtimeDefs){
+      try{realtime[name]=await realtimeReport(env,token,body);}catch(error){realtime[name]=null;diagnostics.push({report:`realtime-${name}`,error:String(error?.message||error)});}
+    }
+
+    const todayOverview=overview(reports.today),yesterdayOverview=overview(reports.yesterday),sevenOverview=overview(reports.seven),thirtyOverview=overview(reports.thirty);
+    const whatsapp={today:metric(reports.waToday),sevenDays:metric(reports.waSeven),thirtyDays:metric(reports.waThirty)};
     whatsapp.conversionToday=todayOverview.activeUsers?Number((whatsapp.today/todayOverview.activeUsers*100).toFixed(1)):0;
     whatsapp.conversion7Days=sevenOverview.activeUsers?Number((whatsapp.sevenDays/sevenOverview.activeUsers*100).toFixed(1)):0;
 
     return json({
-      configured:true,
-      connected:true,
-      status:diagnostics.length?'connected-with-warnings':'connected',
-      propertyId:String(env.GA4_PROPERTY_ID),
-      updatedAt:new Date().toISOString(),
+      configured:true,connected:true,status:diagnostics.length?'connected-with-warnings':'connected',version:VERSION,
+      propertyId:String(env.GA4_PROPERTY_ID),updatedAt:new Date().toISOString(),
       overview:{today:todayOverview,yesterday:yesterdayOverview,sevenDays:sevenOverview,thirtyDays:thirtyOverview},
       whatsapp,
-      realtime:{activeUsers:metric(realtime),topPages:rows(realtimePages),countries:rows(realtimeCountries),devices:rows(realtimeDevices)},
-      topPages:rows(topPages),
-      trafficSources:rows(traffic),
-      devices:rows(devices),
-      countries:rows(countries),
-      topEvents:rows(topEvents),
-      topSections:rows(topSections),
-      topButtons:rows(topButtons),
-      topNews:rows(topNews),
-      scrollDepth:rows(scrollDepth),
+      realtime:{activeUsers:metric(realtime.summary),topPages:rows(realtime.pages),countries:rows(realtime.countries),devices:rows(realtime.devices)},
+      topPages:rows(reports.topPages),trafficSources:rows(reports.traffic),devices:rows(reports.devices),countries:rows(reports.countries),topEvents:rows(reports.topEvents),topSections:rows(reports.topSections),topButtons:rows(reports.topButtons),topNews:rows(reports.topNews),scrollDepth:rows(reports.scrollDepth),
       diagnostics,
       customDefinitionsRequired:diagnostics.filter(x=>/customEvent:|custom dimension|not a valid dimension/i.test(x.error)).map(x=>x.report)
     });
   }catch(error){
-    return json({configured:true,connected:false,status:'error',error:String(error?.message||error),updatedAt:new Date().toISOString()},502);
+    console.error('GA4 dashboard fatal error',error);
+    return json({configured:true,connected:false,status:'error',version:VERSION,error:String(error?.message||error),updatedAt:new Date().toISOString()},500);
   }
 }
