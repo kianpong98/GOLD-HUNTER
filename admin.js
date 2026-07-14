@@ -83,18 +83,29 @@
   }
 
   async function loadAnalytics(){
-    const st=$('#analyticsStatus'),badge=$('#analyticsBadge'),headline=$('#analyticsHeadline');
+    const st=$('#analyticsStatus'),warnings=$('#analyticsWarnings'),badge=$('#analyticsBadge'),headline=$('#analyticsHeadline');
+    const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value;};
+    const renderList=(id,rows,labelIndex=0,valueIndex=0,suffix='')=>{const el=document.getElementById(id);if(!el)return;el.innerHTML=rows&&rows.length?rows.map(r=>`<div class="mini-row"><span>${esc(r.dimensions?.[labelIndex]||'Unknown')}</span><b>${metric(r.metrics?.[valueIndex])}${suffix}</b></div>`).join(''):'<span>No data yet</span>';};
     try{
       const r=await fetch(`/api/analytics-dashboard?t=${Date.now()}`,{headers:{'x-admin-pin':pin},cache:'no-store'}),d=await r.json();
       if(!r.ok)throw new Error(d.error||'Analytics unavailable');
       if(!d.configured){
         st.textContent=d.message||'GA4 dashboard is not configured yet.';headline.textContent='GA4 Data API 尚未连接；网站现有追踪代码不会受影响。';badge.textContent='NOT CONFIGURED';badge.className='badge warn';return d;
       }
-      if(d.error)throw new Error(d.error);
-      const o=d.overview||{};$('#aVisitors').textContent=metric(o.activeUsers);$('#aWhatsapp').textContent=metric(o.whatsappClicks);$('#aSessions').textContent=metric(o.sessions);$('#aConversion').textContent=o.sessions?`${(o.whatsappClicks/o.sessions*100).toFixed(1)}%`:'0%';
-      $('#aTopPages').innerHTML=listHtml(d.topPages);$('#aSources').innerHTML=listHtml(d.trafficSources);$('#aNews').innerHTML=listHtml(d.topNews);
-      const topPage=d.topPages?.[0]?.dimensions?.[0]||'No page data',topSource=d.trafficSources?.[0]?.dimensions?.[0]||'No source data';headline.textContent=`Top content: ${topPage} · Top source: ${topSource}`;st.textContent=`Analytics updated: ${fmt(d.updatedAt)}`;badge.textContent='CONNECTED';badge.className='badge ok';return d;
-    }catch(e){st.textContent=e.message;headline.textContent='Analytics API 暂时无法读取。';badge.textContent='ERROR';badge.className='badge warn';throw e;}
+      if(d.connected===false||d.error)throw new Error(d.error||'GA4 connection failed');
+      const today=d.overview?.today||{},yesterday=d.overview?.yesterday||{},seven=d.overview?.sevenDays||{},thirty=d.overview?.thirtyDays||{},wa=d.whatsapp||{},rt=d.realtime||{};
+      set('aVisitors',metric(today.activeUsers));set('aYesterday',metric(yesterday.activeUsers));set('a7Days',metric(seven.activeUsers));set('a30Days',metric(thirty.activeUsers));set('aSessions',metric(today.sessions));set('aRealtime',metric(rt.activeUsers));set('aWhatsapp',metric(wa.today));set('aConversion',`${Number(wa.conversionToday||0).toFixed(1)}%`);
+      renderList('aTopPages',d.topPages,0,0);renderList('aSources',d.trafficSources,0,1);renderList('aSections',d.topSections,0,0);renderList('aButtons',d.topButtons,0,0);renderList('aNews',d.topNews,0,0);renderList('aCountries',d.countries,0,0);renderList('aDevices',d.devices,0,0);renderList('aScroll',d.scrollDepth,0,0);renderList('aRealtimePages',rt.topPages,0,0);
+      const topPage=d.topPages?.[0]?.dimensions?.[0]||'No page data',topSource=d.trafficSources?.[0]?.dimensions?.[0]||'No source data';headline.textContent=`Online: ${metric(rt.activeUsers)} · Top content: ${topPage} · Top source: ${topSource} · 7-day WA: ${metric(wa.sevenDays)}`;
+      st.textContent=`GA4 updated: ${fmt(d.updatedAt)} · Property ${d.propertyId||'connected'}`;
+      const custom=(d.customDefinitionsRequired||[]);const diagnostics=(d.diagnostics||[]);
+      warnings.textContent=custom.length?`部分自定义报表尚未显示。请在 GA4 Custom definitions 注册对应参数：${custom.join(', ')}。`:diagnostics.length?`${diagnostics.length} 个非关键报表暂时不可用，其余 GA4 数据正常。`:'';
+      warnings.className=`admin-note${warnings.textContent?' analytics-warning':''}`;
+      badge.textContent=diagnostics.length?'CONNECTED · WARN':'CONNECTED';badge.className=`badge ${diagnostics.length?'warn':'ok'}`;return d;
+    }catch(e){
+      ['aVisitors','aYesterday','a7Days','a30Days','aSessions','aRealtime','aWhatsapp','aConversion'].forEach(id=>set(id,'—'));
+      st.textContent=e.message;headline.textContent='Analytics API 暂时无法读取。';warnings.textContent='请检查 GA4 Property 权限、Cloudflare Secrets 和 Google Analytics Data API。';badge.textContent='ERROR';badge.className='badge warn';throw e;
+    }
   }
   async function loadDataHealth(){
     const nowIso=new Date().toISOString();
@@ -136,7 +147,7 @@
       if(!etf.ok)checks.push(['ETF Holdings','FAIL',etf.error]);else{const d=etf.data||{},good=String(d.engineVersion||'').startsWith('etf-stable')&&d.kvWrite!==true&&d.officialDate;checks.push(['ETF Holdings',good?'PASS':'WARNING',`${d.latestHoldings??'—'} t · official ${d.officialDate||'unknown'} · ${d.sourceStatus||d.status||'unknown'}`]);}
       if(!gold.ok)checks.push(['Central Bank Gold','FAIL',gold.error]);else{const d=gold.data||{},good=String(d.engineVersion||'').startsWith('gold-reserves')&&d.kvWrite!==true&&(d.records||[]).length>0;checks.push(['Central Bank Gold',good?'PASS':'WARNING',`${(d.records||[]).length} countries · ${d.sourceMode||'unknown source'} · ${d.sourceStatus||d.status||'unknown'}`]);}
       if(!fed.ok)checks.push(['Fed Rate','FAIL',fed.error]);else{const d=fed.data||{},total=(d.outcomes||[]).reduce((s,x)=>s+Number(x.probability||0),0),mode=d.sourceMode||'unknown',valid=Math.abs(total-100)<=1&&(d.outcomes||[]).length>=2;const official=mode==='official-github-sync'&&d.live===true,status=!valid?'FAIL':official?'PASS':mode==='manual-admin-fallback'?'WARNING':'WARNING';checks.push(['Fed Rate',status,`${mode} · probability total ${total.toFixed(1)}%${official?' · CME live':' · fallback/manual active'}`]);}
-      if(!analytics.ok)checks.push(['Analytics','FAIL',analytics.error]);else if(!analytics.data?.configured)checks.push(['Analytics','WARNING','GA4 Data API variables are not configured']);else if(analytics.data?.error)checks.push(['Analytics','WARNING',analytics.data.error]);else checks.push(['Analytics','PASS',`${analytics.data.overview?.activeUsers||0} visitors today · ${analytics.data.overview?.whatsappClicks||0} WhatsApp clicks`]);
+      if(!analytics.ok)checks.push(['Analytics','FAIL',analytics.error]);else if(!analytics.data?.configured)checks.push(['Analytics','WARNING','GA4 Data API variables are not configured']);else if(analytics.data?.error)checks.push(['Analytics','WARNING',analytics.data.error]);else checks.push(['Analytics','PASS',`${analytics.data.overview?.today?.activeUsers||0} visitors today · ${analytics.data.whatsapp?.today||0} WhatsApp clicks`]);
       const pass=checks.filter(x=>x[1]==='PASS').length,warn=checks.filter(x=>x[1]==='WARNING').length,fail=checks.filter(x=>x[1]==='FAIL').length;box.innerHTML=checks.map(x=>auditCard(...x)).join('');summary.textContent=`Audit completed: ${pass} PASS · ${warn} WARNING · ${fail} FAIL · ${mytClock(new Date().toISOString())}`;
     }catch(e){summary.textContent=`Audit failed: ${e.message}`;}finally{btn.disabled=false;}
   }
