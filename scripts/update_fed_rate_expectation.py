@@ -32,10 +32,11 @@ import requests
 
 OUT = Path("assets/data/rate-expectation.json")
 DEBUG_DIR = Path("artifacts/fed-rate-calculation-debug")
-ENGINE_VERSION = "fed-futures-calculated-2.1-validation-safe-no-kv"
+ENGINE_VERSION = "fed-futures-calculated-2.2-dual-official-source-no-kv"
 MIN_CHECKPOINT_HOURS = 6
 
-FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
+FRED_MULTI_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=EFFR,DFEDTARL,DFEDTARU"
+NYFED_EFFR = "https://markets.newyorkfed.org/api/rates/unsecured/effr/last/1.json"
 YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 STOOQ_CSV = "https://stooq.com/q/l/?s=zq.f&i=d"
 CME_FEDWATCH_URL = "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html"
@@ -71,17 +72,86 @@ def display_range(lo: float, hi: float) -> str:
     return f"{lo:.2f}%–{hi:.2f}%"
 
 
-def get_csv_latest(series: str) -> tuple[str, float]:
-    url = FRED_CSV.format(series=series)
-    response = requests.get(url, timeout=45, headers={"User-Agent": UA, "Accept": "text/csv"})
-    response.raise_for_status()
-    rows = list(csv.DictReader(io.StringIO(response.text)))
+def _request_with_retry(url: str, *, timeout: int = 12, accept: str = "application/json") -> requests.Response:
+    errors: list[str] = []
+    for attempt in range(1, 4):
+        try:
+            response = requests.get(
+                url,
+                timeout=timeout,
+                headers={"User-Agent": UA, "Accept": accept, "Cache-Control": "no-cache"},
+            )
+            if response.status_code == 200:
+                return response
+            errors.append(f"attempt {attempt}: HTTP {response.status_code}")
+        except Exception as exc:
+            errors.append(f"attempt {attempt}: {type(exc).__name__}: {exc}")
+        time.sleep(attempt * 1.5)
+    raise RuntimeError("; ".join(errors))
+
+
+def _latest_from_rows(rows: list[dict[str, str]], series: str) -> tuple[str, float]:
     for row in reversed(rows):
         raw = (row.get(series) or "").strip()
         if raw and raw != ".":
-            return row.get("DATE", ""), float(raw)
-    raise RuntimeError(f"No usable observation in FRED series {series}")
+            return (row.get("DATE") or row.get("observation_date") or ""), float(raw)
+    raise RuntimeError(f"No usable observation for {series}")
 
+
+def fetch_fred_reference_rates() -> tuple[dict[str, tuple[str, float]], list[str]]:
+    response = _request_with_retry(FRED_MULTI_CSV, timeout=12, accept="text/csv")
+    rows = list(csv.DictReader(io.StringIO(response.text)))
+    if not rows:
+        raise RuntimeError("FRED returned no CSV rows")
+    values = {series: _latest_from_rows(rows, series) for series in ("EFFR", "DFEDTARL", "DFEDTARU")}
+    return values, []
+
+
+def fetch_nyfed_effr() -> tuple[str, float]:
+    response = _request_with_retry(NYFED_EFFR, timeout=12, accept="application/json")
+    payload = response.json()
+    candidates = []
+    if isinstance(payload, dict):
+        candidates.extend(payload.get("refRates") or [])
+        candidates.extend(payload.get("rates") or [])
+        if isinstance(payload.get("data"), list):
+            candidates.extend(payload["data"])
+    for row in candidates:
+        if not isinstance(row, dict):
+            continue
+        raw = row.get("percentRate") if row.get("percentRate") is not None else (row.get("rate") if row.get("rate") is not None else row.get("value"))
+        date_value = row.get("effectiveDate") or row.get("date") or row.get("businessDate") or ""
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= value <= 20:
+            return str(date_value), value
+    raise RuntimeError("New York Fed EFFR response did not contain a usable rate")
+
+
+def fetch_reference_rates(existing: dict[str, Any]) -> tuple[str, float, str, float, str, float, str, list[str]]:
+    errors: list[str] = []
+    try:
+        values, _ = fetch_fred_reference_rates()
+        effr_date, effr = values["EFFR"]
+        low_date, target_low = values["DFEDTARL"]
+        high_date, target_high = values["DFEDTARU"]
+        return effr_date, effr, low_date, target_low, high_date, target_high, "FRED combined official series", errors
+    except Exception as exc:
+        errors.append(f"FRED combined: {type(exc).__name__}: {exc}")
+
+    # Official fallback for EFFR from the New York Fed. The target range changes
+    # only at FOMC decisions, so preserve the last validated range from the
+    # current snapshot when FRED is temporarily unavailable.
+    effr_date, effr = fetch_nyfed_effr()
+    parsed = parse_range(existing.get("currentTargetRange"))
+    if not parsed:
+        raise RuntimeError("FRED unavailable and existing target range is invalid")
+    target_low, target_high = parsed
+    target_date = str(existing.get("officialDataChangedAt") or existing.get("updatedAt") or "verified snapshot")
+    errors.append("Target range retained from last validated official snapshot")
+    return effr_date, effr, target_date, target_low, target_date, target_high, "New York Fed EFFR + validated official target range", errors
 
 def yahoo_symbols(meeting: date) -> list[str]:
     code = MONTH_CODES[meeting.month]
@@ -283,9 +353,8 @@ def main() -> int:
     errors: list[str] = []
     try:
         meeting = next_meeting(existing)
-        effr_date, effr = get_csv_latest("EFFR")
-        low_date, target_low = get_csv_latest("DFEDTARL")
-        high_date, target_high = get_csv_latest("DFEDTARU")
+        effr_date, effr, low_date, target_low, high_date, target_high, reference_source, reference_errors = fetch_reference_rates(existing)
+        errors.extend(reference_errors)
         if not (0 <= target_low < target_high <= 20) or not math.isclose((target_high-target_low)*100, 25, abs_tol=0.6):
             raise RuntimeError(f"Invalid official target range: {target_low}-{target_high}")
         price, futures_source, futures_time, source_errors = fetch_futures_price(meeting)
@@ -331,7 +400,7 @@ def main() -> int:
             "sourceUrl": CME_FEDWATCH_URL,
             "futuresSource": futures_source,
             "futuresDataTime": futures_time,
-            "referenceRateSource": "Federal Reserve Bank of New York / FRED",
+            "referenceRateSource": reference_source,
             "referenceRateDates": {"EFFR":effr_date, "targetLower":low_date, "targetUpper":high_date},
             "sourceMode": "free-futures-calculation",
             "sourceStatus": "calculated-live",
@@ -346,7 +415,7 @@ def main() -> int:
             "meetingDateTime": make_meeting_datetime(meeting),
             "meetingTimezone": "Asia/Kuala_Lumpur",
             "meetingTimezoneLabel": "Malaysia Time (MYT)",
-            "note": "Free FedWatch-like estimate calculated from 30-Day Fed Funds futures and official EFFR/target-rate data. It is not CME licensed FedWatch API output.",
+            "note": "Free FedWatch-like estimate calculated from 30-Day Fed Funds futures and official reference rates. FRED is primary; New York Fed EFFR plus the last validated official target range is the outage fallback. It is not CME licensed FedWatch API output.",
             "engineVersion": ENGINE_VERSION,
             "kvWrite": False,
             "errors": errors,
