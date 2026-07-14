@@ -29,8 +29,8 @@
   "meetingDateTime": "2026-07-30T02:00:00+08:00",
   "meetingTimezone": "Asia/Kuala_Lumpur",
   "meetingTimezoneLabel": "Malaysia Time (MYT)",
-  "note": "Target-rate probabilities are updated by GitHub Actions directly from CME FedWatch. No Workers KV writes.",
-  "engineVersion": "fedwatch-github-sync-1",
+  "note": "Verified seed. GitHub Actions replaces it with official-github-sync after a successful CME check. No Workers KV writes.",
+  "engineVersion": "fedwatch-github-sync-1.1",
   "kvWrite": false,
   "errors": []
 }

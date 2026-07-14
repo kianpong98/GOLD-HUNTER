@@ -1,8 +1,8 @@
 {
   "source": "World Gold Council / IMF IFS",
   "sourceUrl": "https://www.gold.org/goldhub/data/gold-reserves-by-country",
-  "updatedAt": "2026-07-14T06:03:02.606808Z",
-  "checkedAt": "2026-07-14T06:03:02.606808Z",
+  "updatedAt": "2026-04-01T00:00:00Z",
+  "checkedAt": "2026-07-12T10:25:10.338424Z",
   "records": [
     {
       "country": "United States",
@@ -17,104 +17,95 @@
     {
       "country": "China",
       "holdingsTonnes": 2313.46,
-      "monthlyChangeTonnes": 7.16,
-      "period": "first quarter of 2026",
-      "sourceLabel": "WGC/IMF-based public country summary",
+      "monthlyChangeTonnes": 7.46,
+      "period": "Q1 2026",
+      "sourceLabel": "World Gold Council / IMF IFS verified snapshot",
       "shareOfReservesPct": 9.0,
       "sharePeriod": "2026 latest available",
-      "shareSourceLabel": "World Gold Council / IMF IFS",
-      "sourceUrl": "https://tradingeconomics.com/china/gold-reserves"
+      "shareSourceLabel": "World Gold Council / IMF IFS"
     },
     {
       "country": "India",
       "holdingsTonnes": 880.52,
-      "monthlyChangeTonnes": 0.34,
-      "period": "first quarter of 2026",
-      "sourceLabel": "WGC/IMF-based public country summary",
+      "monthlyChangeTonnes": 0.52,
+      "period": "Q1 2026",
+      "sourceLabel": "World Gold Council / IMF IFS verified snapshot",
       "shareOfReservesPct": 18.5,
       "sharePeriod": "2026 latest available",
-      "shareSourceLabel": "World Gold Council / IMF IFS",
-      "sourceUrl": "https://tradingeconomics.com/india/gold-reserves"
+      "shareSourceLabel": "World Gold Council / IMF IFS"
     },
     {
       "country": "Türkiye",
       "holdingsTonnes": 534.85,
       "monthlyChangeTonnes": -78.85,
-      "period": "first quarter of 2026",
-      "sourceLabel": "WGC/IMF-based public country summary",
+      "period": "Q1 2026",
+      "sourceLabel": "World Gold Council / IMF IFS verified snapshot",
       "shareOfReservesPct": 40.0,
       "sharePeriod": "2026 latest available",
-      "shareSourceLabel": "World Gold Council / IMF IFS",
-      "sourceUrl": "https://tradingeconomics.com/turkey/gold-reserves"
+      "shareSourceLabel": "World Gold Council / IMF IFS"
     },
     {
       "country": "Russia",
-      "holdingsTonnes": 2304.75,
-      "monthlyChangeTonnes": -21.77,
-      "period": "first quarter of 2026",
-      "sourceLabel": "WGC/IMF-based public country summary",
+      "holdingsTonnes": 2304.7,
+      "monthlyChangeTonnes": -22.3,
+      "period": "Q1 2026",
+      "sourceLabel": "World Gold Council / IMF IFS verified snapshot",
       "shareOfReservesPct": 40.6,
       "sharePeriod": "2026 latest available",
-      "shareSourceLabel": "World Gold Council / IMF IFS",
-      "sourceUrl": "https://tradingeconomics.com/russia/gold-reserves"
+      "shareSourceLabel": "World Gold Council / IMF IFS"
     },
     {
       "country": "Poland",
       "holdingsTonnes": 581.64,
       "monthlyChangeTonnes": 31.43,
-      "period": "first quarter of 2026",
-      "sourceLabel": "WGC/IMF-based public country summary",
+      "period": "Q1 2026",
+      "sourceLabel": "World Gold Council / IMF IFS verified snapshot",
       "shareOfReservesPct": 30.0,
       "sharePeriod": "2026 latest available",
-      "shareSourceLabel": "World Gold Council / IMF IFS",
-      "sourceUrl": "https://tradingeconomics.com/poland/gold-reserves"
+      "shareSourceLabel": "World Gold Council / IMF IFS"
     },
     {
       "country": "Singapore",
-      "holdingsTonnes": 193.85,
-      "monthlyChangeTonnes": 0.29,
-      "period": "first quarter of 2026",
-      "sourceLabel": "WGC/IMF-based public country summary",
+      "holdingsTonnes": 204.1,
+      "monthlyChangeTonnes": null,
+      "period": "latest available",
+      "sourceLabel": "World Gold Council / IMF IFS verified snapshot",
       "shareOfReservesPct": 6.1,
       "sharePeriod": "2026 latest available",
-      "shareSourceLabel": "World Gold Council / IMF IFS",
-      "sourceUrl": "https://tradingeconomics.com/singapore/gold-reserves"
+      "shareSourceLabel": "World Gold Council / IMF IFS"
     },
     {
       "country": "Kazakhstan",
       "holdingsTonnes": 353.59,
-      "monthlyChangeTonnes": 12.55,
-      "period": "first quarter of 2026",
-      "sourceLabel": "WGC/IMF-based public country summary",
+      "monthlyChangeTonnes": null,
+      "period": "Q1 2026",
+      "sourceLabel": "World Gold Council / IMF IFS verified snapshot",
       "shareOfReservesPct": 78.0,
       "sharePeriod": "2026 latest available",
-      "shareSourceLabel": "World Gold Council / IMF IFS",
-      "sourceUrl": "https://tradingeconomics.com/kazakhstan/gold-reserves"
+      "shareSourceLabel": "World Gold Council / IMF IFS"
     },
     {
       "country": "Malaysia",
       "holdingsTonnes": 43.86,
       "monthlyChangeTonnes": 4.98,
-      "period": "first quarter of 2026",
-      "sourceLabel": "WGC/IMF-based public country summary",
+      "period": "Q1 2026",
+      "sourceLabel": "World Gold Council / IMF IFS verified snapshot",
       "shareOfReservesPct": 5.0,
       "sharePeriod": "2026 latest available",
-      "shareSourceLabel": "World Gold Council / IMF IFS",
-      "sourceUrl": "https://tradingeconomics.com/malaysia/gold-reserves"
+      "shareSourceLabel": "World Gold Council / IMF IFS"
     }
   ],
   "summary": {
     "countriesTracked": 9,
-    "netMonthlyChangeTonnes": -43.87,
+    "netMonthlyChangeTonnes": -56.76,
     "signal": "Net Selling"
   },
   "status": "ready",
-  "sourceMode": "official-github-partial-sync",
-  "sourceStatus": "live",
-  "engineVersion": "gold-reserves-stable-1.1",
-  "kvWrite": false,
+  "sourceMode": "verified-static-snapshot",
   "refresh": {
-    "countriesUpdated": [
+    "countriesUpdated": [],
+    "countriesRetainedFromSnapshot": [
+      "United States",
       "China",
       "India",
       "Türkiye",
@@ -124,11 +115,10 @@
       "Kazakhstan",
       "Malaysia"
     ],
-    "countriesRetainedFromSnapshot": [
-      "United States"
-    ],
-    "errors": [
-      "United States: gold reserve summary not found"
-    ]
-  }
+    "errors": []
+  },
+  "shareDefinition": "Gold value as a percentage of total official reserves, calculated by the World Gold Council using end-of-quarter gold prices and IMF IFS reserves data.",
+  "sourceStatus": "cached",
+  "engineVersion": "gold-reserves-stable-1.1",
+  "kvWrite": false
 }
