@@ -1,5 +1,5 @@
 (()=>{
-  const API='/api/market-events'; const SYNC_INTERVAL_MS=5*60*1000; let pin='',events=[],meta={},nextSyncAt=0,autoRefreshBusy=false;
+  const API='/api/market-events'; const FED_API='/api/rate-expectation-engine'; const SYNC_INTERVAL_MS=5*60*1000; let pin='',events=[],meta={},nextSyncAt=0,autoRefreshBusy=false;
   const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const statusText=e=>e.eventOnly?'Event time only':e.actual?'Actual received':e.officialAuto?(e.previousStatus==='ready'?'Official connected':'Awaiting official sync'):'Manual / fallback';
   function visibleEvents(){const q=$('#searchInput').value.trim().toLowerCase(),f=$('#filterSelect').value,now=Date.now();return events.map((e,i)=>({e,i})).filter(({e})=>{
@@ -47,6 +47,34 @@
   function collect(){document.querySelectorAll('.event').forEach(card=>{const i=+card.dataset.i;card.querySelectorAll('[data-k]').forEach(input=>{if(input.disabled)return;let v=input.value.trim();const key=input.dataset.k;if(key==='datetime'&&v&&!/[zZ]|[+-]\d\d:\d\d$/.test(v))v+=':00+08:00';events[i][key]=v;});events[i].releaseForecasts=events[i].releaseForecasts||{};card.querySelectorAll('[data-history-period]').forEach(input=>{const period=input.dataset.historyPeriod;const value=input.value.trim();if(period){if(value)events[i].releaseForecasts[period]=value;else delete events[i].releaseForecasts[period];}});});}
   const metric=(v)=>Number(v||0).toLocaleString('en-US');
   const listHtml=(rows,labelIndex=0,valueIndex=0)=>rows&&rows.length?rows.map(r=>`<div class="mini-row"><span>${esc(r.dimensions?.[labelIndex]||'Unknown')}</span><b>${metric(r.metrics?.[valueIndex])}</b></div>`).join(''):'<span>No data yet</span>';
+
+  function setValue(id,value){const el=document.getElementById(id);if(el)el.value=value??'';}
+  function fedRowsFrom(data){const manual=data?.admin?.manualOverride;const effective=(manual&&data?.sourceMode!=='official-github-sync')?manual:data;return Array.isArray(effective?.outcomes)?effective.outcomes:[];}
+  async function loadFedEditor(){
+    const st=$('#fedManualStatus');
+    try{
+      const r=await fetch(`${FED_API}?admin=${Date.now()}`,{headers:{'x-admin-pin':pin},cache:'no-store'}),d=await r.json();
+      if(!r.ok)throw new Error(d.error||'Fed Rate data unavailable');
+      const manual=d.admin?.manualOverride||null, base=manual||d, rows=fedRowsFrom(d);
+      setValue('fedMeetingDate',base.meetingDate||d.meetingDate||'');setValue('fedCurrentRange',base.currentTargetRange||d.currentTargetRange||'');
+      setValue('fedRange1',rows[0]?.targetRange||'');setValue('fedProb1',rows[0]?.probability??'');setValue('fedRange2',rows[1]?.targetRange||'');setValue('fedProb2',rows[1]?.probability??'');
+      setValue('fedEffectiveSource',d.sourceMode==='official-github-sync'?'CME Official (automatic primary)':d.sourceMode==='manual-admin-fallback'?'Admin Manual (CME unavailable)':'Verified static fallback');
+      setValue('fedLastCmeCheck',fmt(d.cmeLastCheckedAt||d.lastCheckedAt||d.updatedAt));
+      const badge=$('#fedEffectiveBadge');if(badge){badge.textContent=d.sourceMode==='official-github-sync'?'CME LIVE':d.sourceMode==='manual-admin-fallback'?'MANUAL ACTIVE':'STATIC FALLBACK';badge.className=`badge ${d.sourceMode==='official-github-sync'?'ok':'warn'}`;}
+      st.textContent=d.sourceMode==='official-github-sync'?'CME 已连接，官网数据优先。你保存的手动值会保留，只有 CME 连接失败时才启用。':d.sourceMode==='manual-admin-fallback'?'CME 当前不可用，网站正在使用 Admin 手动概率。':'CME 当前不可用；尚未保存手动概率，网站使用最后验证快照。';
+    }catch(e){st.textContent=e.message;}
+  }
+  async function saveFedManual(){
+    const st=$('#fedManualStatus'),btn=$('#saveFedManual');btn.disabled=true;st.textContent='保存 Fed Rate 手动概率中…';
+    const body={meetingDate:$('#fedMeetingDate').value,currentTargetRange:$('#fedCurrentRange').value,outcomes:[{targetRange:$('#fedRange1').value,probability:$('#fedProb1').value},{targetRange:$('#fedRange2').value,probability:$('#fedProb2').value}]};
+    try{
+      const r=await fetch(`${FED_API}?save=${Date.now()}`,{method:'POST',headers:{'content-type':'application/json','x-admin-pin':pin,'cache-control':'no-cache'},body:JSON.stringify(body)}),d=await r.json();
+      if(!r.ok)throw new Error(d.error+(d.detail?` · ${d.detail}`:''));
+      st.textContent=d.unchanged?'内容没有变化，不需要重复写入 KV。':'已保存并验证。CME 连接失败时网站会自动使用这份手动概率。';
+      await loadFedEditor();await loadDataHealth();
+    }catch(e){st.textContent=e.message;}finally{btn.disabled=false;}
+  }
+
   async function loadAnalytics(){
     const st=$('#analyticsStatus');
     try{
@@ -63,7 +91,7 @@
     $('#dataHealthCards').innerHTML=rows.map(x=>`<div class="mini-row"><span>${x.ok&&x.live?'●':'▲'} ${x.name}<small style="display:block;opacity:.65">Checked: ${x.checked?fmt(x.checked):'No timestamp'}</small><small style="display:block;opacity:.55">Data: ${x.changed?fmt(x.changed):'No timestamp'}</small>${x.note?`<small style="display:block;opacity:.5">${esc(x.note)}</small>`:''}</span><b style="color:${x.ok&&x.live?'#83d79f':'#efaa69'}">${x.status}</b></div>`).join('');
   }
   async function load(){const r=await fetch(API,{headers:{'x-admin-pin':pin},cache:'no-store'}),d=await r.json();if(!r.ok)throw new Error(d.error||'无法打开后台');events=d.events||[];meta=d;nextSyncAt=Math.ceil(Date.now()/SYNC_INTERVAL_MS)*SYNC_INTERVAL_MS;render();}
-  async function unlock(){pin=$('#adminPin').value.trim();$('#loginStatus').textContent='检查中…';try{await load();await Promise.allSettled([loadAnalytics(),loadDataHealth()]);sessionStorage.setItem('ghAdminPin',pin);$('#loginPanel').hidden=true;$('#dashboard').hidden=false;$('#loginStatus').textContent='';}catch(e){$('#loginStatus').textContent=e.message;}}
+  async function unlock(){pin=$('#adminPin').value.trim();$('#loginStatus').textContent='检查中…';try{await load();await Promise.allSettled([loadAnalytics(),loadDataHealth(),loadFedEditor()]);sessionStorage.setItem('ghAdminPin',pin);$('#loginPanel').hidden=true;$('#dashboard').hidden=false;$('#loginStatus').textContent='';}catch(e){$('#loginStatus').textContent=e.message;}}
   $('#unlockAdmin').addEventListener('click',unlock);$('#adminPin').addEventListener('keydown',e=>{if(e.key==='Enter')unlock();});$('#adminPin').value=sessionStorage.getItem('ghAdminPin')||'';
   $('#searchInput').addEventListener('input',render);$('#filterSelect').addEventListener('change',render);$('#refreshData').addEventListener('click',async()=>{collect();$('#saveStatus').textContent='重新读取中…';try{await load();$('#saveStatus').textContent='已读取最新数据。';}catch(e){$('#saveStatus').textContent=e.message;}});
   $('#saveEvents').addEventListener('click',async()=>{collect();const st=$('#saveStatus'),btn=$('#saveEvents');st.textContent='保存 Forecast 中…';btn.disabled=true;try{
@@ -80,6 +108,8 @@
     st.textContent=`已保存并验证 ${events.length} 项 Forecast（Gold Hunter Stable）。`;
     try{localStorage.setItem('gh-market-events-updated',String(Date.now()));}catch{}await load();
   }catch(e){st.textContent=e.message;}finally{btn.disabled=false;}});
+
+  $('#saveFedManual').addEventListener('click',saveFedManual);$('#reloadFedManual').addEventListener('click',loadFedEditor);
   $('#logoutAdmin').addEventListener('click',()=>{sessionStorage.removeItem('ghAdminPin');location.reload();});
   setInterval(tickSyncMonitor,1000);setInterval(()=>{if(pin){loadAnalytics();loadDataHealth();}},5*60*1000);
 })();
