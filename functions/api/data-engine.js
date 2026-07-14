@@ -706,14 +706,19 @@ export async function onRequestGet({request,env}){
   const blsLive=!bls.error&&!bls.refreshError&&!bls.stale;
   const fredHasErrors=Boolean(fred.error||fred.refreshError||fred.stale||Object.keys(fred.errors||{}).length);
   const fredLive=!fredHasErrors;
+  const staticIso=staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null;
+  const staticAgeMinutes=staticOfficial.savedAt?Math.round((Date.now()-staticOfficial.savedAt)/60000):null;
+  const staticHealthy=Boolean(Object.keys(staticOfficial.metrics||{}).length)&&staticAgeMinutes!==null&&staticAgeMinutes<=45;
+  const staticAvailable=Boolean(Object.keys(staticOfficial.metrics||{}).length);
+  const staticMetricStatus=type=>official.metrics?.[type]?.actual?(staticHealthy?'live':'cached'):'offline';
   const connectorSources={
-    staticCache:{status:Object.keys(staticOfficial.metrics||{}).length?'cached':'offline',lastSuccess:staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null,lastChecked:staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null},
-    bls:{status:sourceStatus(bls,blsLive),lastSuccess:bls.savedAt?new Date(bls.savedAt).toISOString():null,lastChecked:(bls.liveCheckAt||bls.savedAt)?new Date(bls.liveCheckAt||bls.savedAt).toISOString():null},
-    fred:{status:sourceStatus(fred,fredLive),lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null,lastChecked:(fred.liveCheckAt||fred.savedAt)?new Date(fred.liveCheckAt||fred.savedAt).toISOString():null},
-    dol:{status:official.metrics?.jobless_claims?.actual?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null,lastChecked:(fred.liveCheckAt||fred.savedAt)?new Date(fred.liveCheckAt||fred.savedAt).toISOString():null},
-    bea:{status:(official.metrics?.gdp?.actual&&official.metrics?.pce?.actual&&official.metrics?.core_pce?.actual)?(fredLive?'live':'cached'):'offline',lastSuccess:fred.savedAt?new Date(fred.savedAt).toISOString():null,lastChecked:(fred.liveCheckAt||fred.savedAt)?new Date(fred.liveCheckAt||fred.savedAt).toISOString():null},
-    federalReserve:{status:official.metrics?.fomc?.actual?((!fedFomc.error&&!fedFomc.refreshError&&!fedFomc.stale)?'live':'cached'):'offline',lastSuccess:(fedFomc.savedAt||fred.savedAt)?new Date(fedFomc.savedAt||fred.savedAt).toISOString():null,lastChecked:(fedFomc.liveCheckAt||fedFomc.savedAt||fred.liveCheckAt||fred.savedAt)?new Date(fedFomc.liveCheckAt||fedFomc.savedAt||fred.liveCheckAt||fred.savedAt).toISOString():null},
-    cloudflareKv:{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?new Date().toISOString():null,lastChecked:env.GH_MARKET_DATA?new Date().toISOString():null}
+    staticCache:{status:staticHealthy?'live':staticAvailable?'cached':'offline',lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso,ageMinutes:staticAgeMinutes,mode:'GitHub Actions verified snapshot'},
+    bls:{status:forceRefresh?sourceStatus(bls,blsLive):(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings'].some(type=>staticMetricStatus(type)!=='offline')?(staticHealthy?'live':'cached'):'offline'),lastSuccess:forceRefresh&&bls.savedAt?new Date(bls.savedAt).toISOString():staticIso,lastChecked:forceRefresh&&(bls.liveCheckAt||bls.savedAt)?new Date(bls.liveCheckAt||bls.savedAt).toISOString():staticIso,lastDataChanged:staticIso},
+    fred:{status:forceRefresh?sourceStatus(fred,fredLive):(staticAvailable?(staticHealthy?'live':'cached'):'offline'),lastSuccess:forceRefresh&&fred.savedAt?new Date(fred.savedAt).toISOString():staticIso,lastChecked:forceRefresh&&(fred.liveCheckAt||fred.savedAt)?new Date(fred.liveCheckAt||fred.savedAt).toISOString():staticIso,lastDataChanged:staticIso},
+    dol:{status:staticMetricStatus('jobless_claims'),lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso},
+    bea:{status:(staticMetricStatus('gdp')!=='offline'||staticMetricStatus('pce')!=='offline'||staticMetricStatus('core_pce')!=='offline')?(staticHealthy?'live':'cached'):'offline',lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso},
+    federalReserve:{status:staticMetricStatus('fomc'),lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso},
+    cloudflareKv:{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?new Date().toISOString():null,lastChecked:env.GH_MARKET_DATA?new Date().toISOString():null,lastDataChanged:null}
   };
   const degraded=[];
   if(connectorSources.bls.status!=='live')degraded.push('BLS');
@@ -721,11 +726,11 @@ export async function onRequestGet({request,env}){
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
   const responseNow=new Date().toISOString();
-  return json({engineVersion:'stable-data-phase1-news-static-first',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'stable-data-phase1.1-news-history',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
-    engineVersion:'11.0.1-history-safe',
+    engineVersion:'stable-data-phase1.1-news-history',
     step:'start',
     timestamp:new Date().toISOString(),
     kvBound:Boolean(env&&env.GH_MARKET_DATA)
@@ -774,7 +779,7 @@ export async function onRequestPost({request,env}){
     }
 
     const updatedAt=new Date().toISOString();
-    const payload={version:'11.0.1-history-safe',updatedAt,overrides};
+    const payload={version:'stable-data-phase1.1-news-history',updatedAt,overrides};
     const serialized=JSON.stringify(payload);
     debug.overrideCount=Object.keys(overrides).length;
     debug.payloadBytes=new TextEncoder().encode(serialized).length;
@@ -786,7 +791,7 @@ export async function onRequestPost({request,env}){
     if(existing&&sameMeaningfulData(existing,payload)){
       debug.step='complete-no-change';
       debug.writeSkipped=true;
-      return json({ok:true,unchanged:true,version:'11.0.1-history-safe',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
+      return json({ok:true,unchanged:true,version:'stable-data-phase1.1-news-history',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
     }
 
     debug.step='kv-put';
@@ -798,12 +803,12 @@ export async function onRequestPost({request,env}){
     debug.readbackVersion=verify?.version||null;
 
     debug.step='verify-readback';
-    if(!verify||verify.version!=='11.0.1-history-safe'){
+    if(!verify||verify.version!=='stable-data-phase1.1-news-history'){
       return json({error:'KV write verification failed.',debug},500,{'cache-control':'no-store'});
     }
 
     debug.step='complete';
-    return json({ok:true,version:'11.0.1-history-safe',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
+    return json({ok:true,version:'stable-data-phase1.1-news-history',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
   }catch(error){
     debug.failedAt=debug.step;
     debug.exception={

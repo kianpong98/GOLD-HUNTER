@@ -1,5 +1,5 @@
-const STATIC_URL = '/assets/data/rate-expectation.json?v=fedwatch-github-sync-1';
-const ENGINE_VERSION = 'fedwatch-github-sync-1';
+const STATIC_URL = '/assets/data/rate-expectation.json?v=fedwatch-github-sync-1.1';
+const ENGINE_VERSION = 'fedwatch-github-sync-1.1';
 
 const headers = {
   'content-type': 'application/json; charset=utf-8',
@@ -32,12 +32,14 @@ export async function onRequestGet({ request }) {
 
     const sourceChecked = Date.parse(data.lastCheckedAt || data.updatedAt || 0);
     const ageMinutes = Number.isFinite(sourceChecked) ? Math.round((Date.now() - sourceChecked) / 60000) : null;
-    const sourceStatus = ageMinutes === null ? 'cached' : ageMinutes <= 180 ? 'live' : ageMinutes <= 1440 ? 'cached' : 'stale';
+    const githubSynced = data.sourceMode === 'official-github-sync';
+    const sourceStatus = !githubSynced ? 'awaiting-sync' : ageMinutes === null ? 'cached' : ageMinutes <= 180 ? 'live' : ageMinutes <= 1440 ? 'cached' : 'stale';
     return json({
       ...data,
       engineVersion: ENGINE_VERSION,
       sourceStatus,
       live: sourceStatus === 'live',
+      githubSynced,
       lastApiCheckedAt: lastCheckedAt,
       sourceAgeMinutes: ageMinutes,
       cacheMode: 'GitHub Actions verified CME snapshot; read-only Cloudflare edge cache',
