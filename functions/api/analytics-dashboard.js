@@ -1,4 +1,4 @@
-const VERSION='ga4-data-api-1.1-batched-stable';
+const VERSION='ga4-data-api-1.2-private-key-normalizer';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{
   'content-type':'application/json;charset=UTF-8',
   'cache-control':'private, no-store, max-age=0',
@@ -11,9 +11,44 @@ const b64url=input=>{
   for(const b of bytes)binary+=String.fromCharCode(b);
   return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 };
+const normalizePrivateKey=value=>{
+  let raw=String(value||'').replace(/^\uFEFF/,'').trim();
+  if(!raw)throw new Error('GA4_PRIVATE_KEY is empty');
+
+  // Accept an accidentally pasted full service-account JSON object.
+  if(raw.startsWith('{')){
+    try{
+      const parsed=JSON.parse(raw);
+      if(parsed?.private_key)raw=String(parsed.private_key);
+    }catch{}
+  }
+
+  // Accept a JSON-quoted private_key value, with or without a trailing comma.
+  raw=raw.replace(/,\s*$/,'').trim();
+  if(raw.startsWith('\"')&&raw.endsWith('\"')){
+    try{raw=JSON.parse(raw);}catch{raw=raw.slice(1,-1);}
+  }
+
+  return String(raw)
+    .replace(/\\r\\n/g,'\n')
+    .replace(/\\n/g,'\n')
+    .replace(/\r\n/g,'\n')
+    .replace(/[\u200B-\u200D\uFEFF]/g,'')
+    .trim();
+};
+
 const pemToBuf=pem=>{
-  const body=String(pem||'').replace(/\\n/g,'\n').replace(/-----BEGIN PRIVATE KEY-----/g,'').replace(/-----END PRIVATE KEY-----/g,'').replace(/\s/g,'');
-  if(!body)throw new Error('GA4_PRIVATE_KEY is empty or invalid');
+  const normalized=normalizePrivateKey(pem);
+  if(!normalized.includes('-----BEGIN PRIVATE KEY-----')||!normalized.includes('-----END PRIVATE KEY-----')){
+    throw new Error('GA4_PRIVATE_KEY must include BEGIN PRIVATE KEY and END PRIVATE KEY');
+  }
+  const body=normalized
+    .replace(/-----BEGIN PRIVATE KEY-----/g,'')
+    .replace(/-----END PRIVATE KEY-----/g,'')
+    .replace(/\s/g,'');
+  if(!body||body.length<1000)throw new Error('GA4_PRIVATE_KEY appears incomplete');
+  if(!/^[A-Za-z0-9+/]+={0,2}$/.test(body))throw new Error('GA4_PRIVATE_KEY contains invalid characters');
+  if(body.length%4!==0)throw new Error('GA4_PRIVATE_KEY has invalid base64 length');
   try{return Uint8Array.from(atob(body),c=>c.charCodeAt(0)).buffer;}
   catch{throw new Error('GA4_PRIVATE_KEY could not be decoded');}
 };
