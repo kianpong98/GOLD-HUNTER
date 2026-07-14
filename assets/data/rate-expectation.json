@@ -5,37 +5,58 @@
   "outcomes": [
     {
       "targetRange": "3.50%–3.75%",
-      "probability": 54.6,
+      "probability": 22.5,
       "move": "No change",
       "direction": "hold"
     },
     {
       "targetRange": "3.75%–4.00%",
-      "probability": 45.4,
+      "probability": 77.5,
       "move": "25 bps hike",
       "direction": "hike"
     }
   ],
-  "updatedAt": "2026-07-14T00:00:00Z",
-  "lastCheckedAt": "2026-07-14T07:14:21.289187Z",
-  "officialDataChangedAt": "2026-07-14T00:00:00Z",
-  "source": "CME FedWatch",
+  "updatedAt": "2026-07-14T07:26:18.308157Z",
+  "lastCheckedAt": "2026-07-14T07:26:18.308157Z",
+  "officialDataChangedAt": "2026-07-14T07:26:18.308157Z",
+  "source": "30-Day Fed Funds futures implied estimate",
   "sourceUrl": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
-  "sourceMode": "calculation-fallback",
-  "sourceStatus": "cached",
-  "live": false,
-  "exactOfficialValues": true,
+  "sourceMode": "free-futures-calculation",
+  "sourceStatus": "calculated-live",
+  "live": true,
+  "exactOfficialValues": false,
   "probabilityTotal": 100.0,
   "meetingDateTime": "2026-07-30T02:00:00+08:00",
   "meetingTimezone": "Asia/Kuala_Lumpur",
   "meetingTimezoneLabel": "Malaysia Time (MYT)",
-  "note": "Automatic free futures calculation failed; last validated snapshot preserved. No Workers KV writes.",
-  "engineVersion": "fed-futures-calculated-2.1-validation-safe-no-kv",
+  "note": "Free FedWatch-like estimate calculated from 30-Day Fed Funds futures and official reference rates. FRED is primary; New York Fed EFFR plus the last validated official target range is the outage fallback. It is not CME licensed FedWatch API output.",
+  "engineVersion": "fed-futures-calculated-2.2-dual-official-source-no-kv",
   "kvWrite": false,
-  "errors": [],
+  "errors": [
+    "FRED combined: RuntimeError: attempt 1: ReadTimeout: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=12); attempt 2: ReadTimeout: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=12); attempt 3: ReadTimeout: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=12)",
+    "Target range retained from last validated official snapshot"
+  ],
   "githubChecked": true,
   "githubSynced": true,
-  "officialFetchSucceeded": false,
-  "lastOfficialFetchError": "ReadTimeout: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=45)",
-  "calculationSucceeded": false
+  "officialFetchSucceeded": true,
+  "lastOfficialFetchError": "",
+  "calculationSucceeded": true,
+  "futuresSource": "Yahoo Finance delayed 30-Day Fed Funds futures (ZQN26.CBT)",
+  "futuresDataTime": "2026-07-14T04:00:00Z",
+  "referenceRateSource": "New York Fed EFFR + validated official target range",
+  "referenceRateDates": {
+    "EFFR": "2026-07-10",
+    "targetLower": "2026-07-14T00:00:00Z",
+    "targetUpper": "2026-07-14T00:00:00Z"
+  },
+  "calculation": {
+    "futuresPrice": 96.3675,
+    "impliedMonthlyAverageEffr": 3.6325,
+    "currentEffr": 3.62,
+    "expectedPostMeetingEffr": 3.81375,
+    "daysInContractMonth": 31,
+    "preDecisionDays": 29,
+    "postDecisionDays": 2,
+    "effrTargetMidpointOffset": -0.005
+  }
 }
