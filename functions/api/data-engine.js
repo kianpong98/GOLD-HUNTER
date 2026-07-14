@@ -681,11 +681,11 @@ export async function onRequestGet({request,env}){
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
   const responseNow=new Date().toISOString();
-  return json({engineVersion:'10.2.4-kv-efficient',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'11-stable-data',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
-    engineVersion:'10.2.4-kv-efficient',
+    engineVersion:'11-stable-data',
     step:'start',
     timestamp:new Date().toISOString(),
     kvBound:Boolean(env&&env.GH_MARKET_DATA)
@@ -734,7 +734,7 @@ export async function onRequestPost({request,env}){
     }
 
     const updatedAt=new Date().toISOString();
-    const payload={version:'10.2.4-kv-efficient',updatedAt,overrides};
+    const payload={version:'11-stable-data',updatedAt,overrides};
     const serialized=JSON.stringify(payload);
     debug.overrideCount=Object.keys(overrides).length;
     debug.payloadBytes=new TextEncoder().encode(serialized).length;
@@ -746,7 +746,7 @@ export async function onRequestPost({request,env}){
     if(existing&&sameMeaningfulData(existing,payload)){
       debug.step='complete-no-change';
       debug.writeSkipped=true;
-      return json({ok:true,unchanged:true,version:'10.2.4-kv-efficient',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
+      return json({ok:true,unchanged:true,version:'11-stable-data',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
     }
 
     debug.step='kv-put';
@@ -758,12 +758,12 @@ export async function onRequestPost({request,env}){
     debug.readbackVersion=verify?.version||null;
 
     debug.step='verify-readback';
-    if(!verify||verify.version!=='10.2.4-kv-efficient'){
+    if(!verify||verify.version!=='11-stable-data'){
       return json({error:'KV write verification failed.',debug},500,{'cache-control':'no-store'});
     }
 
     debug.step='complete';
-    return json({ok:true,version:'10.2.4-kv-efficient',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
+    return json({ok:true,version:'11-stable-data',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
   }catch(error){
     debug.failedAt=debug.step;
     debug.exception={

@@ -1,2 +1,0 @@
-Gold Hunter News Engine v10.2.0
-Only news backend/admin save logic changed. Website UI and SEO are unchanged.

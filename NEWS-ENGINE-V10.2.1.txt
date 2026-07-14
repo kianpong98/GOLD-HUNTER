@@ -1,5 +1,0 @@
-Gold Hunter News Engine v10.2.1
-- Adds /api/admin-forecasts backward-compatible POST/GET/OPTIONS route.
-- Forces admin.js cache refresh with ?v=10.2.1.
-- Keeps /api/market-events as the single source of truth.
-- No website UI, SEO, market tools, ETF, Fed Rate, reserves, quotes, or layout changes.

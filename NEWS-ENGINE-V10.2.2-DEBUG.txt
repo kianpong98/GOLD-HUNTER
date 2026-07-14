@@ -1,7 +1,0 @@
-Gold Hunter News Engine v10.2.2 Debug
-
-Only functions/api/data-engine.js POST error handling was changed.
-The website UI, SEO, market tools, calendar display, ETF, Fed Rate, reserves and quotes are unchanged.
-
-After deployment, save Forecast once, then open DevTools > Network > market-events > Response.
-The JSON response now reports the exact failed step and Cloudflare exception.

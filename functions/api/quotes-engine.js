@@ -68,7 +68,10 @@ export async function onRequestGet({request,env}){
       const last=Date.parse(kvCache?.updatedAt||0)||0;
       const oldSig=JSON.stringify({gold:kvCache?.gold?.price,dxy:kvCache?.dxy?.price,partial:kvCache?.partial});
       const newSig=JSON.stringify({gold:out?.gold?.price,dxy:out?.dxy?.price,partial:out?.partial});
-      if(!kvCache||Date.now()-last>=5*60*1000){
+      // Quotes remain live on every request. KV is only a fallback cache, so do not
+      // spend a write when the visible values have not changed. Even when they do
+      // change, cap fallback-cache writes to once every 30 minutes.
+      if((!kvCache||oldSig!==newSig)&&Date.now()-last>=30*60*1000){
         await env.GH_MARKET_DATA.put(CACHE_KEY,JSON.stringify(out),{expirationTtl:604800});
       }
     }catch{}
