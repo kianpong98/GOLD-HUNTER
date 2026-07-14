@@ -109,22 +109,7 @@
     const box=document.getElementById('rateExpectationBody');
     if(!box)return;
     try{
-      const fallbackData={
-        meetingDate:'2026-07-30',
-        meetingDateTime:'2026-07-30T02:00:00+08:00',
-        meetingTimezone:'Asia/Kuala_Lumpur',
-        meetingTimezoneLabel:'Malaysia Time (MYT)',
-        meetingLabel:'Next FOMC decision',
-        currentTargetRange:'3.75%–4.00%',
-        outcomes:[
-          {targetRange:'3.50%–3.75%',probability:78,move:'25 bps cut',direction:'cut'},
-          {targetRange:'3.75%–4.00%',probability:22,move:'No change',direction:'hold'}
-        ],
-        updatedAt:'2026-07-12T11:00:00Z',
-        source:'CME FedWatch',
-        sourceUrl:'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html',
-        note:'Probabilities are market-implied estimates and may change during the trading day.'
-      };
+      const fallbackData=null;
       async function readJson(url){
         try{
           const r=await fetch(url,{cache:'no-store'});
@@ -139,6 +124,7 @@
         ||(await readJson('./assets/data/rate-expectation.json?v=9.0'))
         ||(await readJson('/assets/data/rate-expectation.json?v=9.0'))
         ||fallbackData;
+      if(!d)throw new Error('Rate expectations are awaiting a verified CME update');
       const outcomes=(Array.isArray(d.outcomes)?d.outcomes:[])
         .map(x=>({...x,probability:Number(x.probability)}))
         .filter(x=>x.targetRange&&Number.isFinite(x.probability))
@@ -197,7 +183,7 @@
           <p>${impactText}</p>
         </div>
         <div class="rate-source-row">
-          <small>Updated ${esc(d.updatedAt?new Date(d.updatedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}):'pending')} · Total ${total.toFixed(0)}%</small>
+          <small>${d.live?'Live CME':'Cached fallback'} · Checked ${esc((d.lastCheckedAt||d.updatedAt)?new Date(d.lastCheckedAt||d.updatedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}):'pending')} · Total ${total.toFixed(0)}% · No KV writes</small>
           <a href="${esc(d.sourceUrl||'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html')}" target="_blank" rel="noopener">View source ↗</a>
         </div>`;
       const countdownEl=box.querySelector('[data-rate-countdown]');

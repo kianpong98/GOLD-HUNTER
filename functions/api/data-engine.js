@@ -48,6 +48,7 @@ const SERIES = {
 
 const FRED_CACHE_KEY='official-fred-cache-v2';
 const FED_FOMC_CACHE_KEY='official-fed-fomc-cache-v1';
+const OFFICIAL_HISTORY_SNAPSHOT_KEY='official-history-snapshot-v1';
 const FRED_CONFIG={
   // FRED fallback coverage for every numeric news type. BLS remains primary where available.
   cpi_yoy:{series:'CPIAUCSL',mode:'yoy',suffix:'%',decimals:1},
@@ -521,6 +522,22 @@ function mergeOfficialHistories(...sources){
   return out;
 }
 
+function cleanOfficialHistorySnapshot(source){
+  const out={};
+  for(const [type,list] of Object.entries(source||{})){
+    const rows=[];const seen=new Set();
+    for(const row of Array.isArray(list)?list:[]){
+      const period=clean(row?.period,20),actual=clean(row?.actual,80);
+      if(!period||!actual||seen.has(period))continue;
+      seen.add(period);
+      rows.push({period,actual,previous:clean(row?.previous,80),observationDate:clean(row?.observationDate,20)});
+      if(rows.length===10)break;
+    }
+    if(rows.length)out[canonicalType({type})]=rows;
+  }
+  return out;
+}
+
 
 function nextMalaysiaDayStart(datetime){
   const day=String(datetime||'').slice(0,10);
@@ -569,6 +586,13 @@ export async function onRequestGet({request,env}){
       adminOverrides=(payload&&typeof payload.overrides==='object')?payload.overrides:{};
     }catch{adminOverrides={};}
   }
+  let historySnapshot={};
+  if(env.GH_MARKET_DATA){
+    try{
+      const snapshot=await env.GH_MARKET_DATA.get(OFFICIAL_HISTORY_SNAPSHOT_KEY,{type:'json'})||{};
+      historySnapshot=cleanOfficialHistorySnapshot(snapshot.histories||snapshot);
+    }catch{historySnapshot={};}
+  }
   const staticOfficial=await fetchStaticOfficial(request);
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null},fedFomc={metrics:{},histories:{},savedAt:null};
   try{bls=await fetchBls(env,forceRefresh);}catch(e){bls.error=e.message;}
@@ -578,11 +602,22 @@ export async function onRequestGet({request,env}){
   const runtimeHistories={...(fred.histories||{}),...(bls.histories||{}),...(fedFomc.histories||{})};
   const official={
     metrics:mergeOfficialMetrics(mergeOfficialMetrics(VERIFIED_FALLBACK_METRICS,runtimeMetrics),staticOfficial.metrics||{}),
-    histories:mergeOfficialHistories(fedFomc.histories||{},bls.histories||{},fred.histories||{},staticOfficial.histories||{},Object.fromEntries(Object.entries(VERIFIED_FALLBACK_METRICS).map(([k,v])=>[k,v.history||[]]))),
+    histories:mergeOfficialHistories(fedFomc.histories||{},bls.histories||{},fred.histories||{},staticOfficial.histories||{},historySnapshot,Object.fromEntries(Object.entries(VERIFIED_FALLBACK_METRICS).map(([k,v])=>[k,v.history||[]]))),
     savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,fedFomc.savedAt||0,staticOfficial.savedAt||0),
     error:[bls.error,fred.error,fedFomc.error,...Object.values(staticOfficial.errors||{})].filter(Boolean).join(' | '),
     staticSource:staticOfficial.source
   };
+  // Preserve the latest ten official releases independently from connector caches.
+  // This prevents Last Releases from disappearing when BLS/FRED/BEA is temporarily
+  // unavailable, a cache expires, or a deployment starts with an empty KV cache.
+  if(env.GH_MARKET_DATA){
+    try{
+      const histories=cleanOfficialHistorySnapshot(official.histories);
+      if(Object.keys(histories).length){
+        await putJsonIfChanged(env.GH_MARKET_DATA,OFFICIAL_HISTORY_SNAPSHOT_KEY,{schemaVersion:1,histories,updatedAt:new Date().toISOString()});
+      }
+    }catch{/* History persistence must never break the public calendar response. */}
+  }
   const now=Date.now();
   let archiveChanged=false;
   const persistable=stored.map(e=>({...e}));
@@ -681,11 +716,11 @@ export async function onRequestGet({request,env}){
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
   const responseNow=new Date().toISOString();
-  return json({engineVersion:'11-stable-data',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'11.0.1-history-safe',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
-    engineVersion:'11-stable-data',
+    engineVersion:'11.0.1-history-safe',
     step:'start',
     timestamp:new Date().toISOString(),
     kvBound:Boolean(env&&env.GH_MARKET_DATA)
@@ -734,7 +769,7 @@ export async function onRequestPost({request,env}){
     }
 
     const updatedAt=new Date().toISOString();
-    const payload={version:'11-stable-data',updatedAt,overrides};
+    const payload={version:'11.0.1-history-safe',updatedAt,overrides};
     const serialized=JSON.stringify(payload);
     debug.overrideCount=Object.keys(overrides).length;
     debug.payloadBytes=new TextEncoder().encode(serialized).length;
@@ -746,7 +781,7 @@ export async function onRequestPost({request,env}){
     if(existing&&sameMeaningfulData(existing,payload)){
       debug.step='complete-no-change';
       debug.writeSkipped=true;
-      return json({ok:true,unchanged:true,version:'11-stable-data',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
+      return json({ok:true,unchanged:true,version:'11.0.1-history-safe',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
     }
 
     debug.step='kv-put';
@@ -758,12 +793,12 @@ export async function onRequestPost({request,env}){
     debug.readbackVersion=verify?.version||null;
 
     debug.step='verify-readback';
-    if(!verify||verify.version!=='11-stable-data'){
+    if(!verify||verify.version!=='11.0.1-history-safe'){
       return json({error:'KV write verification failed.',debug},500,{'cache-control':'no-store'});
     }
 
     debug.step='complete';
-    return json({ok:true,version:'11-stable-data',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
+    return json({ok:true,version:'11.0.1-history-safe',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
   }catch(error){
     debug.failedAt=debug.step;
     debug.exception={

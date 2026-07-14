@@ -1,0 +1,17 @@
+Gold Hunter v11.0.2 — FedWatch Live / No KV
+
+Changed files:
+- functions/api/rate-expectation-engine.js
+- market-tools.js
+- admin.js
+
+Behavior:
+- The Fed Rate endpoint checks the official CME FedWatch public page.
+- It uses Cloudflare edge cache for 5 minutes, not Workers KV.
+- It never calls GH_MARKET_DATA.put().
+- The website shows Live CME or Cached fallback.
+- Admin Data Health shows checked time, data time, and live/fallback status.
+- If CME changes its page markup or blocks automated access, the last static verified snapshot remains visible and is clearly labelled Cached fallback.
+
+Important:
+- CME's supported programmatic FedWatch API is a paid authenticated product. Public-page extraction is best-effort and can require maintenance if CME changes the page.

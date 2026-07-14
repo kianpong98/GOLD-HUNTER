@@ -1,0 +1,9 @@
+Gold Hunter News Stability v11.0.1
+
+Changes are limited to news history reliability.
+- Keeps a dedicated official-history-snapshot-v1 in Cloudflare KV.
+- Last 10 releases survive connector outages, cache expiry and deployments.
+- Bundles the last verified histories already shown by the live website.
+- Official fresh data still replaces older rows by period.
+- No UI, SEO, ETF, Fed Rate, Central Bank Gold or page layout changes.
+- Snapshot writes only when meaningful history changes.
