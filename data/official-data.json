@@ -1,139 +1,132 @@
 {
-  "schemaVersion": 2,
-  "updatedAt": "2026-07-14T05:52:01.391616+00:00",
+  "schemaVersion": 3,
+  "updatedAt": "2026-07-11T10:00:00+00:00",
   "metrics": {
     "jobless_claims": {
       "actual": "215K",
       "previous": "217K",
       "period": "2026-07-04",
       "observationDate": "2026-07-04",
-      "source": "FRED (official-source series)",
+      "source": "U.S. Department of Labor verified fallback",
       "history": [
         {
           "period": "2026-07-04",
-          "observationDate": "2026-07-04",
           "actual": "215K",
           "previous": "217K"
         },
         {
           "period": "2026-06-27",
-          "observationDate": "2026-06-27",
           "actual": "217K",
           "previous": "216K"
         },
         {
           "period": "2026-06-20",
-          "observationDate": "2026-06-20",
           "actual": "216K",
           "previous": "227K"
         },
         {
           "period": "2026-06-13",
-          "observationDate": "2026-06-13",
           "actual": "227K",
           "previous": "230K"
         },
         {
           "period": "2026-06-06",
-          "observationDate": "2026-06-06",
-          "actual": "230K",
+          "actual": "229K",
           "previous": "225K"
         },
         {
           "period": "2026-05-30",
-          "observationDate": "2026-05-30",
           "actual": "225K",
           "previous": "212K"
         },
         {
           "period": "2026-05-23",
-          "observationDate": "2026-05-23",
-          "actual": "212K",
+          "actual": "215K",
           "previous": "210K"
         },
         {
           "period": "2026-05-16",
-          "observationDate": "2026-05-16",
-          "actual": "210K",
+          "actual": "209K",
           "previous": "212K"
         },
         {
           "period": "2026-05-09",
-          "observationDate": "2026-05-09",
-          "actual": "212K",
+          "actual": "211K",
           "previous": "199K"
         },
         {
           "period": "2026-05-02",
-          "observationDate": "2026-05-02",
-          "actual": "199K",
+          "actual": "200K",
           "previous": "190K"
         }
-      ],
-      "fetchedAt": "2026-07-14T05:51:59.230089+00:00"
+      ]
     },
     "fomc": {
       "actual": "3.5–3.75%",
-      "previous": "3.75–4%",
-      "period": "2026-07-13",
-      "observationDate": "2026-07-13",
-      "source": "Federal Reserve target range via FRED",
+      "previous": "3.5–3.75%",
+      "period": "2026-06-18",
+      "observationDate": "2026-06-18",
+      "source": "Federal Reserve verified FOMC history",
       "history": [
         {
-          "period": "2026-07-13",
-          "observationDate": "2026-07-13",
-          "actual": "3.5–3.75%",
-          "previous": "3.75–4%"
-        },
-        {
           "period": "2026-06-18",
+          "observationDate": "2026-06-18",
           "actual": "3.5–3.75%",
           "previous": "3.5–3.75%"
         },
         {
           "period": "2026-04-30",
+          "observationDate": "2026-04-30",
           "actual": "3.5–3.75%",
           "previous": "3.5–3.75%"
         },
         {
           "period": "2026-03-19",
+          "observationDate": "2026-03-19",
           "actual": "3.5–3.75%",
           "previous": "3.5–3.75%"
         },
         {
           "period": "2026-01-29",
+          "observationDate": "2026-01-29",
           "actual": "3.5–3.75%",
-          "previous": ""
+          "previous": "3.5–3.75%"
         },
         {
-          "period": "2025-12-10",
-          "observationDate": "2025-12-10",
+          "period": "2025-12-11",
+          "observationDate": "2025-12-11",
+          "actual": "3.5–3.75%",
+          "previous": "3.75–4%"
+        },
+        {
+          "period": "2025-10-30",
+          "observationDate": "2025-10-30",
           "actual": "3.75–4%",
           "previous": "4–4.25%"
         },
         {
-          "period": "2025-10-29",
-          "observationDate": "2025-10-29",
+          "period": "2025-09-18",
+          "observationDate": "2025-09-18",
           "actual": "4–4.25%",
           "previous": "4.25–4.5%"
         },
         {
-          "period": "2025-09-17",
-          "observationDate": "2025-09-17",
+          "period": "2025-07-31",
+          "observationDate": "2025-07-31",
           "actual": "4.25–4.5%",
-          "previous": "4.5–4.75%"
+          "previous": "4.25–4.5%"
         },
         {
-          "period": "2024-12-18",
-          "observationDate": "2024-12-18",
-          "actual": "4.5–4.75%",
-          "previous": "4.75–5%"
+          "period": "2025-06-19",
+          "observationDate": "2025-06-19",
+          "actual": "4.25–4.5%",
+          "previous": "4.25–4.5%"
         },
         {
-          "period": "2024-11-07",
-          "observationDate": "2024-11-07",
-          "actual": "4.75–5%",
-          "previous": "5.25–5.5%"
+          "period": "2025-05-08",
+          "observationDate": "2025-05-08",
+          "actual": "4.25–4.5%",
+          "previous": "4.25–4.5%"
         }
       ]
     },
@@ -141,71 +134,25 @@
       "actual": "2.1%",
       "previous": "0.5%",
       "period": "2026-Q1",
-      "observationDate": "2026-01-01",
-      "source": "FRED (official-source series)",
+      "observationDate": "2026-04-01",
+      "source": "U.S. Bureau of Economic Analysis verified fallback",
       "history": [
         {
           "period": "2026-Q1",
-          "observationDate": "2026-01-01",
           "actual": "2.1%",
           "previous": "0.5%"
         },
         {
           "period": "2025-Q4",
-          "observationDate": "2025-10-01",
           "actual": "0.5%",
           "previous": "4.4%"
         },
         {
           "period": "2025-Q3",
-          "observationDate": "2025-07-01",
           "actual": "4.4%",
-          "previous": "3.8%"
-        },
-        {
-          "period": "2025-Q2",
-          "observationDate": "2025-04-01",
-          "actual": "3.8%",
-          "previous": "-0.6%"
-        },
-        {
-          "period": "2025-Q1",
-          "observationDate": "2025-01-01",
-          "actual": "-0.6%",
-          "previous": "1.9%"
-        },
-        {
-          "period": "2024-Q4",
-          "observationDate": "2024-10-01",
-          "actual": "1.9%",
-          "previous": "3.3%"
-        },
-        {
-          "period": "2024-Q3",
-          "observationDate": "2024-07-01",
-          "actual": "3.3%",
-          "previous": "3.6%"
-        },
-        {
-          "period": "2024-Q2",
-          "observationDate": "2024-04-01",
-          "actual": "3.6%",
-          "previous": "0.8%"
-        },
-        {
-          "period": "2024-Q1",
-          "observationDate": "2024-01-01",
-          "actual": "0.8%",
-          "previous": "3.4%"
-        },
-        {
-          "period": "2023-Q4",
-          "observationDate": "2023-10-01",
-          "actual": "3.4%",
-          "previous": "4.7%"
+          "previous": ""
         }
-      ],
-      "fetchedAt": "2026-07-14T05:51:59.254527+00:00"
+      ]
     },
     "cpi_yoy": {
       "actual": "4.2%",
@@ -264,8 +211,7 @@
           "actual": "2.7%",
           "previous": "2.7%"
         }
-      ],
-      "fetchedAt": "2026-07-14T05:51:58.965245+00:00"
+      ]
     },
     "core_cpi_yoy": {
       "actual": "2.9%",
@@ -324,8 +270,7 @@
           "actual": "3.1%",
           "previous": "2.9%"
         }
-      ],
-      "fetchedAt": "2026-07-14T05:51:58.965424+00:00"
+      ]
     },
     "ppi_yoy": {
       "actual": "6.5%",
@@ -384,8 +329,7 @@
           "actual": "2.7%",
           "previous": "3.2%"
         }
-      ],
-      "fetchedAt": "2026-07-14T05:51:58.965586+00:00"
+      ]
     },
     "core_ppi_yoy": {
       "actual": "5.1%",
@@ -444,8 +388,7 @@
           "actual": "3%",
           "previous": "2.9%"
         }
-      ],
-      "fetchedAt": "2026-07-14T05:51:58.965742+00:00"
+      ]
     },
     "nfp": {
       "actual": "57K",
@@ -504,8 +447,7 @@
           "actual": "76K",
           "previous": "-70K"
         }
-      ],
-      "fetchedAt": "2026-07-14T05:51:58.965886+00:00"
+      ]
     },
     "unemployment": {
       "actual": "4.2%",
@@ -558,14 +500,8 @@
           "period": "2025-09",
           "actual": "4.4%",
           "previous": "4.3%"
-        },
-        {
-          "period": "2025-08",
-          "actual": "4.3%",
-          "previous": "4.3%"
         }
-      ],
-      "fetchedAt": "2026-07-14T05:51:58.966037+00:00"
+      ]
     },
     "avg_hourly_earnings": {
       "actual": "0.3%",
@@ -624,221 +560,19 @@
           "actual": "0.2%",
           "previous": "0.4%"
         }
-      ],
-      "fetchedAt": "2026-07-14T05:51:58.966184+00:00"
-    },
-    "core_pce": {
-      "actual": "3.4%",
-      "previous": "3.3%",
-      "period": "2026-05",
-      "observationDate": "2026-05-01",
-      "history": [
-        {
-          "period": "2026-05",
-          "observationDate": "2026-05-01",
-          "actual": "3.4%",
-          "previous": "3.3%"
-        },
-        {
-          "period": "2026-04",
-          "observationDate": "2026-04-01",
-          "actual": "3.3%",
-          "previous": "3.3%"
-        },
-        {
-          "period": "2026-03",
-          "observationDate": "2026-03-01",
-          "actual": "3.3%",
-          "previous": "3%"
-        },
-        {
-          "period": "2026-02",
-          "observationDate": "2026-02-01",
-          "actual": "3%",
-          "previous": "3.1%"
-        },
-        {
-          "period": "2026-01",
-          "observationDate": "2026-01-01",
-          "actual": "3.1%",
-          "previous": "3%"
-        },
-        {
-          "period": "2025-12",
-          "observationDate": "2025-12-01",
-          "actual": "3%",
-          "previous": "2.8%"
-        },
-        {
-          "period": "2025-11",
-          "observationDate": "2025-11-01",
-          "actual": "2.8%",
-          "previous": "2.8%"
-        },
-        {
-          "period": "2025-10",
-          "observationDate": "2025-10-01",
-          "actual": "2.8%",
-          "previous": "2.8%"
-        },
-        {
-          "period": "2025-09",
-          "observationDate": "2025-09-01",
-          "actual": "2.8%",
-          "previous": "2.9%"
-        },
-        {
-          "period": "2025-08",
-          "observationDate": "2025-08-01",
-          "actual": "2.9%",
-          "previous": "2.9%"
-        }
-      ],
-      "source": "FRED (official-source series)",
-      "fetchedAt": "2026-07-14T05:51:59.215298+00:00"
-    },
-    "pce": {
-      "actual": "4.1%",
-      "previous": "3.8%",
-      "period": "2026-05",
-      "observationDate": "2026-05-01",
-      "history": [
-        {
-          "period": "2026-05",
-          "observationDate": "2026-05-01",
-          "actual": "4.1%",
-          "previous": "3.8%"
-        },
-        {
-          "period": "2026-04",
-          "observationDate": "2026-04-01",
-          "actual": "3.8%",
-          "previous": "3.5%"
-        },
-        {
-          "period": "2026-03",
-          "observationDate": "2026-03-01",
-          "actual": "3.5%",
-          "previous": "2.9%"
-        },
-        {
-          "period": "2026-02",
-          "observationDate": "2026-02-01",
-          "actual": "2.9%",
-          "previous": "2.9%"
-        },
-        {
-          "period": "2026-01",
-          "observationDate": "2026-01-01",
-          "actual": "2.9%",
-          "previous": "2.9%"
-        },
-        {
-          "period": "2025-12",
-          "observationDate": "2025-12-01",
-          "actual": "2.9%",
-          "previous": "2.8%"
-        },
-        {
-          "period": "2025-11",
-          "observationDate": "2025-11-01",
-          "actual": "2.8%",
-          "previous": "2.7%"
-        },
-        {
-          "period": "2025-10",
-          "observationDate": "2025-10-01",
-          "actual": "2.7%",
-          "previous": "2.8%"
-        },
-        {
-          "period": "2025-09",
-          "observationDate": "2025-09-01",
-          "actual": "2.8%",
-          "previous": "2.7%"
-        },
-        {
-          "period": "2025-08",
-          "observationDate": "2025-08-01",
-          "actual": "2.7%",
-          "previous": "2.6%"
-        }
-      ],
-      "source": "FRED (official-source series)",
-      "fetchedAt": "2026-07-14T05:51:59.217674+00:00"
-    },
-    "retail_sales": {
-      "actual": "0.9%",
-      "previous": "0.4%",
-      "period": "2026-05",
-      "observationDate": "2026-05-01",
-      "history": [
-        {
-          "period": "2026-05",
-          "observationDate": "2026-05-01",
-          "actual": "0.9%",
-          "previous": "0.4%"
-        },
-        {
-          "period": "2026-04",
-          "observationDate": "2026-04-01",
-          "actual": "0.4%",
-          "previous": "1.7%"
-        },
-        {
-          "period": "2026-03",
-          "observationDate": "2026-03-01",
-          "actual": "1.7%",
-          "previous": "0.9%"
-        },
-        {
-          "period": "2026-02",
-          "observationDate": "2026-02-01",
-          "actual": "0.9%",
-          "previous": "-0%"
-        },
-        {
-          "period": "2026-01",
-          "observationDate": "2026-01-01",
-          "actual": "-0%",
-          "previous": "-0%"
-        },
-        {
-          "period": "2025-12",
-          "observationDate": "2025-12-01",
-          "actual": "-0%",
-          "previous": "0.5%"
-        },
-        {
-          "period": "2025-11",
-          "observationDate": "2025-11-01",
-          "actual": "0.5%",
-          "previous": "-0.2%"
-        },
-        {
-          "period": "2025-10",
-          "observationDate": "2025-10-01",
-          "actual": "-0.2%",
-          "previous": "0.1%"
-        },
-        {
-          "period": "2025-09",
-          "observationDate": "2025-09-01",
-          "actual": "0.1%",
-          "previous": "0.5%"
-        },
-        {
-          "period": "2025-08",
-          "observationDate": "2025-08-01",
-          "actual": "0.5%",
-          "previous": "0.6%"
-        }
-      ],
-      "source": "FRED (official-source series)",
-      "fetchedAt": "2026-07-14T05:51:59.223162+00:00"
+      ]
     }
   },
-  "errors": {},
+  "errors": {
+    "fetch_bls": "Request failed: https://api.bls.gov/publicAPI/v2/timeseries/data/: HTTPSConnectionPool(host='api.bls.gov', port=443): Max retries exceeded with url: /publicAPI/v2/timeseries/data/ (Caused by NameResolutionError(\"HTTPSConnection(host='api.bls.gov', port=443): Failed to resolve 'api.bls.gov' ([Errno -3] Temporary failure in name resolution)\"))",
+    "retail_sales": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=RSAFS: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=RSAFS (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "gdp": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=A191RL1Q225SBEA: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=A191RL1Q225SBEA (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "jobless_claims": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=ICSA (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "pce": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPI: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=PCEPI (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "core_pce": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPILFE: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=PCEPILFE (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "fomc": "Request failed: https://fred.stlouisfed.org/graph/fredgraph.csv?id=DFEDTARU: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Max retries exceeded with url: /graph/fredgraph.csv?id=DFEDTARU (Caused by NameResolutionError(\"HTTPSConnection(host='fred.stlouisfed.org', port=443): Failed to resolve 'fred.stlouisfed.org' ([Errno -3] Temporary failure in name resolution)\"))",
+    "missing": "cpi_yoy, core_cpi_yoy, ppi_yoy, core_ppi_yoy, nfp, unemployment, avg_hourly_earnings, retail_sales, jobless_claims, gdp, pce, core_pce, fomc"
+  },
   "coverage": {
     "cpi_yoy": true,
     "core_cpi_yoy": true,
@@ -847,11 +581,12 @@
     "nfp": true,
     "unemployment": true,
     "avg_hourly_earnings": true,
-    "retail_sales": true,
+    "retail_sales": false,
     "jobless_claims": true,
     "gdp": true,
-    "pce": true,
-    "core_pce": true,
+    "pce": false,
+    "core_pce": false,
     "fomc": true
-  }
+  },
+  "historyProtection": "Bundled verified history + persistent KV history snapshot"
 }

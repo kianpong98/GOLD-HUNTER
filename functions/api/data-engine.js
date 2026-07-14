@@ -26,11 +26,36 @@ const EVENT_ONLY_TYPES = new Set(['fomc_minutes','fed_speech']);
 const VERIFIED_FALLBACK_METRICS = {
   jobless_claims:{actual:'215K',previous:'217K',period:'2026-07-04',observationDate:'2026-07-04',source:'U.S. Department of Labor verified fallback',history:[
     {period:'2026-07-04',actual:'215K',previous:'217K'},{period:'2026-06-27',actual:'217K',previous:'216K'},{period:'2026-06-20',actual:'216K',previous:'227K'},{period:'2026-06-13',actual:'227K',previous:'230K'},{period:'2026-06-06',actual:'229K',previous:'225K'},{period:'2026-05-30',actual:'225K',previous:'212K'},{period:'2026-05-23',actual:'215K',previous:'210K'},{period:'2026-05-16',actual:'209K',previous:'212K'},{period:'2026-05-09',actual:'211K',previous:'199K'},{period:'2026-05-02',actual:'200K',previous:'190K'}]},
-  fomc:{actual:'3.5–3.75%',previous:'3.5–3.75%',period:'2026-06-18',observationDate:'2026-06-18',source:'Federal Reserve verified fallback',history:[
-    {period:'2026-06-18',actual:'3.5–3.75%',previous:'3.5–3.75%'},{period:'2026-04-30',actual:'3.5–3.75%',previous:'3.5–3.75%'},{period:'2026-03-19',actual:'3.5–3.75%',previous:'3.5–3.75%'},{period:'2026-01-29',actual:'3.5–3.75%',previous:''}]},
+  fomc:{actual:'3.5–3.75%',previous:'3.5–3.75%',period:'2026-06-18',observationDate:'2026-06-18',source:'Federal Reserve verified fallback',history:VERIFIED_FOMC_HISTORY},
   gdp:{actual:'2.1%',previous:'0.5%',period:'2026-Q1',observationDate:'2026-04-01',source:'U.S. Bureau of Economic Analysis verified fallback',history:[
     {period:'2026-Q1',actual:'2.1%',previous:'0.5%'},{period:'2025-Q4',actual:'0.5%',previous:'4.4%'},{period:'2025-Q3',actual:'4.4%',previous:''}]}
 };
+
+
+const VERIFIED_FOMC_HISTORY = [
+  {period:'2026-06-18',actual:'3.5–3.75%',previous:'3.5–3.75%'},
+  {period:'2026-04-30',actual:'3.5–3.75%',previous:'3.5–3.75%'},
+  {period:'2026-03-19',actual:'3.5–3.75%',previous:'3.5–3.75%'},
+  {period:'2026-01-29',actual:'3.5–3.75%',previous:'3.5–3.75%'},
+  {period:'2025-12-11',actual:'3.5–3.75%',previous:'3.75–4%'},
+  {period:'2025-10-30',actual:'3.75–4%',previous:'4–4.25%'},
+  {period:'2025-09-18',actual:'4–4.25%',previous:'4.25–4.5%'},
+  {period:'2025-07-31',actual:'4.25–4.5%',previous:'4.25–4.5%'},
+  {period:'2025-06-19',actual:'4.25–4.5%',previous:'4.25–4.5%'},
+  {period:'2025-05-08',actual:'4.25–4.5%',previous:'4.25–4.5%'}
+];
+const VERIFIED_FOMC_PERIODS = new Set(VERIFIED_FOMC_HISTORY.map(row=>row.period));
+function sanitizeFomcHistory(list){
+  const byPeriod=new Map();
+  for(const row of [...(Array.isArray(list)?list:[]),...VERIFIED_FOMC_HISTORY]){
+    const period=String(row?.period||'').slice(0,10);
+    if(!VERIFIED_FOMC_PERIODS.has(period)||!row?.actual)continue;
+    const canonical=VERIFIED_FOMC_HISTORY.find(item=>item.period===period)||{};
+    const old=byPeriod.get(period)||{};
+    byPeriod.set(period,{...old,...row,period,actual:canonical.actual||row.actual,previous:canonical.previous||row.previous||''});
+  }
+  return [...byPeriod.values()].sort((a,b)=>b.period.localeCompare(a.period)).slice(0,10);
+}
 
 const REMOVED_TYPES = new Set(['ism_manufacturing','ism_services']);
 
@@ -517,7 +542,7 @@ function mergeOfficialHistories(...sources){
       }
     }
     rows.sort((a,b)=>String(b.period).localeCompare(String(a.period)));
-    out[key]=rows.slice(0,10);
+    out[key]=key==='fomc'?sanitizeFomcHistory(rows):rows.slice(0,10);
   }
   return out;
 }
@@ -533,7 +558,7 @@ function cleanOfficialHistorySnapshot(source){
       rows.push({period,actual,previous:clean(row?.previous,80),observationDate:clean(row?.observationDate,20)});
       if(rows.length===10)break;
     }
-    if(rows.length)out[canonicalType({type})]=rows;
+    if(rows.length){const canonical=canonicalType({type});out[canonical]=canonical==='fomc'?sanitizeFomcHistory(rows):rows;}
   }
   return out;
 }
@@ -688,9 +713,11 @@ export async function onRequestGet({request,env}){
       seenHistory.add(String(row.period));
       history.push({...row,forecast:forecastMap[row.period]||row.forecast||'',lastRelease});
     };
-    for(const row of (e.releaseHistory||[]))addHistory(row,Boolean(e.lastRelease?.period===row.period));
-    if(e.lastRelease?.actual)addHistory(e.lastRelease,true);
-    for(const row of rawHistory)addHistory(row,false);
+    const eventHistory=e.type==='fomc'?sanitizeFomcHistory(e.releaseHistory||[]):(e.releaseHistory||[]);
+    for(const row of eventHistory)addHistory(row,Boolean(e.lastRelease?.period===row.period));
+    if(e.lastRelease?.actual&&(e.type!=='fomc'||VERIFIED_FOMC_PERIODS.has(String(e.lastRelease.period||'').slice(0,10))))addHistory(e.lastRelease,true);
+    for(const row of (e.type==='fomc'?sanitizeFomcHistory(rawHistory):rawHistory))addHistory(row,false);
+    if(e.type==='fomc')for(const row of VERIFIED_FOMC_HISTORY)addHistory(row,false);
     history.sort((a,b)=>String(b.period).localeCompare(String(a.period)));
     history.splice(10);
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
@@ -726,11 +753,11 @@ export async function onRequestGet({request,env}){
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
   const responseNow=new Date().toISOString();
-  return json({engineVersion:'stable-data-phase1.1-news-history',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'stable-data-phase1.2-fomc-history-fixed',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
-    engineVersion:'stable-data-phase1.1-news-history',
+    engineVersion:'stable-data-phase1.2-fomc-history-fixed',
     step:'start',
     timestamp:new Date().toISOString(),
     kvBound:Boolean(env&&env.GH_MARKET_DATA)
@@ -779,7 +806,7 @@ export async function onRequestPost({request,env}){
     }
 
     const updatedAt=new Date().toISOString();
-    const payload={version:'stable-data-phase1.1-news-history',updatedAt,overrides};
+    const payload={version:'stable-data-phase1.2-fomc-history-fixed',updatedAt,overrides};
     const serialized=JSON.stringify(payload);
     debug.overrideCount=Object.keys(overrides).length;
     debug.payloadBytes=new TextEncoder().encode(serialized).length;
@@ -791,7 +818,7 @@ export async function onRequestPost({request,env}){
     if(existing&&sameMeaningfulData(existing,payload)){
       debug.step='complete-no-change';
       debug.writeSkipped=true;
-      return json({ok:true,unchanged:true,version:'stable-data-phase1.1-news-history',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
+      return json({ok:true,unchanged:true,version:'stable-data-phase1.2-fomc-history-fixed',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
     }
 
     debug.step='kv-put';
@@ -803,12 +830,12 @@ export async function onRequestPost({request,env}){
     debug.readbackVersion=verify?.version||null;
 
     debug.step='verify-readback';
-    if(!verify||verify.version!=='stable-data-phase1.1-news-history'){
+    if(!verify||verify.version!=='stable-data-phase1.2-fomc-history-fixed'){
       return json({error:'KV write verification failed.',debug},500,{'cache-control':'no-store'});
     }
 
     debug.step='complete';
-    return json({ok:true,version:'stable-data-phase1.1-news-history',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
+    return json({ok:true,version:'stable-data-phase1.2-fomc-history-fixed',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
   }catch(error){
     debug.failedAt=debug.step;
     debug.exception={
