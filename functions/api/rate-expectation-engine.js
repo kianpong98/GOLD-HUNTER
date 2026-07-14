@@ -1,5 +1,5 @@
-const STATIC_URL = '/assets/data/rate-expectation.json?v=fed-futures-calculated-2.0-free-no-kv';
-const ENGINE_VERSION = 'fed-futures-calculated-2.0-free-no-kv';
+const STATIC_URL = '/assets/data/rate-expectation.json?v=fed-futures-calculated-2.1-validation-safe-no-kv';
+const ENGINE_VERSION = 'fed-futures-calculated-2.1-validation-safe-no-kv';
 
 const headers = {
   'content-type': 'application/json; charset=utf-8',
