@@ -17,11 +17,11 @@
     }
   ],
   "updatedAt": "2026-07-14T00:00:00Z",
-  "lastCheckedAt": "2026-07-14T00:00:00Z",
+  "lastCheckedAt": "2026-07-14T06:42:12.601925Z",
   "officialDataChangedAt": "2026-07-14T00:00:00Z",
   "source": "CME FedWatch",
   "sourceUrl": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
-  "sourceMode": "verified-seed-awaiting-github-sync",
+  "sourceMode": "github-verified-fallback",
   "sourceStatus": "cached",
   "live": false,
   "exactOfficialValues": true,
@@ -29,8 +29,12 @@
   "meetingDateTime": "2026-07-30T02:00:00+08:00",
   "meetingTimezone": "Asia/Kuala_Lumpur",
   "meetingTimezoneLabel": "Malaysia Time (MYT)",
-  "note": "Verified seed. GitHub Actions replaces it with official-github-sync after a successful CME check. No Workers KV writes.",
-  "engineVersion": "fedwatch-github-sync-1.1",
+  "note": "GitHub Actions verified and preserved the last valid CME snapshot because CME blocked or failed the current fetch. No Workers KV writes.",
+  "engineVersion": "fedwatch-github-sync-1.2-safe",
   "kvWrite": false,
-  "errors": []
+  "errors": [],
+  "githubChecked": true,
+  "githubSynced": true,
+  "officialFetchSucceeded": false,
+  "lastOfficialFetchError": "official public page: fetch_with_requests: attempt 1: HTTP 403, bytes=602; attempt 2: HTTP 403, bytes=602; attempt 3: HTTP 403, bytes=602; attempt 4: HTTP 403, bytes=602 | fetch_with_curl: attempt 1: CalledProcessError: curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403; attempt 2: CalledProcessError: curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403; attempt 3: CalledProcessError: curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403"
 }
