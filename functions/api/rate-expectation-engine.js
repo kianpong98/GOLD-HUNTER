@@ -1,6 +1,9 @@
-const STATIC_URL = '/assets/data/rate-expectation.json?v=11.0.2';
-const CME_URL = 'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html';
-const CACHE_SECONDS = 300;
+const STATIC_URL = '/assets/data/rate-expectation.json?v=11.0.3';
+const CME_PAGE_URL = 'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html';
+const CME_API_BASE = 'https://markets.api.cmegroup.com/fedwatch/v1';
+const EDGE_REFRESH_SECONDS = 300;
+const LAST_GOOD_SECONDS = 86400;
+const ENGINE_VERSION = '11.0.3-fedwatch-official-exact-no-kv';
 
 function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -18,21 +21,43 @@ function cleanText(value) {
     .replace(/&ndash;|&#8211;|&#x2013;/gi, '–')
     .replace(/&mdash;|&#8212;|&#x2014;/gi, '–')
     .replace(/&nbsp;|&#160;/gi, ' ')
-    .replace(/\u0025/g, '%')
-    .replace(/\\u0025/g, '%')
-    .replace(/\\u2013|\u2013/g, '–')
-    .replace(/\\u2014|\u2014/g, '–')
+    .replace(/\u0025|\\u0025/g, '%')
+    .replace(/\u2013|\\u2013|\u2014|\\u2014/g, '–')
+    .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-function normalizeRange(value) {
+function parseRange(value) {
   const nums = cleanText(value).match(/\d+(?:\.\d+)?/g) || [];
-  if (nums.length < 2) return '';
-  const a = Number(nums[0]);
-  const b = Number(nums[1]);
-  if (!Number.isFinite(a) || !Number.isFinite(b) || a < 0 || b > 20 || a >= b) return '';
-  return `${a.toFixed(2)}%–${b.toFixed(2)}%`;
+  if (nums.length < 2) return null;
+  let lower = Number(nums[0]);
+  let upper = Number(nums[1]);
+  if (!Number.isFinite(lower) || !Number.isFinite(upper) || lower >= upper) return null;
+
+  // CME charts commonly label target ranges in basis points, e.g. 350–375.
+  if (upper > 20) {
+    if (lower < 0 || upper > 2000) return null;
+    lower /= 100;
+    upper /= 100;
+  }
+  if (lower < 0 || upper > 20 || lower >= upper) return null;
+
+  const lowerBps = Math.round(lower * 100);
+  const upperBps = Math.round(upper * 100);
+  if (upperBps - lowerBps < 1 || upperBps - lowerBps > 100) return null;
+  return {
+    lower,
+    upper,
+    lowerBps,
+    upperBps,
+    key: `${lowerBps}-${upperBps}`,
+    display: `${lower.toFixed(2)}%–${upper.toFixed(2)}%`,
+  };
+}
+
+function normalizeRange(value) {
+  return parseRange(value)?.display || '';
 }
 
 function numberProbability(value) {
@@ -42,16 +67,16 @@ function numberProbability(value) {
 }
 
 function midpoint(range) {
-  const nums = String(range || '').match(/\d+(?:\.\d+)?/g) || [];
-  return nums.length >= 2 ? (Number(nums[0]) + Number(nums[1])) / 2 : null;
+  const parsed = parseRange(range);
+  return parsed ? (parsed.lower + parsed.upper) / 2 : null;
 }
 
 function directionFor(targetRange, currentTargetRange) {
   const target = midpoint(targetRange);
   const current = midpoint(currentTargetRange);
   if (!Number.isFinite(target) || !Number.isFinite(current)) return 'hold';
-  if (target < current - 0.01) return 'cut';
-  if (target > current + 0.01) return 'hike';
+  if (target < current - 0.001) return 'cut';
+  if (target > current + 0.001) return 'hike';
   return 'hold';
 }
 
@@ -64,117 +89,123 @@ function moveFor(targetRange, currentTargetRange) {
   return `${Math.abs(bps)} bps ${bps < 0 ? 'cut' : 'hike'}`;
 }
 
-function chooseCurrentRange(outcomes, fallbackRange) {
-  if (normalizeRange(fallbackRange)) return normalizeRange(fallbackRange);
-  const sorted = [...outcomes].sort((a, b) => b.probability - a.probability);
-  return sorted[0]?.targetRange || '';
+function toIsoDate(value) {
+  if (!value) return '';
+  const text = cleanText(value);
+  const direct = text.match(/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (direct) return `${direct[1]}-${String(direct[2]).padStart(2, '0')}-${String(direct[3]).padStart(2, '0')}`;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
 }
 
-function dedupeOutcomes(rows) {
-  const best = new Map();
-  for (const row of rows) {
-    const targetRange = normalizeRange(row.targetRange || row.range || row.rateRange || row.label);
-    const probability = numberProbability(row.probability ?? row.prob ?? row.value ?? row.percent ?? row.percentage);
-    if (!targetRange || probability === null) continue;
-    const prior = best.get(targetRange);
-    if (!prior || probability > prior.probability) best.set(targetRange, { targetRange, probability });
+function exactOutcomes(rows, currentTargetRange = '') {
+  const byRange = new Map();
+  for (const row of rows || []) {
+    const range = parseRange(row.targetRange ?? row.range ?? row.rateRange ?? row.label ?? row.targetRate);
+    const probability = numberProbability(row.probability ?? row.prob ?? row.value ?? row.percent ?? row.percentage ?? row.currentProbability);
+    if (!range || probability === null) continue;
+    const prior = byRange.get(range.key);
+    // Keep the last explicit value; do not normalize or recalculate official probabilities.
+    byRange.set(range.key, { targetRange: range.display, probability, lowerBps: range.lowerBps, upperBps: range.upperBps, prior });
   }
-  const values = [...best.values()].filter(x => x.probability > 0.001).sort((a, b) => a.targetRange.localeCompare(b.targetRange));
-  const total = values.reduce((sum, x) => sum + x.probability, 0);
-  if (!values.length || total < 80 || total > 120) return [];
-  return values.map(x => ({ ...x, probability: x.probability * 100 / total }));
+
+  const all = [...byRange.values()].sort((a, b) => a.lowerBps - b.lowerBps);
+  if (!all.length) return [];
+
+  // Select the most coherent contiguous 25bp/50bp block whose official values total ~100%.
+  const current = parseRange(currentTargetRange);
+  let best = null;
+  for (let start = 0; start < all.length; start++) {
+    let sum = 0;
+    for (let end = start; end < Math.min(all.length, start + 8); end++) {
+      if (end > start && all[end].lowerBps !== all[end - 1].upperBps) break;
+      sum += all[end].probability;
+      const group = all.slice(start, end + 1);
+      const totalError = Math.abs(100 - sum);
+      const includesCurrent = current ? group.some(x => x.lowerBps === current.lowerBps && x.upperBps === current.upperBps) : false;
+      const score = totalError + (includesCurrent ? 0 : 8) + (group.length < 2 ? 20 : 0);
+      if (sum >= 98.5 && sum <= 101.5 && (!best || score < best.score)) best = { score, group, sum };
+    }
+  }
+  if (!best) return [];
+  return best.group.map(({ targetRange, probability }) => ({ targetRange, probability }));
 }
 
-function collectFromObject(root) {
+function findRowsInObject(root) {
   const rows = [];
   const seen = new Set();
   const visit = (value, depth = 0) => {
-    if (depth > 16 || value == null) return;
-    if (typeof value === 'object') {
-      if (seen.has(value)) return;
-      seen.add(value);
-      if (!Array.isArray(value)) {
-        const keys = Object.keys(value);
-        let rangeValue = '';
-        let probabilityValue = null;
-        for (const key of keys) {
-          if (/target.*range|rate.*range|targetrate|target_rate|range/i.test(key)) rangeValue ||= value[key];
-          if (/probability|probabilityvalue|prob|percentage|percent/i.test(key)) probabilityValue ??= value[key];
-        }
-        if (rangeValue !== '' && probabilityValue !== null) rows.push({ targetRange: rangeValue, probability: probabilityValue });
+    if (depth > 18 || value == null) return;
+    if (typeof value !== 'object') return;
+    if (seen.has(value)) return;
+    seen.add(value);
+
+    if (!Array.isArray(value)) {
+      const keys = Object.keys(value);
+      let rangeValue = '';
+      let probabilityValue = null;
+      for (const key of keys) {
+        if (/target.*range|rate.*range|targetrate|target_rate|targetRate|range/i.test(key)) rangeValue ||= value[key];
+        if (/probability|probabilityvalue|currentProbability|prob|percentage|percent/i.test(key)) probabilityValue ??= value[key];
       }
-      for (const child of Object.values(value)) visit(child, depth + 1);
+      if (rangeValue !== '' && probabilityValue !== null) rows.push({ targetRange: rangeValue, probability: probabilityValue });
     }
+    for (const child of Object.values(value)) visit(child, depth + 1);
   };
   visit(root);
   return rows;
 }
 
-function parseJsonCandidates(html) {
+function jsonCandidates(html) {
   const candidates = [];
   const scriptRegex = /<script[^>]*type=["']application\/(?:ld\+)?json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let match;
   while ((match = scriptRegex.exec(html))) candidates.push(match[1]);
-  const markers = ['__NEXT_DATA__', '__INITIAL_STATE__', 'fedWatch', 'fedwatch', 'probability'];
-  for (const marker of markers) {
-    let from = 0;
-    while ((from = html.indexOf(marker, from)) !== -1) {
-      const start = html.lastIndexOf('{', from);
-      if (start >= 0) {
-        let level = 0, inString = false, escaped = false;
-        for (let i = start; i < Math.min(html.length, start + 800000); i++) {
-          const ch = html[i];
-          if (inString) {
-            if (escaped) escaped = false;
-            else if (ch === '\\') escaped = true;
-            else if (ch === '"') inString = false;
-          } else {
-            if (ch === '"') inString = true;
-            else if (ch === '{') level++;
-            else if (ch === '}') {
-              level--;
-              if (level === 0) { candidates.push(html.slice(start, i + 1)); break; }
-            }
-          }
-        }
-      }
-      from += marker.length;
-    }
-  }
   return candidates;
 }
 
-function parseCmeHtml(html) {
+function parsePublicCmePage(html) {
+  const rawText = cleanText(html);
+  const currentMatch = rawText.match(/current\s+(?:federal\s+funds\s+)?target\s+rate\s+is\s+(\d+(?:\.\d+)?\s*%?\s*[–-]\s*\d+(?:\.\d+)?\s*%?)/i);
+  const currentTargetRange = normalizeRange(currentMatch?.[1] || '');
+
+  const titleMatch = rawText.match(/Target\s+Rate\s+Probabilities\s+for\s+(.{3,40}?)\s+Fed\s+Meeting/i);
+  const meetingDate = toIsoDate(titleMatch?.[1] || '');
+
   const rows = [];
-  for (const raw of parseJsonCandidates(html)) {
-    try { rows.push(...collectFromObject(JSON.parse(raw))); } catch {}
+  for (const candidate of jsonCandidates(html)) {
+    try { rows.push(...findRowsInObject(JSON.parse(candidate))); } catch {}
   }
 
-  // Generic fallback for JSON-like or rendered table content where range and probability are close together.
-  const text = cleanText(html);
-  const pairPatterns = [
-    /(\d+(?:\.\d+)?\s*%?\s*[–-]\s*\d+(?:\.\d+)?\s*%?)[^\d%]{0,160}(\d+(?:\.\d+)?)\s*%/g,
-    /(?:targetRate|target_range|targetRange|rateRange)["'\s:=]+([^,"'}<]{3,40})[\s\S]{0,220}?(?:probability|percentage|percent|prob)["'\s:=]+(\d+(?:\.\d+)?)/gi,
-  ];
-  for (const regex of pairPatterns) {
-    let match;
-    while ((match = regex.exec(text))) rows.push({ targetRange: match[1], probability: match[2] });
-  }
+  // Exact visible/table format: 350–375 ... 54.6%
+  const exactPair = /(\d{2,4}(?:\.\d+)?\s*[–-]\s*\d{2,4}(?:\.\d+)?)[^\d%]{0,120}(\d{1,3}(?:\.\d+)?)\s*%/g;
+  let pair;
+  while ((pair = exactPair.exec(rawText))) rows.push({ targetRange: pair[1], probability: pair[2] });
 
-  const outcomes = dedupeOutcomes(rows);
-  if (!outcomes.length) throw new Error('CME page loaded but rate probabilities could not be parsed');
+  const outcomes = exactOutcomes(rows, currentTargetRange);
+  if (!currentTargetRange) throw new Error('CME current target range could not be verified');
+  if (!outcomes.length) throw new Error('CME target-rate probability table could not be verified');
+  return { outcomes, currentTargetRange, meetingDate };
+}
 
-  let currentTargetRange = '';
-  const currentMatch = text.match(/current\s+(?:federal\s+funds\s+)?target\s+rate[^\d]{0,80}(\d+(?:\.\d+)?\s*%?\s*[–-]\s*\d+(?:\.\d+)?\s*%?)/i);
-  if (currentMatch) currentTargetRange = normalizeRange(currentMatch[1]);
+function parseOfficialApi(payload) {
+  const candidates = Array.isArray(payload) ? payload : [payload];
+  const rows = findRowsInObject(payload);
+  const text = JSON.stringify(payload);
+  const currentMatch = text.match(/(?:currentTargetRate|current_target_rate|currentRateRange|currentRange)["']?\s*[:=]\s*["']([^"']+)/i);
+  const currentTargetRange = normalizeRange(currentMatch?.[1] || '');
 
   let meetingDate = '';
-  const meetingMatch = text.match(/(?:next\s+FOMC|FOMC\s+meeting)[^\d]{0,100}(20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2}|[A-Za-z]{3,9}\s+\d{1,2},?\s+20\d{2})/i);
-  if (meetingMatch) {
-    const parsed = new Date(meetingMatch[1]);
-    if (!Number.isNaN(parsed.getTime())) meetingDate = parsed.toISOString().slice(0, 10);
+  for (const item of candidates) {
+    meetingDate ||= toIsoDate(item?.meetingDt || item?.meetingDate || item?.fomcMeetingDate || item?.meeting_date);
+  }
+  if (!meetingDate) {
+    const dateMatch = text.match(/(?:meetingDt|meetingDate|fomcMeetingDate|meeting_date)["']?\s*:\s*["']([^"']+)/i);
+    meetingDate = toIsoDate(dateMatch?.[1] || '');
   }
 
+  const outcomes = exactOutcomes(rows, currentTargetRange);
+  if (!outcomes.length) throw new Error('CME API returned no verified probability table');
   return { outcomes, currentTargetRange, meetingDate };
 }
 
@@ -187,70 +218,153 @@ async function loadStatic(origin) {
   return response.json();
 }
 
-async function fetchOfficial() {
-  const response = await fetch(CME_URL, {
+async function fetchOfficialApi(env) {
+  const token = env?.CME_FEDWATCH_ACCESS_TOKEN;
+  if (!token) return null;
+  const response = await fetch(`${CME_API_BASE}/forecasts`, {
+    headers: { accept: 'application/json', authorization: `Bearer ${token}` },
+    cf: { cacheTtl: EDGE_REFRESH_SECONDS, cacheEverything: true },
+  });
+  if (!response.ok) throw new Error(`CME FedWatch API HTTP ${response.status}`);
+  return parseOfficialApi(await response.json());
+}
+
+async function fetchPublicCme() {
+  const response = await fetch(CME_PAGE_URL, {
     headers: {
       accept: 'text/html,application/xhtml+xml',
       'accept-language': 'en-US,en;q=0.9',
-      'user-agent': 'Mozilla/5.0 (compatible; GoldHunterMarketData/1.0; +https://goldhunter.site)',
+      'user-agent': 'Mozilla/5.0 (compatible; GoldHunterMarketData/1.1; +https://goldhunter.site)',
     },
     redirect: 'follow',
-    cf: { cacheTtl: CACHE_SECONDS, cacheEverything: true },
+    cf: { cacheTtl: EDGE_REFRESH_SECONDS, cacheEverything: true },
   });
-  if (!response.ok) throw new Error(`CME FedWatch HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`CME FedWatch page HTTP ${response.status}`);
   const html = await response.text();
   if (html.length < 1000) throw new Error('CME FedWatch returned an incomplete page');
-  return parseCmeHtml(html);
+  return parsePublicCmePage(html);
 }
 
-export async function onRequestGet({ request }) {
+function buildResult(official, fallback, checkedAt, sourceMode) {
+  const currentTargetRange = normalizeRange(official.currentTargetRange || fallback?.currentTargetRange);
+  if (!currentTargetRange) throw new Error('Current target range is unavailable');
+  const outcomes = official.outcomes
+    .map(x => ({
+      targetRange: normalizeRange(x.targetRange),
+      probability: Number(Number(x.probability).toFixed(1)),
+    }))
+    .filter(x => x.targetRange && Number.isFinite(x.probability))
+    .map(x => ({
+      ...x,
+      direction: directionFor(x.targetRange, currentTargetRange),
+      move: moveFor(x.targetRange, currentTargetRange),
+    }))
+    .sort((a, b) => b.probability - a.probability);
+
+  const total = Number(outcomes.reduce((sum, x) => sum + x.probability, 0).toFixed(1));
+  if (!outcomes.length || total < 98.5 || total > 101.5) throw new Error(`Probability total failed verification (${total}%)`);
+
+  const meetingDate = official.meetingDate || fallback?.meetingDate || '';
+  const meetingDateTime = fallback?.meetingDateTime || (meetingDate ? `${meetingDate}T14:00:00-04:00` : '');
+  return {
+    ...(fallback || {}),
+    meetingDate,
+    meetingDateTime,
+    currentTargetRange,
+    outcomes,
+    updatedAt: checkedAt,
+    sourceUpdatedAt: checkedAt,
+    lastCheckedAt: checkedAt,
+    live: true,
+    sourceStatus: 'live',
+    sourceMode,
+    source: 'CME FedWatch',
+    sourceUrl: CME_PAGE_URL,
+    probabilityTotal: total,
+    exactOfficialValues: true,
+    cacheMode: `Official CME data; Cloudflare edge/last-good cache; no KV writes`,
+    kvWrite: false,
+    engineVersion: ENGINE_VERSION,
+  };
+}
+
+async function readLastGood(request) {
+  try {
+    const cache = caches.default;
+    const key = new Request(`${new URL(request.url).origin}/__cache/fedwatch-last-good-v1103`, { method: 'GET' });
+    const hit = await cache.match(key);
+    return hit ? await hit.json() : null;
+  } catch { return null; }
+}
+
+async function storeLastGood(request, data, context) {
+  try {
+    const cache = caches.default;
+    const key = new Request(`${new URL(request.url).origin}/__cache/fedwatch-last-good-v1103`, { method: 'GET' });
+    const response = new Response(JSON.stringify(data), {
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': `public, max-age=${LAST_GOOD_SECONDS}`,
+      },
+    });
+    const task = cache.put(key, response);
+    if (context?.waitUntil) context.waitUntil(task); else await task;
+  } catch {}
+}
+
+export async function onRequestGet({ request, env, context }) {
   const checkedAt = new Date().toISOString();
   const origin = new URL(request.url).origin;
-  let fallback;
-  try { fallback = await loadStatic(origin); } catch { fallback = null; }
+  let fallback = null;
+  try { fallback = await loadStatic(origin); } catch {}
 
+  const errors = [];
   try {
-    const official = await fetchOfficial();
-    const currentTargetRange = chooseCurrentRange(official.outcomes, official.currentTargetRange || fallback?.currentTargetRange);
-    const outcomes = official.outcomes
-      .map(x => ({
-        targetRange: x.targetRange,
-        probability: Number(x.probability.toFixed(2)),
-        direction: directionFor(x.targetRange, currentTargetRange),
-        move: moveFor(x.targetRange, currentTargetRange),
-      }))
-      .sort((a, b) => b.probability - a.probability);
-    const meetingDate = official.meetingDate || fallback?.meetingDate || '';
-    const meetingDateTime = fallback?.meetingDateTime || (meetingDate ? `${meetingDate}T02:00:00+08:00` : '');
-    return json({
-      ...(fallback || {}),
-      meetingDate,
-      meetingDateTime,
-      currentTargetRange,
-      outcomes,
-      updatedAt: checkedAt,
-      lastCheckedAt: checkedAt,
-      live: true,
-      sourceStatus: 'live',
-      source: 'CME FedWatch',
-      sourceUrl: CME_URL,
-      cacheMode: `Cloudflare edge cache ${CACHE_SECONDS}s; no KV writes`,
-      kvWrite: false,
-      engineVersion: '11.0.2-fedwatch-live-no-kv',
-    });
+    const apiResult = await fetchOfficialApi(env);
+    const official = apiResult || await fetchPublicCme();
+    const result = buildResult(official, fallback, checkedAt, apiResult ? 'official-api' : 'official-public-page');
+    await storeLastGood(request, result, context);
+    return json(result, 200, { 'x-gh-data-status': 'live', 'x-gh-fedwatch-source': result.sourceMode });
   } catch (error) {
-    if (!fallback) return json({ error: 'Rate expectation unavailable', detail: String(error?.message || error), lastCheckedAt: checkedAt, live: false, kvWrite: false }, 503);
+    errors.push(String(error?.message || error));
+  }
+
+  const lastGood = await readLastGood(request);
+  if (lastGood?.outcomes?.length) {
+    return json({
+      ...lastGood,
+      lastCheckedAt: checkedAt,
+      live: false,
+      sourceStatus: 'cached-last-good',
+      sourceError: errors.join(' | '),
+      cacheMode: 'Last verified CME result from Cloudflare Cache API; no KV writes',
+      kvWrite: false,
+      engineVersion: ENGINE_VERSION,
+    }, 200, { 'x-gh-data-status': 'cached-last-good' });
+  }
+
+  if (fallback?.outcomes?.length) {
     return json({
       ...fallback,
       lastCheckedAt: checkedAt,
       live: false,
-      sourceStatus: 'fallback',
-      sourceError: String(error?.message || error),
-      source: 'CME FedWatch cached snapshot',
-      sourceUrl: CME_URL,
-      cacheMode: 'Static fallback; no KV writes',
+      sourceStatus: 'static-fallback',
+      sourceError: errors.join(' | '),
+      source: 'CME FedWatch verified static snapshot',
+      sourceUrl: CME_PAGE_URL,
+      exactOfficialValues: true,
+      cacheMode: 'Verified static fallback; no KV writes',
       kvWrite: false,
-      engineVersion: '11.0.2-fedwatch-live-no-kv',
-    }, 200, { 'x-gh-data-status': 'fallback' });
+      engineVersion: ENGINE_VERSION,
+    }, 200, { 'x-gh-data-status': 'static-fallback' });
   }
+
+  return json({
+    error: 'Rate expectation unavailable',
+    detail: errors.join(' | '),
+    lastCheckedAt: checkedAt,
+    live: false,
+    kvWrite: false,
+    engineVersion: ENGINE_VERSION,
+  }, 503);
 }

@@ -1,0 +1,13 @@
+Gold Hunter v11.0.3 — FedWatch Official Exact / No KV
+
+Changed only Fed Rate data handling and exact probability display.
+
+- Accepts CME basis-point labels such as 350–375 and converts them to 3.50%–3.75%.
+- Preserves official probabilities exactly (for example 54.6% / 45.4%); no normalization or rounding to whole numbers.
+- Verifies that target ranges are contiguous and probabilities total approximately 100%.
+- Uses the explicit CME current target range to classify hold/cut/hike correctly.
+- Supports optional official CME FedWatch API bearer token through CME_FEDWATCH_ACCESS_TOKEN.
+- Without a token, uses the public CME page as a best-effort official source.
+- Stores the last verified result only in Cloudflare Cache API, never Workers KV.
+- Falls back to a verified static snapshot if CME is temporarily unreachable.
+- Does not change News, ETF, Central Bank Gold, SEO, layout, or other website functions.

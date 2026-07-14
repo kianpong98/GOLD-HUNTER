@@ -3,7 +3,7 @@
   const SNAPSHOT_API='/api/market-snapshot';
   const ETF_DATA='/api/etf-engine';
   const GOLD_RESERVES_API='/api/gold-reserves-engine';
-  const RATE_EXPECTATION_API='/api/rate-expectation-engine';
+  const RATE_EXPECTATION_API='/api/rate-expectation-engine?v=11.0.3';
   const sessions=[
     {name:'Sydney',short:'SYD',tz:'Australia/Sydney',open:8,close:17},
     {name:'Tokyo',short:'TKY',tz:'Asia/Tokyo',open:8,close:17},
@@ -105,6 +105,8 @@
     }
   }
 
+  const formatProbability=value=>{const n=Number(value);if(!Number.isFinite(n))return '—';return Math.abs(n-Math.round(n))<0.05?n.toFixed(0):n.toFixed(1);};
+
   async function loadRateExpectation(){
     const box=document.getElementById('rateExpectationBody');
     if(!box)return;
@@ -121,8 +123,8 @@
         }catch(_){return null;}
       }
       const d=(await readJson(RATE_EXPECTATION_API))
-        ||(await readJson('./assets/data/rate-expectation.json?v=9.0'))
-        ||(await readJson('/assets/data/rate-expectation.json?v=9.0'))
+        ||(await readJson('./assets/data/rate-expectation.json?v=11.0.3'))
+        ||(await readJson('/assets/data/rate-expectation.json?v=11.0.3'))
         ||fallbackData;
       if(!d)throw new Error('Rate expectations are awaiting a verified CME update');
       const outcomes=(Array.isArray(d.outcomes)?d.outcomes:[])
@@ -153,7 +155,7 @@
           <div class="rate-primary ${dir}">
             <span>Highest probability</span>
             <strong>${esc(leader.targetRange)}</strong>
-            <b>${leader.probability.toFixed(0)}%</b>
+            <b>${formatProbability(leader.probability)}%</b>
             <small>${esc(leader.move||'Market-implied outcome')}</small>
           </div>
         </div>
@@ -161,7 +163,7 @@
           <div><span>Current Rate</span><strong>${esc(d.currentTargetRange||'—')}</strong></div>
           <div class="rate-arrow" aria-hidden="true">↓</div>
           <div><span>Expected</span><strong>${esc(leader.targetRange)}</strong></div>
-          <div><span>Probability</span><strong>${leader.probability.toFixed(0)}%</strong></div>
+          <div><span>Probability</span><strong>${formatProbability(leader.probability)}%</strong></div>
           <div><span>Expected Move</span><strong>${esc((()=>{const parseRange=v=>{const nums=String(v||'').match(/\d+(?:\.\d+)?/g)||[];return nums.length>=2?(Number(nums[0])+Number(nums[1]))/2:null};const current=parseRange(d.currentTargetRange),expected=parseRange(leader.targetRange);if(current===null||expected===null)return leader.move||'—';const bps=Math.round((expected-current)*100);return `${bps>0?'+':''}${bps} bps`;})())}</strong></div>
           <div class="${dir}"><span>Gold</span><strong>${dir==='cut'?'Bullish':dir==='hike'?'Bearish':'Neutral'}</strong></div>
         </div>
@@ -173,8 +175,8 @@
                 <span>${esc(x.move||'Target range')}</span>
                 <strong>${esc(x.targetRange)}</strong>
               </div>
-              <div class="rate-range-meter"><i><b style="width:${Math.max(0,Math.min(100,x.probability))}%"></b></i><small>${x.probability.toFixed(0)}% probability</small></div>
-              <em>${x.probability.toFixed(0)}%</em>
+              <div class="rate-range-meter"><i><b style="width:${Math.max(0,Math.min(100,x.probability))}%"></b></i><small>${formatProbability(x.probability)}% probability</small></div>
+              <em>${formatProbability(x.probability)}%</em>
             </article>`;
           }).join('')}
         </div>
@@ -183,7 +185,7 @@
           <p>${impactText}</p>
         </div>
         <div class="rate-source-row">
-          <small>${d.live?'Live CME':'Cached fallback'} · Checked ${esc((d.lastCheckedAt||d.updatedAt)?new Date(d.lastCheckedAt||d.updatedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}):'pending')} · Total ${total.toFixed(0)}% · No KV writes</small>
+          <small>${d.live?'Live CME':d.sourceStatus==='cached-last-good'?'Cached last verified CME':'Verified fallback'} · Checked ${esc((d.lastCheckedAt||d.updatedAt)?new Date(d.lastCheckedAt||d.updatedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}):'pending')} · Total ${formatProbability(total)}% · No KV writes</small>
           <a href="${esc(d.sourceUrl||'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html')}" target="_blank" rel="noopener">View source ↗</a>
         </div>`;
       const countdownEl=box.querySelector('[data-rate-countdown]');
