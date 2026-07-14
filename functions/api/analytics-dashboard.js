@@ -1,4 +1,4 @@
-const VERSION='ga4-data-api-1.3-custom-dimension-audit';
+const VERSION='ga4-data-api-1.4-news-name-section-id';
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{
   'content-type':'application/json;charset=UTF-8','cache-control':'private, no-store, max-age=0','x-content-type-options':'nosniff'
 }});
@@ -40,8 +40,10 @@ export async function onRequestGet({request,env}){
     for(const [name,body] of Object.entries(standardDefs))reports[name]=await safeReport(env,token,name,body,diagnostics);
     const customSpecs=[
       {name:'topSections',eventName:'section_view',candidates:['page_section','section_id','section_name']},
+      {name:'topSectionIds',eventName:'section_view',candidates:['section_id'],limit:12},
       {name:'topButtons',eventName:'whatsapp_click',candidates:['button_location','button_name'],date:'30daysAgo',metrics:[{name:'eventCount'}],limit:10},
-      {name:'topNews',eventName:'news_interest',candidates:['news_type','news_name'],limit:10},
+      {name:'topNewsNames',eventName:'news_interest',candidates:['news_name'],limit:12},
+      {name:'topNewsTypes',eventName:'news_interest',candidates:['news_type'],limit:10},
       {name:'scrollDepth',eventName:'scroll_depth',candidates:['percent_scrolled','scroll_percent','scroll_depth'],limit:10}
     ];
     const custom={};for(const spec of customSpecs)custom[spec.name]=await dimensionReport(env,token,spec,diagnostics);
@@ -51,6 +53,8 @@ export async function onRequestGet({request,env}){
     const tracked=['section_view','section_engagement','content_click','scroll_depth','news_interest','details_toggle','whatsapp_click'];const eventCounts=Object.fromEntries(tracked.map(name=>[name,0]));for(const row of rows(reports.topEvents)){const name=row.dimensions?.[0];if(name in eventCounts)eventCounts[name]=row.metrics?.[0]||0;}
     const dimensionStatus=Object.fromEntries(Object.entries(custom).map(([name,result])=>[name,{resolved:result.resolved,parameter:result.parameter,dimension:result.dimension,attempts:result.attempts}]));
     const waitingForProcessing=Object.fromEntries(Object.entries(custom).map(([name,result])=>{const eventName=customSpecs.find(x=>x.name===name)?.eventName;return [name,{eventName,eventCount:eventCounts[eventName]||0,rows:rows(result.data).length,reason:result.resolved?(rows(result.data).length?'ready':'custom-definition-has-no-processed-rows-yet'):'custom-definition-not-registered'}];}));
-    return json({configured:true,connected:true,status:diagnostics.length?'connected-with-warnings':'connected',version:VERSION,propertyId:String(env.GA4_PROPERTY_ID),updatedAt:new Date().toISOString(),overview:{today:todayOverview,yesterday:yesterdayOverview,sevenDays:sevenOverview,thirtyDays:thirtyOverview},whatsapp,realtime:{activeUsers:metric(realtime.summary),topPages:rows(realtime.pages),countries:rows(realtime.countries),devices:rows(realtime.devices)},topPages:rows(reports.topPages),trafficSources:rows(reports.traffic),devices:rows(reports.devices),countries:rows(reports.countries),topEvents:rows(reports.topEvents),topSections:rows(custom.topSections.data),topButtons:rows(custom.topButtons.data),topNews:rows(custom.topNews.data),scrollDepth:rows(custom.scrollDepth.data),analyticsHealth:{eventCounts,dimensionStatus,waitingForProcessing},diagnostics,customDefinitionsRequired:Object.entries(dimensionStatus).filter(([,v])=>!v.resolved).map(([name])=>name)});
+    const topNewsNames=rows(custom.topNewsNames.data),topNewsTypes=rows(custom.topNewsTypes.data);
+    const preferredTopNews=topNewsNames.length?topNewsNames:topNewsTypes;
+    return json({configured:true,connected:true,status:diagnostics.length?'connected-with-warnings':'connected',version:VERSION,propertyId:String(env.GA4_PROPERTY_ID),updatedAt:new Date().toISOString(),overview:{today:todayOverview,yesterday:yesterdayOverview,sevenDays:sevenOverview,thirtyDays:thirtyOverview},whatsapp,realtime:{activeUsers:metric(realtime.summary),topPages:rows(realtime.pages),countries:rows(realtime.countries),devices:rows(realtime.devices)},topPages:rows(reports.topPages),trafficSources:rows(reports.traffic),devices:rows(reports.devices),countries:rows(reports.countries),topEvents:rows(reports.topEvents),topSections:rows(custom.topSections.data),topSectionIds:rows(custom.topSectionIds.data),topButtons:rows(custom.topButtons.data),topNews:preferredTopNews,topNewsNames,topNewsTypes,scrollDepth:rows(custom.scrollDepth.data),analyticsHealth:{eventCounts,dimensionStatus,waitingForProcessing,preferredNewsDimension:topNewsNames.length?'news_name':(topNewsTypes.length?'news_type':null)},diagnostics,customDefinitionsRequired:Object.entries(dimensionStatus).filter(([,v])=>!v.resolved).map(([name])=>name),recommendedCustomDefinitions:[{displayName:'Page section',parameter:'page_section'},{displayName:'Section ID',parameter:'section_id'},{displayName:'WhatsApp button',parameter:'button_location'},{displayName:'News Type',parameter:'news_type'},{displayName:'News Name',parameter:'news_name'},{displayName:'Scroll Depth',parameter:'percent_scrolled'}]});
   }catch(error){console.error('GA4 dashboard fatal error',error);return json({configured:true,connected:false,status:'error',version:VERSION,error:errorText(error),updatedAt:new Date().toISOString()},500);}
 }
