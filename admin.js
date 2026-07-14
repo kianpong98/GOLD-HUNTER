@@ -98,10 +98,13 @@
       renderList('aTopPages',d.topPages,0,0);renderList('aSources',d.trafficSources,0,1);renderList('aSections',d.topSections,0,0);renderList('aButtons',d.topButtons,0,0);renderList('aNews',d.topNews,0,0);renderList('aCountries',d.countries,0,0);renderList('aDevices',d.devices,0,0);renderList('aScroll',d.scrollDepth,0,0);renderList('aRealtimePages',rt.topPages,0,0);
       const topPage=d.topPages?.[0]?.dimensions?.[0]||'No page data',topSource=d.trafficSources?.[0]?.dimensions?.[0]||'No source data';headline.textContent=`Online: ${metric(rt.activeUsers)} · Top content: ${topPage} · Top source: ${topSource} · 7-day WA: ${metric(wa.sevenDays)}`;
       st.textContent=`GA4 updated: ${fmt(d.updatedAt)} · Property ${d.propertyId||'connected'}`;
-      const custom=(d.customDefinitionsRequired||[]);const diagnostics=(d.diagnostics||[]);
-      warnings.textContent=custom.length?`部分自定义报表尚未显示。请在 GA4 Custom definitions 注册对应参数：${custom.join(', ')}。`:diagnostics.length?`${diagnostics.length} 个非关键报表暂时不可用，其余 GA4 数据正常。`:'';
+      const custom=(d.customDefinitionsRequired||[]),diagnostics=(d.diagnostics||[]),health=d.analyticsHealth||{},eventCounts=health.eventCounts||{},waiting=health.waitingForProcessing||{};
+      const labels={topSections:'page_section（或 section_id）',topButtons:'button_location',topNews:'news_type',scrollDepth:'percent_scrolled'};
+      const eventSummary=['section_view','scroll_depth','news_interest','whatsapp_click'].map(name=>`${name}: ${metric(eventCounts[name]||0)}`).join(' · ');
+      const waitingItems=Object.entries(waiting).filter(([,v])=>Number(v.eventCount||0)>0&&Number(v.rows||0)===0).map(([name,v])=>`${labels[name]||name}：事件已有 ${metric(v.eventCount)} 次，但自定义维度${v.reason==='custom-definition-not-registered'?'尚未注册':'仍在处理，GA4 不回填注册前数据'}`);
+      warnings.textContent=custom.length?`GA4 事件已收到（${eventSummary}）。请建立 Event-scoped Custom definitions：${custom.map(x=>labels[x]||x).join('、')}。${waitingItems.length?' '+waitingItems.join('；'):' '}`:waitingItems.length?`GA4 事件已收到（${eventSummary}）。${waitingItems.join('；')}。新数据通常需数小时至 24 小时进入普通报表。`:diagnostics.length?`${diagnostics.length} 个非关键报表暂时不可用，其余 GA4 数据正常。事件：${eventSummary}`:`事件追踪正常：${eventSummary}`;
       warnings.className=`admin-note${warnings.textContent?' analytics-warning':''}`;
-      badge.textContent=diagnostics.length?'CONNECTED · WARN':'CONNECTED';badge.className=`badge ${diagnostics.length?'warn':'ok'}`;return d;
+      badge.textContent=custom.length||diagnostics.length?'CONNECTED · WARN':'CONNECTED';badge.className=`badge ${custom.length||diagnostics.length?'warn':'ok'}`;return d;
     }catch(e){
       ['aVisitors','aYesterday','a7Days','a30Days','aSessions','aRealtime','aWhatsapp','aConversion'].forEach(id=>set(id,'—'));
       st.textContent=e.message;headline.textContent='Analytics API 暂时无法读取。';warnings.textContent='请检查 GA4 Property 权限、Cloudflare Secrets 和 Google Analytics Data API。';badge.textContent='ERROR';badge.className='badge warn';throw e;
