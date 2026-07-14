@@ -1,9 +1,9 @@
-const STATIC_URL = '/assets/data/rate-expectation.json?v=11.0.3';
+const STATIC_URL = '/assets/data/rate-expectation.json?v=stable-data-1';
 const CME_PAGE_URL = 'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html';
 const CME_API_BASE = 'https://markets.api.cmegroup.com/fedwatch/v1';
 const EDGE_REFRESH_SECONDS = 300;
 const LAST_GOOD_SECONDS = 86400;
-const ENGINE_VERSION = '11.0.3-fedwatch-official-exact-no-kv';
+const ENGINE_VERSION = 'stable-data-1-fedwatch-exact-no-kv';
 
 function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -291,7 +291,7 @@ function buildResult(official, fallback, checkedAt, sourceMode) {
 async function readLastGood(request) {
   try {
     const cache = caches.default;
-    const key = new Request(`${new URL(request.url).origin}/__cache/fedwatch-last-good-v1103`, { method: 'GET' });
+    const key = new Request(`${new URL(request.url).origin}/__cache/fedwatch-last-good-stable-data-1`, { method: 'GET' });
     const hit = await cache.match(key);
     return hit ? await hit.json() : null;
   } catch { return null; }
@@ -300,7 +300,7 @@ async function readLastGood(request) {
 async function storeLastGood(request, data, context) {
   try {
     const cache = caches.default;
-    const key = new Request(`${new URL(request.url).origin}/__cache/fedwatch-last-good-v1103`, { method: 'GET' });
+    const key = new Request(`${new URL(request.url).origin}/__cache/fedwatch-last-good-stable-data-1`, { method: 'GET' });
     const response = new Response(JSON.stringify(data), {
       headers: {
         'content-type': 'application/json; charset=utf-8',
