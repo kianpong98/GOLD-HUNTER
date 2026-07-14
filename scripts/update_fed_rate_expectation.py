@@ -327,7 +327,52 @@ def main() -> int:
 
     if result is None:
         write_diagnostic(checked_at, errors)
-        print("CME is temporarily unavailable or blocking automation. Existing verified snapshot was preserved.")
+        # A successful GitHub run must still leave an auditable heartbeat.
+        # Preserve the last verified probabilities, but record that GitHub checked
+        # the source and had to retain the fallback. This is NOT labelled live.
+        rows = existing.get("outcomes") if isinstance(existing.get("outcomes"), list) else []
+        total = round(sum(float(row.get("probability", 0)) for row in rows), 1) if rows else 0
+        existing_valid = (
+            bool(existing.get("meetingDate"))
+            and bool(existing.get("currentTargetRange"))
+            and len(rows) >= 2
+            and 98.5 <= total <= 101.5
+        )
+        if existing_valid:
+            prior_checked = existing.get("lastCheckedAt") or existing.get("updatedAt")
+            checkpoint_due = True
+            if prior_checked:
+                try:
+                    prior = datetime.fromisoformat(str(prior_checked).replace("Z", "+00:00"))
+                    checkpoint_due = checked_at - prior >= timedelta(hours=MIN_CHECKPOINT_HOURS)
+                except ValueError:
+                    pass
+            if checkpoint_due or not existing.get("githubChecked"):
+                now_text = checked_at.isoformat().replace("+00:00", "Z")
+                fallback = {
+                    **existing,
+                    "lastCheckedAt": now_text,
+                    "source": "CME FedWatch",
+                    "sourceUrl": CME_PAGE,
+                    "sourceMode": "github-verified-fallback",
+                    "sourceStatus": "cached",
+                    "live": False,
+                    "githubChecked": True,
+                    "githubSynced": True,
+                    "officialFetchSucceeded": False,
+                    "lastOfficialFetchError": " | ".join(errors),
+                    "probabilityTotal": total,
+                    "engineVersion": ENGINE_VERSION,
+                    "kvWrite": False,
+                    "note": "GitHub Actions verified and preserved the last valid CME snapshot because CME blocked or failed the current fetch. No Workers KV writes.",
+                }
+                OUT.parent.mkdir(parents=True, exist_ok=True)
+                OUT.write_text(json.dumps(fallback, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                print("CME unavailable; wrote a verified GitHub fallback heartbeat without changing probabilities.")
+            else:
+                print("CME unavailable; existing verified fallback remains fresh. No file change needed.")
+        else:
+            print("CME unavailable and no valid existing snapshot was available. No file was overwritten.")
         for error in errors:
             print("-", error)
         return 0
@@ -384,6 +429,10 @@ def main() -> int:
         "sourceTransport": result.get("mode"),
         "sourceStatus": "live",
         "live": True,
+        "githubChecked": True,
+        "githubSynced": True,
+        "officialFetchSucceeded": True,
+        "lastOfficialFetchError": "",
         "exactOfficialValues": True,
         "probabilityTotal": total,
         "meetingDateTime": make_datetime(meeting_date),
