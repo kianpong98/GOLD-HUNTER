@@ -32,7 +32,7 @@ import requests
 
 OUT = Path("assets/data/rate-expectation.json")
 DEBUG_DIR = Path("artifacts/fed-rate-calculation-debug")
-ENGINE_VERSION = "fed-futures-calculated-2.2-dual-official-source-no-kv"
+ENGINE_VERSION = "fed-futures-calculated-2.3-cme-method-no-kv"
 MIN_CHECKPOINT_HOURS = 6
 
 FRED_MULTI_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=EFFR,DFEDTARL,DFEDTARU"
@@ -166,9 +166,9 @@ def yahoo_symbols(meeting: date) -> list[str]:
     ]
 
 
-def fetch_yahoo_price(meeting: date) -> tuple[float, str, str]:
+def fetch_yahoo_contract_price(contract_month: date) -> tuple[float, str, str]:
     errors: list[str] = []
-    for symbol in yahoo_symbols(meeting):
+    for symbol in yahoo_symbols(contract_month):
         try:
             url = YAHOO_CHART.format(symbol=requests.utils.quote(symbol, safe=""))
             response = requests.get(
@@ -219,24 +219,40 @@ def fetch_stooq_price() -> tuple[float, str, str]:
     return price, "Stooq delayed continuous 30-Day Fed Funds futures", stamp
 
 
-def fetch_futures_price(meeting: date) -> tuple[float, str, str, list[str]]:
+def fetch_contract_pair(meeting: date) -> tuple[dict[str, Any], list[str]]:
+    """Fetch the prior-month and meeting-month dated ZQ contracts.
+
+    CME's published methodology uses the change in implied average EFFR between
+    adjacent monthly Fed Funds contracts to infer the binary probability for the
+    next meeting. Using only the meeting-month contract and today's EFFR can
+    greatly exaggerate probabilities when the meeting occurs near month-end.
+    """
     errors: list[str] = []
+    if meeting.month == 1:
+        prior_month = date(meeting.year - 1, 12, 1)
+    else:
+        prior_month = date(meeting.year, meeting.month - 1, 1)
+    meeting_month = date(meeting.year, meeting.month, 1)
+
     try:
-        price, source, stamp = fetch_yahoo_price(meeting)
-        return price, source, stamp, errors
+        prior_price, prior_source, prior_time = fetch_yahoo_contract_price(prior_month)
     except Exception as exc:
-        errors.append(f"Yahoo: {exc}")
-    # Continuous fallback is only safe when the meeting is in the current/next contract month.
-    today = datetime.now(timezone.utc).date()
-    month_distance = (meeting.year-today.year)*12 + meeting.month-today.month
-    if month_distance not in (0, 1):
-        raise RuntimeError("Dated futures quote unavailable and continuous fallback is unsafe for this meeting; " + " | ".join(errors))
+        raise RuntimeError(f"Prior-month dated ZQ contract unavailable: {exc}") from exc
     try:
-        price, source, stamp = fetch_stooq_price()
-        return price, source, stamp, errors
+        meeting_price, meeting_source, meeting_time = fetch_yahoo_contract_price(meeting_month)
     except Exception as exc:
-        errors.append(f"Stooq: {exc}")
-    raise RuntimeError(" | ".join(errors))
+        raise RuntimeError(f"Meeting-month dated ZQ contract unavailable: {exc}") from exc
+
+    return {
+        "priorPrice": prior_price,
+        "priorSource": prior_source,
+        "priorDataTime": prior_time,
+        "priorContractMonth": prior_month.isoformat(),
+        "meetingPrice": meeting_price,
+        "meetingSource": meeting_source,
+        "meetingDataTime": meeting_time,
+        "meetingContractMonth": meeting_month.isoformat(),
+    }, errors
 
 
 def next_meeting(existing: dict[str, Any]) -> date:
@@ -260,87 +276,81 @@ def make_meeting_datetime(meeting: date) -> str:
 
 def calculate_probabilities(
     meeting: date,
-    futures_price: float,
-    effr: float,
+    contract_pair: dict[str, Any],
     target_low: float,
     target_high: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    days = calendar.monthrange(meeting.year, meeting.month)[1]
-    # Policy changes are normally effective the day after the announcement.
-    pre_days = meeting.day
-    post_days = days - pre_days
-    if post_days < 1:
-        raise RuntimeError("Meeting leaves no post-decision calendar days in contract month")
+    """Calculate the next-meeting binary probability using adjacent ZQ contracts.
 
-    implied_month_avg = 100.0 - futures_price
-    expected_post_effr = (implied_month_avg * days - effr * pre_days) / post_days
+    For the nearest meeting, CME's published methodology derives the probability
+    from the difference between the meeting-month implied rate and the preceding
+    month's implied rate, with policy moves constrained to 25bp increments. This
+    avoids the severe month-end amplification produced by dividing the whole
+    monthly average by only the few post-meeting days.
+    """
+    prior_price = float(contract_pair["priorPrice"])
+    meeting_price = float(contract_pair["meetingPrice"])
+    prior_implied = 100.0 - prior_price
+    meeting_implied = 100.0 - meeting_price
+    implied_change_bps = (meeting_implied - prior_implied) * 100.0
 
     current_mid = (target_low + target_high) / 2.0
-    effr_offset = effr - current_mid
-    # Candidate target ranges at 25bp steps, with EFFR assumed to preserve its
-    # current offset from the target midpoint.
-    candidates: list[tuple[float, float, float]] = []
-    for step in range(-6, 7):
-        lo = target_low + step * 0.25
-        hi = target_high + step * 0.25
-        if lo < 0:
-            continue
-        candidate_effr = (lo + hi) / 2.0 + effr_offset
-        candidates.append((lo, hi, candidate_effr))
-    candidates.sort(key=lambda x: x[2])
+    if abs(implied_change_bps) > 25.0:
+        # The nearest-meeting binary display supports the two adjacent outcomes.
+        # Larger moves generally indicate a wrong/stale contract symbol or that a
+        # multi-meeting probability tree is required. Preserve the prior snapshot.
+        raise RuntimeError(
+            f"Adjacent-contract implied change {implied_change_bps:.2f}bp exceeds binary 25bp range"
+        )
 
-    lower = None
-    upper = None
-    for item in candidates:
-        if item[2] <= expected_post_effr:
-            lower = item
-        if item[2] >= expected_post_effr and upper is None:
-            upper = item
-    if lower is None or upper is None:
-        raise RuntimeError(f"Expected post-meeting EFFR {expected_post_effr:.4f}% is outside validated candidate range")
+    change_prob = max(0.0, min(100.0, abs(implied_change_bps) / 25.0 * 100.0))
+    hold_prob = 100.0 - change_prob
+    direction_step = 1 if implied_change_bps > 0 else -1 if implied_change_bps < 0 else 0
+    next_low = target_low + direction_step * 0.25
+    next_high = target_high + direction_step * 0.25
+    if next_low < 0:
+        raise RuntimeError("Calculated target range would be below zero")
 
-    if lower == upper:
-        # Exact grid point: show it with the nearest adjacent outcome at 0% so
-        # the existing two-row UI remains compatible.
-        idx = candidates.index(lower)
-        neighbor = candidates[idx+1] if idx+1 < len(candidates) else candidates[idx-1]
-        pairs = [(lower, 100.0), (neighbor, 0.0)]
+    hold = {
+        "targetRange": display_range(target_low, target_high),
+        "probability": round(hold_prob, 1),
+        "move": "No change",
+        "direction": "hold",
+    }
+    if direction_step == 0:
+        # Keep the existing two-row UI compatible while being explicit that the
+        # adjacent move is currently priced at zero.
+        next_low, next_high = target_low + 0.25, target_high + 0.25
+        move = {
+            "targetRange": display_range(next_low, next_high),
+            "probability": 0.0,
+            "move": "25 bps hike",
+            "direction": "hike",
+        }
     else:
-        span = upper[2] - lower[2]
-        if span <= 0 or span > 0.251:
-            raise RuntimeError(f"Invalid adjacent EFFR span: {span}")
-        upper_prob = max(0.0, min(100.0, (expected_post_effr - lower[2]) / span * 100.0))
-        lower_prob = 100.0 - upper_prob
-        pairs = [(lower, round(lower_prob, 1)), (upper, round(upper_prob, 1))]
-
-    outcomes: list[dict[str, Any]] = []
-    for (lo, hi, _candidate_effr), prob in pairs:
-        bps = round(((lo + hi) / 2.0 - current_mid) * 100)
-        direction = "cut" if bps < 0 else "hike" if bps > 0 else "hold"
-        move = "No change" if bps == 0 else f"{abs(bps)} bps {direction}"
-        outcomes.append({
-            "targetRange": display_range(lo, hi),
-            "probability": round(prob, 1),
-            "move": move,
+        direction = "hike" if direction_step > 0 else "cut"
+        move = {
+            "targetRange": display_range(next_low, next_high),
+            "probability": round(change_prob, 1),
+            "move": f"25 bps {direction}",
             "direction": direction,
-        })
-    outcomes.sort(key=lambda row: parse_range(row["targetRange"])[0])
+        }
+    outcomes = sorted([hold, move], key=lambda row: parse_range(row["targetRange"])[0])
     total = round(sum(float(row["probability"]) for row in outcomes), 1)
     if not 99.9 <= total <= 100.1:
         outcomes[-1]["probability"] = round(outcomes[-1]["probability"] + (100.0-total), 1)
 
     diagnostics = {
-        "futuresPrice": round(futures_price, 5),
-        "impliedMonthlyAverageEffr": round(implied_month_avg, 5),
-        "currentEffr": round(effr, 5),
-        "expectedPostMeetingEffr": round(expected_post_effr, 5),
-        "daysInContractMonth": days,
-        "preDecisionDays": pre_days,
-        "postDecisionDays": post_days,
-        "effrTargetMidpointOffset": round(effr_offset, 5),
+        "method": "CME adjacent-month binary methodology",
+        "priorContractPrice": round(prior_price, 5),
+        "meetingContractPrice": round(meeting_price, 5),
+        "priorContractImpliedRate": round(prior_implied, 5),
+        "meetingContractImpliedRate": round(meeting_implied, 5),
+        "impliedChangeBps": round(implied_change_bps, 3),
+        "changeProbability": round(change_prob, 1),
+        "holdProbability": round(hold_prob, 1),
     }
     return outcomes, diagnostics
-
 
 def write_debug(payload: dict[str, Any]) -> None:
     DEBUG_DIR.mkdir(parents=True, exist_ok=True)
@@ -357,9 +367,9 @@ def main() -> int:
         errors.extend(reference_errors)
         if not (0 <= target_low < target_high <= 20) or not math.isclose((target_high-target_low)*100, 25, abs_tol=0.6):
             raise RuntimeError(f"Invalid official target range: {target_low}-{target_high}")
-        price, futures_source, futures_time, source_errors = fetch_futures_price(meeting)
+        contract_pair, source_errors = fetch_contract_pair(meeting)
         errors.extend(source_errors)
-        outcomes, diagnostics = calculate_probabilities(meeting, price, effr, target_low, target_high)
+        outcomes, diagnostics = calculate_probabilities(meeting, contract_pair, target_low, target_high)
         total = round(sum(float(x["probability"]) for x in outcomes), 1)
         if not 99.9 <= total <= 100.1:
             raise RuntimeError(f"Probability total failed validation: {total}")
@@ -396,10 +406,11 @@ def main() -> int:
             "updatedAt": updated_at,
             "lastCheckedAt": now_text,
             "officialDataChangedAt": updated_at,
-            "source": "30-Day Fed Funds futures implied estimate",
+            "source": "30-Day Fed Funds futures implied estimate (CME methodology)",
             "sourceUrl": CME_FEDWATCH_URL,
-            "futuresSource": futures_source,
-            "futuresDataTime": futures_time,
+            "futuresSource": f"{contract_pair['priorSource']} + {contract_pair['meetingSource']}",
+            "futuresDataTime": max(contract_pair['priorDataTime'], contract_pair['meetingDataTime']),
+            "futuresContracts": contract_pair,
             "referenceRateSource": reference_source,
             "referenceRateDates": {"EFFR":effr_date, "targetLower":low_date, "targetUpper":high_date},
             "sourceMode": "free-futures-calculation",
@@ -415,7 +426,7 @@ def main() -> int:
             "meetingDateTime": make_meeting_datetime(meeting),
             "meetingTimezone": "Asia/Kuala_Lumpur",
             "meetingTimezoneLabel": "Malaysia Time (MYT)",
-            "note": "Free FedWatch-like estimate calculated from 30-Day Fed Funds futures and official reference rates. FRED is primary; New York Fed EFFR plus the last validated official target range is the outage fallback. It is not CME licensed FedWatch API output.",
+            "note": "Free FedWatch-like estimate calculated with CME's published adjacent-month Fed Funds futures methodology. It is not licensed CME FedWatch API output and may differ slightly because delayed third-party settlement prices are used.",
             "engineVersion": ENGINE_VERSION,
             "kvWrite": False,
             "errors": errors,
@@ -424,7 +435,7 @@ def main() -> int:
         OUT.parent.mkdir(parents=True, exist_ok=True)
         OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
         write_debug({"result":"success", **payload})
-        print(f"Wrote free futures-implied rate probabilities: {outcomes}; changed={changed}; price={price}")
+        print(f"Wrote CME-method futures-implied probabilities: {outcomes}; changed={changed}; contracts={contract_pair}")
         return 0
     except Exception as exc:
         errors.append(f"{type(exc).__name__}: {exc}")
