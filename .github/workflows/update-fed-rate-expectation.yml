@@ -1,4 +1,4 @@
-name: Update free Fed Funds futures probabilities (dual source)
+name: Update free Fed Funds futures probabilities (CME method)
 
 on:
   workflow_dispatch:
@@ -61,7 +61,7 @@ jobs:
               if not d.get('meetingDate'): issues.append('Missing meetingDate')
               if not d.get('currentTargetRange'): issues.append('Missing currentTargetRange')
               if d.get('kvWrite') is not False: issues.append('kvWrite must be false')
-              if d.get('engineVersion')!='fed-futures-calculated-2.2-dual-official-source-no-kv':
+              if d.get('engineVersion')!='fed-futures-calculated-2.3-cme-method-no-kv':
                   issues.append(f"Unexpected engineVersion: {d.get('engineVersion')}")
               if d.get('sourceMode') not in {'free-futures-calculation','calculation-fallback'}:
                   issues.append(f"Unexpected sourceMode: {d.get('sourceMode')}")
