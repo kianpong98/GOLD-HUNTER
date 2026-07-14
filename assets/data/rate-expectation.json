@@ -4,22 +4,22 @@
   "currentTargetRange": "3.50%–3.75%",
   "outcomes": [
     {
-      "targetRange": "3.50%–3.75%",
-      "probability": 22.5,
-      "move": "No change",
-      "direction": "hold"
+      "targetRange": "3.25%–3.50%",
+      "probability": 39.0,
+      "move": "25 bps cut",
+      "direction": "cut"
     },
     {
-      "targetRange": "3.75%–4.00%",
-      "probability": 77.5,
-      "move": "25 bps hike",
-      "direction": "hike"
+      "targetRange": "3.50%–3.75%",
+      "probability": 61.0,
+      "move": "No change",
+      "direction": "hold"
     }
   ],
-  "updatedAt": "2026-07-14T07:26:18.308157Z",
-  "lastCheckedAt": "2026-07-14T07:26:18.308157Z",
-  "officialDataChangedAt": "2026-07-14T07:26:18.308157Z",
-  "source": "30-Day Fed Funds futures implied estimate",
+  "updatedAt": "2026-07-14T07:35:47.901609Z",
+  "lastCheckedAt": "2026-07-14T07:35:47.901609Z",
+  "officialDataChangedAt": "2026-07-14T07:35:47.901609Z",
+  "source": "30-Day Fed Funds futures implied estimate (CME methodology)",
   "sourceUrl": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
   "sourceMode": "free-futures-calculation",
   "sourceStatus": "calculated-live",
@@ -29,8 +29,8 @@
   "meetingDateTime": "2026-07-30T02:00:00+08:00",
   "meetingTimezone": "Asia/Kuala_Lumpur",
   "meetingTimezoneLabel": "Malaysia Time (MYT)",
-  "note": "Free FedWatch-like estimate calculated from 30-Day Fed Funds futures and official reference rates. FRED is primary; New York Fed EFFR plus the last validated official target range is the outage fallback. It is not CME licensed FedWatch API output.",
-  "engineVersion": "fed-futures-calculated-2.2-dual-official-source-no-kv",
+  "note": "Free FedWatch-like estimate calculated with CME's published adjacent-month Fed Funds futures methodology. It is not licensed CME FedWatch API output and may differ slightly because delayed third-party settlement prices are used.",
+  "engineVersion": "fed-futures-calculated-2.3-cme-method-no-kv",
   "kvWrite": false,
   "errors": [
     "FRED combined: RuntimeError: attempt 1: ReadTimeout: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=12); attempt 2: ReadTimeout: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=12); attempt 3: ReadTimeout: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=12)",
@@ -41,22 +41,32 @@
   "officialFetchSucceeded": true,
   "lastOfficialFetchError": "",
   "calculationSucceeded": true,
-  "futuresSource": "Yahoo Finance delayed 30-Day Fed Funds futures (ZQN26.CBT)",
+  "futuresSource": "Yahoo Finance delayed 30-Day Fed Funds futures (ZQ=F) + Yahoo Finance delayed 30-Day Fed Funds futures (ZQN26.CBT)",
   "futuresDataTime": "2026-07-14T04:00:00Z",
   "referenceRateSource": "New York Fed EFFR + validated official target range",
   "referenceRateDates": {
     "EFFR": "2026-07-10",
-    "targetLower": "2026-07-14T00:00:00Z",
-    "targetUpper": "2026-07-14T00:00:00Z"
+    "targetLower": "2026-07-14T07:26:18.308157Z",
+    "targetUpper": "2026-07-14T07:26:18.308157Z"
   },
   "calculation": {
-    "futuresPrice": 96.3675,
-    "impliedMonthlyAverageEffr": 3.6325,
-    "currentEffr": 3.62,
-    "expectedPostMeetingEffr": 3.81375,
-    "daysInContractMonth": 31,
-    "preDecisionDays": 29,
-    "postDecisionDays": 2,
-    "effrTargetMidpointOffset": -0.005
+    "method": "CME adjacent-month binary methodology",
+    "priorContractPrice": 96.27,
+    "meetingContractPrice": 96.3675,
+    "priorContractImpliedRate": 3.73,
+    "meetingContractImpliedRate": 3.6325,
+    "impliedChangeBps": -9.75,
+    "changeProbability": 39.0,
+    "holdProbability": 61.0
+  },
+  "futuresContracts": {
+    "priorPrice": 96.2699966430664,
+    "priorSource": "Yahoo Finance delayed 30-Day Fed Funds futures (ZQ=F)",
+    "priorDataTime": "2026-07-14T04:00:00Z",
+    "priorContractMonth": "2026-06-01",
+    "meetingPrice": 96.36750030517578,
+    "meetingSource": "Yahoo Finance delayed 30-Day Fed Funds futures (ZQN26.CBT)",
+    "meetingDataTime": "2026-07-14T04:00:00Z",
+    "meetingContractMonth": "2026-07-01"
   }
 }
