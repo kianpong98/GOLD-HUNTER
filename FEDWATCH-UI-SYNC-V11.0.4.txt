@@ -1,0 +1,9 @@
+Gold Hunter FedWatch UI Sync v11.0.4
+
+Changed only the FedWatch data path; no design or layout changes.
+- Frontend consumes outcomes[] from /api/rate-expectation-engine.
+- Cache-busting script/API versions prevent the old 78/22 bundle from remaining in browsers/CDN.
+- New Cache API key prevents an old last-good 78/22 snapshot from being reused.
+- Browser retains only the latest verified probability table as an additional no-KV fallback.
+- Static emergency snapshot verified against CME chart: 54.6% / 45.4%.
+- No Workers KV writes.

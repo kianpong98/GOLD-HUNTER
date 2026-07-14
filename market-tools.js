@@ -3,7 +3,7 @@
   const SNAPSHOT_API='/api/market-snapshot';
   const ETF_DATA='/api/etf-engine';
   const GOLD_RESERVES_API='/api/gold-reserves-engine';
-  const RATE_EXPECTATION_API='/api/rate-expectation-engine?v=11.0.3';
+  const RATE_EXPECTATION_API='/api/rate-expectation-engine?v=11.0.4-fed-ui-sync';
   const sessions=[
     {name:'Sydney',short:'SYD',tz:'Australia/Sydney',open:8,close:17},
     {name:'Tokyo',short:'TKY',tz:'Asia/Tokyo',open:8,close:17},
@@ -122,9 +122,28 @@
           return data&&typeof data==='object'?data:null;
         }catch(_){return null;}
       }
-      const d=(await readJson(RATE_EXPECTATION_API))
-        ||(await readJson('./assets/data/rate-expectation.json?v=11.0.3'))
-        ||(await readJson('/assets/data/rate-expectation.json?v=11.0.3'))
+      // Always request the live engine first with a cache-busting query. The engine itself
+      // uses a five-minute edge cache and never writes Workers KV.
+      const apiData=await readJson(`${RATE_EXPECTATION_API}&_=${Date.now()}`);
+      const validRateData=value=>{
+        if(!value||!Array.isArray(value.outcomes)||!value.outcomes.length)return false;
+        const rows=value.outcomes.map(x=>Number(x.probability)).filter(Number.isFinite);
+        const total=rows.reduce((sum,n)=>sum+n,0);
+        return rows.length===value.outcomes.length&&total>=98.5&&total<=101.5;
+      };
+      let d=validRateData(apiData)?apiData:null;
+      if(d){
+        try{localStorage.setItem('ghFedWatchLastVerified',JSON.stringify(d));}catch{}
+      }
+      if(!d){
+        try{
+          const saved=JSON.parse(localStorage.getItem('ghFedWatchLastVerified')||'null');
+          if(validRateData(saved))d={...saved,live:false,sourceStatus:'browser-last-verified'};
+        }catch{}
+      }
+      d=d
+        ||(await readJson('./assets/data/rate-expectation.json?v=11.0.4-fed-ui-sync'))
+        ||(await readJson('/assets/data/rate-expectation.json?v=11.0.4-fed-ui-sync'))
         ||fallbackData;
       if(!d)throw new Error('Rate expectations are awaiting a verified CME update');
       const outcomes=(Array.isArray(d.outcomes)?d.outcomes:[])
@@ -185,7 +204,7 @@
           <p>${impactText}</p>
         </div>
         <div class="rate-source-row">
-          <small>${d.live?'Live CME':d.sourceStatus==='cached-last-good'?'Cached last verified CME':'Verified fallback'} · Checked ${esc((d.lastCheckedAt||d.updatedAt)?new Date(d.lastCheckedAt||d.updatedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}):'pending')} · Total ${formatProbability(total)}% · No KV writes</small>
+          <small>${d.live?'Live CME':d.sourceStatus==='cached-last-good'?'Cached last verified CME':d.sourceStatus==='browser-last-verified'?'Browser last verified CME':'Verified fallback'} · Checked ${esc((d.lastCheckedAt||d.updatedAt)?new Date(d.lastCheckedAt||d.updatedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}):'pending')} · Total ${formatProbability(total)}% · No KV writes</small>
           <a href="${esc(d.sourceUrl||'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html')}" target="_blank" rel="noopener">View source ↗</a>
         </div>`;
       const countdownEl=box.querySelector('[data-rate-countdown]');
