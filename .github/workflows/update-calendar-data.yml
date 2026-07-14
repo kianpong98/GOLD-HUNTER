@@ -1,22 +1,20 @@
-name: Update official calendar data
+name: Update official economic data
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-      - feature/news-engine
+    branches: [main, feature/news-engine]
     paths:
       - '.github/workflows/update-calendar-data.yml'
       - 'scripts/update_official_data.py'
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/15 * * * *'
 
 permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: official-economic-data-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -24,48 +22,42 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout current branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install dependency
-        run: pip install requests
-
-      - name: Download official economic data
+      - run: pip install requests
+      - name: Refresh verified official data
         run: python scripts/update_official_data.py
-
-      - name: Validate coverage
+      - name: Validate data and ten-release history
         run: |
           python - <<'PY'
           import json
-          data=json.load(open('data/official-data.json',encoding='utf-8'))
+          d=json.load(open('data/official-data.json',encoding='utf-8'))
           required=['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc']
-          ready=[k for k in required if data.get('metrics',{}).get(k,{}).get('actual')]
-          missing=[k for k in required if k not in ready]
-          assert ready, 'No official metrics were generated'
-          print('Official-data ready:', ', '.join(ready))
-          if missing: print('Partial sync; previous cache preserved for:', ', '.join(missing))
+          ready=[]
+          for key in required:
+              metric=d.get('metrics',{}).get(key,{})
+              if metric.get('actual'):
+                  ready.append(key)
+                  history=metric.get('history') or []
+                  assert len(history)<=10
+                  assert all(x.get('period') and x.get('actual') for x in history)
+          assert ready, 'No official metrics available'
+          print('Ready:', ', '.join(ready))
           PY
-
-      - name: Commit official data cache
+      - name: Commit only when official values changed
         shell: bash
         run: |
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/official-data.json
-          if git diff --cached --quiet; then
-            echo "No official data changes."
-            exit 0
-          fi
-          git commit -m "Update official calendar data"
+          if git diff --cached --quiet; then echo "No official data changes."; exit 0; fi
+          git commit -m "Update verified official economic data"
           BRANCH="${GITHUB_REF_NAME}"
           for attempt in 1 2 3 4 5; do
             git fetch origin "$BRANCH"

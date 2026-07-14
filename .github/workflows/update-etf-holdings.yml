@@ -10,7 +10,12 @@ on:
       - '.github/workflows/update-etf-holdings.yml'
       - 'scripts/update_etf_holdings.py'
   schedule:
-    - cron: '30 23 * * 1-5'
+    # The official archive is updated after the New York trading day. Running
+    # more than once handles publication delays and both EDT/EST without
+    # producing commits when the official workbook has not changed.
+    - cron: '30 3 * * 2-6'
+    - cron: '30 5 * * 2-6'
+    - cron: '30 8 * * 2-6'
 
 permissions:
   contents: write
@@ -22,7 +27,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v4
@@ -38,34 +43,46 @@ jobs:
       - name: Install dependencies
         run: pip install requests openpyxl
 
-      - name: Download official SPDR archive
+      - name: Download and parse official SPDR archive
         run: python scripts/update_etf_holdings.py
 
-      - name: Validate output
+      - name: Validate official output
         run: |
           python - <<'PY'
           import json
+          from datetime import date, datetime
           p='assets/data/spdr-gld-holdings.json'
           d=json.load(open(p,encoding='utf-8'))
           rows=d.get('records',[])
-          assert rows, 'No ETF records were generated'
-          assert len(rows) <= 30
-          print('ETF records:',len(rows),'latest:',rows[-1])
+          assert 2 <= len(rows) <= 30, f'Invalid ETF record count: {len(rows)}'
+          dates=[r['date'] for r in rows]
+          values=[float(r['holdings']) for r in rows]
+          assert dates == sorted(set(dates)), 'ETF dates are duplicated or unsorted'
+          assert all(100 < v < 5000 for v in values), 'ETF holdings are outside validation range'
+          latest=datetime.strptime(dates[-1],'%Y-%m-%d').date()
+          age=(date.today()-latest).days
+          assert age <= 10, f'Official ETF archive appears stale: latest={latest}, age={age} days'
+          assert d.get('officialDate') == dates[-1]
+          print('ETF validation passed:', dates[-1], values[-1], 'tonnes; age', age, 'days')
           PY
 
-      - name: Commit updated holdings
+      - name: Commit only when official records changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/data/spdr-gld-holdings.json
-          if git diff --cached --quiet; then echo "No ETF changes."; exit 0; fi
-          git commit -m "Update SPDR GLD holdings"
+          if git diff --cached --quiet; then
+            echo "Official SPDR archive has no new record. No commit needed."
+            exit 0
+          fi
+          LATEST=$(python -c "import json; d=json.load(open('assets/data/spdr-gld-holdings.json')); print(d['officialDate'])")
+          git commit -m "Update SPDR GLD holdings ${LATEST}"
           BRANCH="${GITHUB_REF_NAME}"
           for attempt in 1 2 3 4 5; do
             git fetch origin "$BRANCH"
             git rebase "origin/$BRANCH"
             if git push origin "HEAD:$BRANCH"; then exit 0; fi
             git rebase --abort 2>/dev/null || true
-            sleep $((attempt * 2))
+            sleep $((attempt * 3))
           done
           exit 1
