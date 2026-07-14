@@ -1,26 +1,36 @@
 {
-  "meetingDate": "2026-07-30",
+  "meetingDate": "2026-07-29",
   "meetingLabel": "Next FOMC decision",
-  "currentTargetRange": "3.75%–4.00%",
+  "currentTargetRange": "3.50%–3.75%",
   "outcomes": [
     {
       "targetRange": "3.50%–3.75%",
-      "probability": 78,
-      "move": "25 bps cut",
-      "direction": "cut"
+      "probability": 54.6,
+      "move": "No change",
+      "direction": "hold"
     },
     {
       "targetRange": "3.75%–4.00%",
-      "probability": 22,
-      "move": "No change",
-      "direction": "hold"
+      "probability": 45.4,
+      "move": "25 bps hike",
+      "direction": "hike"
     }
   ],
-  "updatedAt": "2026-07-12T11:00:00Z",
+  "updatedAt": "2026-07-14T00:00:00Z",
+  "lastCheckedAt": "2026-07-14T00:00:00Z",
+  "officialDataChangedAt": "2026-07-14T00:00:00Z",
   "source": "CME FedWatch",
   "sourceUrl": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
-  "note": "Probabilities are market-implied estimates and may change during the trading day.",
+  "sourceMode": "verified-seed-awaiting-github-sync",
+  "sourceStatus": "cached",
+  "live": false,
+  "exactOfficialValues": true,
+  "probabilityTotal": 100.0,
   "meetingDateTime": "2026-07-30T02:00:00+08:00",
   "meetingTimezone": "Asia/Kuala_Lumpur",
-  "meetingTimezoneLabel": "Malaysia Time (MYT)"
+  "meetingTimezoneLabel": "Malaysia Time (MYT)",
+  "note": "Target-rate probabilities are updated by GitHub Actions directly from CME FedWatch. No Workers KV writes.",
+  "engineVersion": "fedwatch-github-sync-1",
+  "kvWrite": false,
+  "errors": []
 }

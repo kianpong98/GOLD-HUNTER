@@ -594,10 +594,15 @@ export async function onRequestGet({request,env}){
     }catch{historySnapshot={};}
   }
   const staticOfficial=await fetchStaticOfficial(request);
+  // Public requests use the GitHub-generated official snapshot as the single source of truth.
+  // Runtime connectors are only used for an authenticated force refresh, preventing
+  // visitor traffic from consuming KV writes or hammering official providers.
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null},fedFomc={metrics:{},histories:{},savedAt:null};
-  try{bls=await fetchBls(env,forceRefresh);}catch(e){bls.error=e.message;}
-  try{fred=await fetchFred(env,forceRefresh);}catch(e){fred.error=e.message;}
-  try{fedFomc=await fetchFederalReserveFomc(env,forceRefresh);}catch(e){fedFomc.error=e.message;}
+  if(forceRefresh){
+    try{bls=await fetchBls(env,true);}catch(e){bls.error=e.message;}
+    try{fred=await fetchFred(env,true);}catch(e){fred.error=e.message;}
+    try{fedFomc=await fetchFederalReserveFomc(env,true);}catch(e){fedFomc.error=e.message;}
+  }
   const runtimeMetrics={...(fred.metrics||{}),...(bls.metrics||{}),...(fedFomc.metrics||{})};
   const runtimeHistories={...(fred.histories||{}),...(bls.histories||{}),...(fedFomc.histories||{})};
   const official={
@@ -610,7 +615,7 @@ export async function onRequestGet({request,env}){
   // Preserve the latest ten official releases independently from connector caches.
   // This prevents Last Releases from disappearing when BLS/FRED/BEA is temporarily
   // unavailable, a cache expires, or a deployment starts with an empty KV cache.
-  if(env.GH_MARKET_DATA){
+  if(env.GH_MARKET_DATA&&forceRefresh){
     try{
       const histories=cleanOfficialHistorySnapshot(official.histories);
       if(Object.keys(histories).length){
@@ -716,11 +721,11 @@ export async function onRequestGet({request,env}){
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
   const responseNow=new Date().toISOString();
-  return json({engineVersion:'stable-data-1',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'stable-data-phase1-news-static-first',events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
-    engineVersion:'stable-data-1',
+    engineVersion:'11.0.1-history-safe',
     step:'start',
     timestamp:new Date().toISOString(),
     kvBound:Boolean(env&&env.GH_MARKET_DATA)
@@ -769,21 +774,19 @@ export async function onRequestPost({request,env}){
     }
 
     const updatedAt=new Date().toISOString();
-    let existingPayload=null;
-    try{existingPayload=await env.GH_MARKET_DATA.get(ADMIN_OVERRIDES_KEY,{type:'json'});}catch{}
-    const mergedOverrides={...(existingPayload?.overrides||{}),...overrides};
-    const payload={version:'stable-data-1',updatedAt,overrides:mergedOverrides};
+    const payload={version:'11.0.1-history-safe',updatedAt,overrides};
     const serialized=JSON.stringify(payload);
     debug.overrideCount=Object.keys(overrides).length;
     debug.payloadBytes=new TextEncoder().encode(serialized).length;
     debug.kvKey=ADMIN_OVERRIDES_KEY;
 
     debug.step='kv-read-existing';
-    const existing=existingPayload;
+    let existing=null;
+    try{existing=await env.GH_MARKET_DATA.get(ADMIN_OVERRIDES_KEY,{type:'json'});}catch{}
     if(existing&&sameMeaningfulData(existing,payload)){
       debug.step='complete-no-change';
       debug.writeSkipped=true;
-      return json({ok:true,unchanged:true,version:'stable-data-1',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
+      return json({ok:true,unchanged:true,version:'11.0.1-history-safe',count:Object.keys(overrides).length,updatedAt:existing.updatedAt||updatedAt,overrides:existing.overrides||{},debug},200,{'cache-control':'no-store'});
     }
 
     debug.step='kv-put';
@@ -795,12 +798,12 @@ export async function onRequestPost({request,env}){
     debug.readbackVersion=verify?.version||null;
 
     debug.step='verify-readback';
-    if(!verify||verify.version!=='stable-data-1'){
+    if(!verify||verify.version!=='11.0.1-history-safe'){
       return json({error:'KV write verification failed.',debug},500,{'cache-control':'no-store'});
     }
 
     debug.step='complete';
-    return json({ok:true,version:'stable-data-1',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
+    return json({ok:true,version:'11.0.1-history-safe',count:Object.keys(overrides).length,updatedAt,overrides:verify.overrides||{},debug},200,{'cache-control':'no-store'});
   }catch(error){
     debug.failedAt=debug.step;
     debug.exception={

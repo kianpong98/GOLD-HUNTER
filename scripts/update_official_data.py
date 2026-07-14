@@ -190,7 +190,6 @@ def fetch_bls() -> tuple[dict[str, Any], dict[str, str]]:
         metric = bls_metric(series_by_id.get(cfg["id"], {}), cfg)
         if metric:
             metric["source"] = "U.S. Bureau of Labor Statistics"
-            metric["fetchedAt"] = datetime.now(timezone.utc).isoformat()
             metrics[event_type] = metric
         else:
             errors[event_type] = "BLS returned no usable observations" + (f"; bulk: {bulk_error}" if bulk_error else "")
@@ -286,7 +285,6 @@ def fetch_fred() -> tuple[dict[str, Any], dict[str, str]]:
         if not metric:
             raise RuntimeError("No usable metric")
         metric["source"] = "FRED (official-source series)"
-        metric["fetchedAt"] = datetime.now(timezone.utc).isoformat()
         return event_type, metric
 
     with ThreadPoolExecutor(max_workers=len(FRED_SERIES)) as pool:
@@ -448,15 +446,19 @@ def main() -> None:
 
     previous_metrics = existing.get("metrics") or {}
     changed = metrics != previous_metrics
+    if not changed and existing:
+        print("No official values changed; preserving the existing snapshot byte-for-byte.")
+        print(json.dumps(existing.get("coverage") or {key: bool(metrics.get(key, {}).get("actual")) for key in required}, indent=2))
+        return
     payload = {
-        "schemaVersion": 2,
-        "updatedAt": datetime.now(timezone.utc).isoformat() if changed else (existing.get("updatedAt") or datetime.now(timezone.utc).isoformat()),
+        "schemaVersion": 3,
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
         "metrics": metrics,
         "errors": errors,
         "coverage": {key: bool(metrics.get(key, {}).get("actual")) for key in required},
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(payload["coverage"], indent=2))
     if missing:
         print(f"WARNING: official-data sync partial; preserved available/previous metrics. Missing: {', '.join(missing)}")
