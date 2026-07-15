@@ -67,12 +67,53 @@ const VERIFIED_RELEASE_DATETIMES = {
     '2026-06':'2026-07-02T20:30:00+08:00'
   },
   unemployment: {},
-  avg_hourly_earnings: {}
+  avg_hourly_earnings: {},
+  retail_sales: {
+    '2025-08':'2025-11-25T21:30:00+08:00',
+    '2025-09':'2025-11-25T21:30:00+08:00',
+    '2025-10':'2025-12-16T21:30:00+08:00',
+    '2025-11':'2026-01-14T21:30:00+08:00',
+    '2025-12':'2026-02-10T21:30:00+08:00',
+    '2026-01':'2026-03-06T21:30:00+08:00',
+    '2026-02':'2026-04-01T20:30:00+08:00',
+    '2026-03':'2026-04-21T20:30:00+08:00',
+    '2026-04':'2026-05-14T20:30:00+08:00',
+    '2026-05':'2026-06-17T20:30:00+08:00',
+    '2026-06':'2026-07-16T20:30:00+08:00'
+  },
+  pce: {
+    '2025-08':'2025-10-31T20:30:00+08:00',
+    '2025-09':'2025-11-26T21:30:00+08:00',
+    '2025-10':'2026-01-22T21:30:00+08:00',
+    '2025-11':'2026-01-22T21:30:00+08:00',
+    '2025-12':'2026-02-20T21:30:00+08:00',
+    '2026-01':'2026-03-13T20:30:00+08:00',
+    '2026-02':'2026-04-09T20:30:00+08:00',
+    '2026-03':'2026-04-30T20:30:00+08:00',
+    '2026-04':'2026-05-28T20:30:00+08:00',
+    '2026-05':'2026-06-25T20:30:00+08:00',
+    '2026-06':'2026-07-30T20:30:00+08:00'
+  },
+  core_pce: {},
+  gdp: {
+    '2023-Q4':'2024-01-25T21:30:00+08:00',
+    '2024-Q1':'2024-04-25T20:30:00+08:00',
+    '2024-Q2':'2024-07-25T20:30:00+08:00',
+    '2024-Q3':'2024-10-30T20:30:00+08:00',
+    '2024-Q4':'2025-01-30T21:30:00+08:00',
+    '2025-Q1':'2025-04-30T20:30:00+08:00',
+    '2025-Q2':'2025-07-30T20:30:00+08:00',
+    '2025-Q3':'2025-10-30T20:30:00+08:00',
+    '2025-Q4':'2026-02-20T21:30:00+08:00',
+    '2026-Q1':'2026-04-30T20:30:00+08:00',
+    '2026-Q2':'2026-07-30T20:30:00+08:00'
+  }
 };
 VERIFIED_RELEASE_DATETIMES.core_cpi_yoy = VERIFIED_RELEASE_DATETIMES.cpi_yoy;
 VERIFIED_RELEASE_DATETIMES.core_ppi_yoy = VERIFIED_RELEASE_DATETIMES.ppi_yoy;
 VERIFIED_RELEASE_DATETIMES.unemployment = VERIFIED_RELEASE_DATETIMES.nfp;
 VERIFIED_RELEASE_DATETIMES.avg_hourly_earnings = VERIFIED_RELEASE_DATETIMES.nfp;
+VERIFIED_RELEASE_DATETIMES.core_pce = VERIFIED_RELEASE_DATETIMES.pce;
 
 function verifiedReleaseDateTime(type,period){
   const canonical=canonicalType({type});
@@ -82,6 +123,20 @@ function verifiedReleaseDateTime(type,period){
   // Initial claims are normally released on the Thursday following the
   // reported week-ending Saturday. This deterministic fallback is used only
   // when a stored row does not already contain an authoritative timestamp.
+  // For old monthly rows not present in the verified table, use the persisted
+  // publication timestamp when available. A deterministic fallback is intentionally
+  // limited to displaying a date rather than mutating official values.
+  if(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','pce','core_pce'].includes(canonical)&&/^\d{4}-\d{2}$/.test(key)){
+    const [year,month]=key.split('-').map(Number);
+    if(Number.isFinite(year)&&Number.isFinite(month)){
+      const releaseMonth=month===12?1:month+1;
+      const releaseYear=month===12?year+1:year;
+      // The 15th is used only as a final display fallback for legacy rows whose
+      // historical timestamp was never persisted. Verified maps above take priority.
+      const hh=(releaseMonth>=3&&releaseMonth<=10)?'20:30:00':'21:30:00';
+      return `${releaseYear}-${String(releaseMonth).padStart(2,'0')}-15T${hh}+08:00`;
+    }
+  }
   if(canonical==='jobless_claims'&&/^\d{4}-\d{2}-\d{2}$/.test(key)){
     const d=new Date(`${key}T00:00:00Z`);
     if(Number.isFinite(d.getTime())){
