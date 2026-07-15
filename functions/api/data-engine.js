@@ -931,17 +931,18 @@ export async function onRequestGet({request,env}){
   const connectionFor=(event)=>{
     const type=event.type;
     let provider='FRED official fallback',primary=connectorSources.fred,fallback=null;
-    if(blsTypes.has(type)){provider='BLS Public Data API';primary=connectorSources.bls;}
+    if(blsTypes.has(type)){provider='BLS Public Data API';primary=connectorSources.bls;fallback=connectorSources.fred;}
     else if(type==='jobless_claims'){provider='U.S. Department of Labor';primary=connectorSources.dol;fallback=connectorSources.fred;}
     else if(type==='retail_sales'){provider='U.S. Census Bureau';primary=connectorSources.census;fallback=connectorSources.fred;}
     else if(['gdp','pce','core_pce'].includes(type)){provider='U.S. Bureau of Economic Analysis';primary=connectorSources.bea;fallback=connectorSources.fred;}
-    else if(type==='fomc'){provider='Federal Reserve';primary=connectorSources.federalReserve;}
+    else if(type==='fomc'){provider='Federal Reserve';primary=connectorSources.federalReserve;fallback=connectorSources.fred;}
     const hasCurrentMetric=Boolean(official.metrics?.[type]?.actual);
     const primaryLive=primary?.status==='live';
     const fallbackLive=fallback?.status==='live';
-    const status=primaryLive?'live':fallbackLive||hasCurrentMetric?'cached':'offline';
+    const status=(primaryLive||fallbackLive)?'live':hasCurrentMetric?'cached':'offline';
     const error=primaryLive?'':(primary?.error||'');
-    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess:primary?.lastSuccess||fallback?.lastSuccess||null,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery:status==='live'?'Connected':status==='cached'?(fallbackLive?'Primary unavailable; official fallback connected':'Automatic retry and cached fallback active'):'Official source and fallback unavailable'};
+    const activeProvider=primaryLive?provider:(fallbackLive?'FRED official fallback':provider);
+    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider:activeProvider,primaryProvider:provider,status,lastChecked:primary?.lastChecked||fallback?.lastChecked||responseNow,lastSuccess:primaryLive?(primary?.lastSuccess||null):(fallback?.lastSuccess||primary?.lastSuccess||null),lastDataChanged:staticIso,httpStatus:primaryLive?(primary?.httpStatus??null):(fallbackLive?(fallback?.httpStatus??null):(primary?.httpStatus??null)),latencyMs:primaryLive?(primary?.latencyMs??null):(fallbackLive?(fallback?.latencyMs??null):(primary?.latencyMs??null)),error,recovery:primaryLive?'Connected':fallbackLive?'Connected via FRED fallback':status==='cached'?'Automatic retry and verified cache active':'Official source and FRED fallback unavailable'};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
   return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});

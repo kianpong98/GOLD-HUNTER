@@ -42,6 +42,15 @@ BLS_SERIES = {
 }
 
 FRED_SERIES = {
+    # FRED fallback coverage for every numeric release. Direct agency APIs remain
+    # primary where available; these series are queried only for failed/missing types.
+    "cpi_yoy": {"id": "CPIAUCSL", "mode": "yoy", "suffix": "%", "decimals": 1},
+    "core_cpi_yoy": {"id": "CPILFESL", "mode": "yoy", "suffix": "%", "decimals": 1},
+    "ppi_yoy": {"id": "WPSFD4", "mode": "yoy", "suffix": "%", "decimals": 1},
+    "core_ppi_yoy": {"id": "WPSFD49116", "mode": "yoy", "suffix": "%", "decimals": 1},
+    "nfp": {"id": "PAYEMS", "mode": "change", "suffix": "K", "decimals": 0},
+    "unemployment": {"id": "UNRATE", "mode": "level", "suffix": "%", "decimals": 1},
+    "avg_hourly_earnings": {"id": "CES0500000003", "mode": "mom", "suffix": "%", "decimals": 1},
     "retail_sales": {"id": "RSAFS", "mode": "mom", "suffix": "%", "decimals": 1},
     "jobless_claims": {"id": "ICSA", "mode": "level", "suffix": "K", "decimals": 0, "scale": 0.001},
     "gdp": {"id": "A191RL1Q225SBEA", "mode": "level", "suffix": "%", "decimals": 1, "period": "quarter"},
@@ -249,6 +258,10 @@ def fred_metric(rows: list[dict[str, Any]], cfg: dict[str, Any]) -> dict[str, An
         current = rows[index]["value"]
         if mode == "level":
             return current
+        if mode == "change":
+            if index + 1 >= len(rows):
+                return None
+            return current - rows[index + 1]["value"]
         if mode == "mom":
             if index + 1 >= len(rows) or rows[index + 1]["value"] == 0:
                 return None
@@ -517,30 +530,56 @@ def main() -> None:
     successful_sources: list[str] = []
     attempted_sources: list[str] = []
 
-    if selected & SOURCE_GROUPS["bls"]:
+    # Primary pass: BLS for its seven releases.
+    bls_selected = selected & set(BLS_SERIES)
+    bls_failed: set[str] = set()
+    if bls_selected:
         attempted_sources.append("bls")
         try:
             fresh, partial_errors = fetch_bls()
-            successful_sources.append("bls")
-            for key, metric in fresh.items():
-                if key in selected:
+            if fresh:
+                successful_sources.append("bls")
+            for key in bls_selected:
+                metric = fresh.get(key)
+                if metric and metric.get("actual"):
                     metrics[key] = merge_metric(metrics.get(key), metric)
-            errors.update({key: value for key, value in partial_errors.items() if key in selected})
+                else:
+                    bls_failed.add(key)
+            for key, value in partial_errors.items():
+                if key in bls_selected:
+                    errors[f"primary:{key}"] = value
+                    bls_failed.add(key)
         except Exception as exc:  # noqa: BLE001
-            errors["bls"] = str(exc)
+            errors["primary:bls"] = str(exc)
+            bls_failed.update(bls_selected)
 
-    if selected & SOURCE_GROUPS["fred"]:
+    # FRED is the normal source for Census/DOL/BEA-backed series in this static
+    # updater, and the automatic fallback for any BLS type that failed above.
+    fred_native = selected & {"retail_sales", "jobless_claims", "gdp", "pce", "core_pce"}
+    fred_needed = fred_native | bls_failed
+    if fred_needed:
         attempted_sources.append("fred")
         try:
-            fresh, partial_errors = fetch_fred(selected)
-            successful_sources.append("fred")
-            for key, metric in fresh.items():
-                if key in selected:
+            fresh, partial_errors = fetch_fred(fred_needed)
+            if fresh:
+                successful_sources.append("fred")
+            for key in fred_needed:
+                metric = fresh.get(key)
+                if metric and metric.get("actual"):
+                    if key in bls_failed:
+                        metric = dict(metric)
+                        metric["source"] = "FRED official fallback (primary BLS unavailable)"
                     metrics[key] = merge_metric(metrics.get(key), metric)
-            errors.update({key: value for key, value in partial_errors.items() if key in selected})
+                    errors.pop(f"primary:{key}", None)
+                elif key not in metrics or not metrics.get(key, {}).get("actual"):
+                    errors[f"fallback:{key}"] = partial_errors.get(key, "FRED returned no usable observations")
+            for key, value in partial_errors.items():
+                if key in fred_needed and (key not in metrics or not metrics.get(key, {}).get("actual")):
+                    errors[f"fallback:{key}"] = value
         except Exception as exc:  # noqa: BLE001
-            errors["fred"] = str(exc)
+            errors["fallback:fred"] = str(exc)
 
+    # Federal Reserve statement is primary; FRED target-range series is fallback.
     if "fomc" in selected:
         attempted_sources.append("fomc")
         fomc_official, fomc_official_error = fetch_fomc_official_statements()
@@ -550,10 +589,12 @@ def main() -> None:
         else:
             fomc_fred, fomc_fred_error = fetch_fomc_range()
             if fomc_fred:
-                successful_sources.append("fomc")
+                successful_sources.append("fred")
                 metrics["fomc"] = merge_metric(metrics.get("fomc"), fomc_fred)
+                errors.pop("primary:fomc", None)
             else:
-                errors["fomc"] = " | ".join(x for x in (fomc_official_error, fomc_fred_error) if x)
+                errors["primary:fomc"] = fomc_official_error or "Federal Reserve statement unavailable"
+                errors["fallback:fomc"] = fomc_fred_error or "FRED target range unavailable"
         metrics["fomc"] = sanitize_fomc_metric(metrics.get("fomc"))
 
     missing_selected = [key for key in sorted(selected) if not metrics.get(key, {}).get("actual")]
