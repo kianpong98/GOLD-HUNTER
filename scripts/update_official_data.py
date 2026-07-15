@@ -11,6 +11,7 @@ rely on Cloudflare reaching every upstream source during a visitor request.
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import io
 import json
@@ -286,7 +287,7 @@ def fred_metric(rows: list[dict[str, Any]], cfg: dict[str, Any]) -> dict[str, An
     }
 
 
-def fetch_fred() -> tuple[dict[str, Any], dict[str, str]]:
+def fetch_fred(selected: set[str] | None = None) -> tuple[dict[str, Any], dict[str, str]]:
     from concurrent.futures import ThreadPoolExecutor, as_completed
     metrics: dict[str, Any] = {}
     errors: dict[str, str] = {}
@@ -299,8 +300,11 @@ def fetch_fred() -> tuple[dict[str, Any], dict[str, str]]:
         metric["source"] = "FRED (official-source series)"
         return event_type, metric
 
-    with ThreadPoolExecutor(max_workers=len(FRED_SERIES)) as pool:
-        futures = {pool.submit(one, item): item[0] for item in FRED_SERIES.items()}
+    items = [(key, cfg) for key, cfg in FRED_SERIES.items() if not selected or key in selected]
+    if not items:
+        return metrics, errors
+    with ThreadPoolExecutor(max_workers=min(3, len(items))) as pool:
+        futures = {pool.submit(one, item): item[0] for item in items}
         for future in as_completed(futures):
             event_type = futures[future]
             try:
@@ -363,7 +367,7 @@ def fetch_fomc_official_statements() -> tuple[dict[str, Any] | None, str | None]
             r'(\d+(?:\.\d+)?)\s*(?:to|–|-)\s*(\d+(?:\.\d+)?)\s*percent',
             re.I,
         )
-        for url in links[:18]:
+        for url in links[:5]:
             match_date = re.search(r'monetary(\d{4})(\d{2})(\d{2})a\.htm', url, re.I)
             if not match_date:
                 continue
@@ -459,7 +463,48 @@ def fetch_fomc_range() -> tuple[dict[str, Any] | None, str | None]:
         return None, str(exc)
 
 
+SOURCE_GROUPS = {
+    "bls": set(BLS_SERIES),
+    "fred": set(FRED_SERIES),
+    "fomc": {"fomc"},
+}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Update verified official macro data.")
+    parser.add_argument(
+        "--types",
+        default="",
+        help="Comma-separated event types to refresh. Empty means all supported types.",
+    )
+    parser.add_argument(
+        "--status-file",
+        default="",
+        help="Optional JSON path for a machine-readable poll result.",
+    )
+    return parser.parse_args()
+
+
+def wanted_types(raw: str) -> set[str]:
+    requested = {part.strip().lower() for part in str(raw or "").split(",") if part.strip()}
+    supported = set().union(*SOURCE_GROUPS.values())
+    unknown = sorted(requested - supported)
+    if unknown:
+        raise SystemExit("Unsupported official event type(s): " + ", ".join(unknown))
+    return requested or supported
+
+
+def write_status(path: str, payload: dict[str, Any]) -> None:
+    if not path:
+        return
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> None:
+    args = parse_args()
+    selected = wanted_types(args.types)
     existing: dict[str, Any] = {}
     if OUT.exists():
         try:
@@ -469,53 +514,96 @@ def main() -> None:
 
     metrics: dict[str, Any] = dict(existing.get("metrics") or {})
     errors: dict[str, str] = {}
+    successful_sources: list[str] = []
+    attempted_sources: list[str] = []
 
-    for fetcher in (fetch_bls, fetch_fred):
+    if selected & SOURCE_GROUPS["bls"]:
+        attempted_sources.append("bls")
         try:
-            fresh, partial_errors = fetcher()
+            fresh, partial_errors = fetch_bls()
+            successful_sources.append("bls")
             for key, metric in fresh.items():
-                metrics[key] = merge_metric(metrics.get(key), metric)
-            errors.update(partial_errors)
+                if key in selected:
+                    metrics[key] = merge_metric(metrics.get(key), metric)
+            errors.update({key: value for key, value in partial_errors.items() if key in selected})
         except Exception as exc:  # noqa: BLE001
-            errors[fetcher.__name__] = str(exc)
+            errors["bls"] = str(exc)
 
-    fomc_official, fomc_official_error = fetch_fomc_official_statements()
-    fomc_fred, fomc_fred_error = fetch_fomc_range()
-    if fomc_official:
-        metrics["fomc"] = merge_metric(metrics.get("fomc"), fomc_official)
-    elif fomc_fred:
-        metrics["fomc"] = merge_metric(metrics.get("fomc"), fomc_fred)
-    else:
-        errors["fomc"] = " | ".join(x for x in (fomc_official_error, fomc_fred_error) if x)
-    metrics["fomc"] = sanitize_fomc_metric(metrics.get("fomc"))
+    if selected & SOURCE_GROUPS["fred"]:
+        attempted_sources.append("fred")
+        try:
+            fresh, partial_errors = fetch_fred(selected)
+            successful_sources.append("fred")
+            for key, metric in fresh.items():
+                if key in selected:
+                    metrics[key] = merge_metric(metrics.get(key), metric)
+            errors.update({key: value for key, value in partial_errors.items() if key in selected})
+        except Exception as exc:  # noqa: BLE001
+            errors["fred"] = str(exc)
 
-    required = [
-        "cpi_yoy", "core_cpi_yoy", "ppi_yoy", "core_ppi_yoy",
-        "nfp", "unemployment", "avg_hourly_earnings", "retail_sales", "jobless_claims",
-        "gdp", "pce", "core_pce", "fomc",
-    ]
-    missing = [key for key in required if not metrics.get(key, {}).get("actual")]
-    if missing:
-        errors["missing"] = ", ".join(missing)
+    if "fomc" in selected:
+        attempted_sources.append("fomc")
+        fomc_official, fomc_official_error = fetch_fomc_official_statements()
+        if fomc_official:
+            successful_sources.append("fomc")
+            metrics["fomc"] = merge_metric(metrics.get("fomc"), fomc_official)
+        else:
+            fomc_fred, fomc_fred_error = fetch_fomc_range()
+            if fomc_fred:
+                successful_sources.append("fomc")
+                metrics["fomc"] = merge_metric(metrics.get("fomc"), fomc_fred)
+            else:
+                errors["fomc"] = " | ".join(x for x in (fomc_official_error, fomc_fred_error) if x)
+        metrics["fomc"] = sanitize_fomc_metric(metrics.get("fomc"))
+
+    missing_selected = [key for key in sorted(selected) if not metrics.get(key, {}).get("actual")]
+    if missing_selected:
+        errors["missing_selected"] = ", ".join(missing_selected)
 
     previous_metrics = existing.get("metrics") or {}
-    changed = metrics != previous_metrics
-    if not changed and existing:
-        print("No official values changed; preserving the existing snapshot byte-for-byte.")
-        print(json.dumps(existing.get("coverage") or {key: bool(metrics.get(key, {}).get("actual")) for key in required}, indent=2))
-        return
-    payload = {
-        "schemaVersion": 3,
-        "updatedAt": datetime.now(timezone.utc).isoformat(),
-        "metrics": metrics,
+    changed_types = sorted(
+        key for key in selected
+        if metrics.get(key) != previous_metrics.get(key)
+    )
+    changed = bool(changed_types)
+    checked_at = datetime.now(timezone.utc).isoformat()
+    status = {
+        "checkedAt": checked_at,
+        "selectedTypes": sorted(selected),
+        "attemptedSources": attempted_sources,
+        "successfulSources": successful_sources,
+        "changedTypes": changed_types,
+        "missingSelected": missing_selected,
         "errors": errors,
-        "coverage": {key: bool(metrics.get(key, {}).get("actual")) for key in required},
+    }
+
+    # A connector failure must be visible to GitHub Actions. Existing verified
+    # values stay untouched, but the workflow becomes red instead of a false success.
+    if attempted_sources and not successful_sources:
+        write_status(args.status_file, status)
+        raise SystemExit("All selected official sources failed: " + json.dumps(errors, ensure_ascii=False))
+
+    if not changed and existing:
+        write_status(args.status_file, status)
+        print("No selected official values changed; preserving the existing snapshot byte-for-byte.")
+        print(json.dumps(status, ensure_ascii=False, indent=2))
+        return
+
+    payload = {
+        "schemaVersion": 4,
+        "updatedAt": checked_at,
+        "metrics": metrics,
+        # Only current poll errors are stored; successful old data is preserved.
+        "errors": errors,
+        "coverage": {
+            key: bool(metrics.get(key, {}).get("actual"))
+            for key in sorted(set().union(*SOURCE_GROUPS.values()))
+        },
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(payload["coverage"], indent=2))
-    if missing:
-        print(f"WARNING: official-data sync partial; preserved available/previous metrics. Missing: {', '.join(missing)}")
+    write_status(args.status_file, status)
+    print(json.dumps(status, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

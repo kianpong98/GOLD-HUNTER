@@ -116,7 +116,7 @@ async function fetchFredCsv(series){
   let lastError=null;
   for(const url of urls){
     try{
-      const r=await fetchWithRetry(url,{headers:{accept:url.includes('file_type=json')?'application/json':'text/csv','user-agent':'GoldHunter/1.0'}},5);
+      const r=await fetchWithRetry(url,{headers:{accept:url.includes('file_type=json')?'application/json':'text/csv','user-agent':'GoldHunter/1.0'}},2);
       if(!r.ok)throw new Error(`FRED ${series} ${r.status}`);
       const rows=csvRows(await r.text());
       if(rows.length)return rows;
@@ -184,7 +184,7 @@ async function fetchFederalReserveFomc(env,forceRefresh=false){
     while((match=re.exec(calendarHtml))){const url=absoluteFedUrl(match[1]);if(url&&!links.includes(url))links.push(url);}
     links.sort().reverse();
     const rows=[];
-    for(const url of links.slice(0,18)){
+    for(const url of links.slice(0,5)){
       const dateMatch=url.match(/monetary(\d{4})(\d{2})(\d{2})a\.htm/i);if(!dateMatch)continue;
       try{
         const response=await fetchWithRetry(url,{headers:{accept:'text/html','user-agent':'GoldHunter/1.0'}},2);if(!response.ok)continue;
@@ -789,11 +789,11 @@ export async function onRequestGet({request,env}){
     return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:checked,lastSuccess:live?responseNow:(source.lastSuccess||null),lastDataChanged:source.lastDataChanged||staticIso,error:error||'',recovery:status==='live'?'Connected':status==='cached'?'Automatic retry and cached fallback active':'Refresh Admin to retry; fallback remains available'};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
-  return json({engineVersion:'stable-data-phase1.3-per-news-health',events,connectionHealth,healthMode:forceRefresh?'live-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors,staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'stable-data-phase1.4-release-hardened',events,connectionHealth,healthMode:forceRefresh?'live-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors,staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
-    engineVersion:'stable-data-phase1.2-fomc-history-fixed',
+    engineVersion:'stable-data-phase1.4-release-hardened',
     step:'start',
     timestamp:new Date().toISOString(),
     kvBound:Boolean(env&&env.GH_MARKET_DATA)
