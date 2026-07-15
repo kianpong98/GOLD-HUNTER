@@ -37,23 +37,29 @@ jobs:
               try:r=datetime.fromisoformat(x['datetime']).astimezone(timezone.utc)
               except:continue
               if x.get('releasePeriod') and r-timedelta(minutes=10)<=now<=r+timedelta(minutes=90): active.append(x)
-          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('active='+('true' if active else 'false')+'\n')
+          routine = now.minute % 30 < 5
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write('active='+('true' if active else 'false')+'\n')
+              f.write('routine='+('true' if routine else 'false')+'\n')
           print('Active releases:', [x.get('type') for x in active])
+          print('24-hour connector check:', routine)
           PY
-      - name: Poll official sources without writing Workers KV
-        if: steps.window.outputs.active == 'true'
+      - name: Check official sources without writing Workers KV
+        if: steps.window.outputs.active == 'true' || steps.window.outputs.routine == 'true'
         run: |
-          for attempt in $(seq 1 24); do
-            echo "Official release poll ${attempt}/24"
+          POLLS=1
+          [ "${{ steps.window.outputs.active }}" = "true" ] && POLLS=24
+          for attempt in $(seq 1 "$POLLS"); do
+            echo "Official source poll ${attempt}/${POLLS}"
             python scripts/update_official_data.py || true
             if ! git diff --quiet -- data/official-data.json; then
               echo "New official data detected."
               break
             fi
-            [ "$attempt" = 24 ] || sleep 25
+            [ "$attempt" = "$POLLS" ] || sleep 25
           done
       - name: Commit new Actual only when changed
-        if: steps.window.outputs.active == 'true'
+        if: steps.window.outputs.active == 'true' || steps.window.outputs.routine == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
