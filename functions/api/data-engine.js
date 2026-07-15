@@ -20,6 +20,86 @@ const SEED_EVENTS = [
   {id:'fomc-minutes-2026-07-29',releasePeriod:'2026-07-29',type:'fomc_minutes',name:'FOMC Meeting Minutes',nameZh:'美联储会议纪要',datetime:'2026-08-20T02:00:00+08:00',forecast:'',previous:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:4,whyZh:'披露政策讨论细节，可能改变市场对未来利率路径的判断。'}
 ];
 
+
+// Verified official publication timestamps used to backfill older Last Release rows.
+// BLS time is 08:30 ET; these values are stored directly in Malaysia Time (MYT).
+// Keeping the publication date separate from the reference period prevents a data
+// month such as 2026-06 from being displayed as though it were a release date.
+const VERIFIED_RELEASE_DATETIMES = {
+  cpi_yoy: {
+    '2025-08':'2025-09-11T20:30:00+08:00',
+    '2025-09':'2025-10-24T20:30:00+08:00',
+    '2025-11':'2025-12-18T21:30:00+08:00',
+    '2025-12':'2026-01-13T21:30:00+08:00',
+    '2026-01':'2026-02-13T21:30:00+08:00',
+    '2026-02':'2026-03-11T20:30:00+08:00',
+    '2026-03':'2026-04-10T20:30:00+08:00',
+    '2026-04':'2026-05-12T20:30:00+08:00',
+    '2026-05':'2026-06-10T20:30:00+08:00',
+    '2026-06':'2026-07-14T20:30:00+08:00'
+  },
+  core_cpi_yoy: {},
+  ppi_yoy: {
+    '2025-08':'2025-09-10T20:30:00+08:00',
+    '2025-09':'2025-11-25T21:30:00+08:00',
+    // October 2025 had no separate PPI release; October data were published
+    // together with November data on 14 Jan 2026.
+    '2025-10':'2026-01-14T21:30:00+08:00',
+    '2025-11':'2026-01-14T21:30:00+08:00',
+    '2025-12':'2026-01-30T21:30:00+08:00',
+    '2026-01':'2026-02-27T21:30:00+08:00',
+    '2026-02':'2026-03-18T20:30:00+08:00',
+    '2026-03':'2026-04-14T20:30:00+08:00',
+    '2026-04':'2026-05-13T20:30:00+08:00',
+    '2026-05':'2026-06-11T20:30:00+08:00',
+    '2026-06':'2026-07-15T20:30:00+08:00'
+  },
+  core_ppi_yoy: {},
+  nfp: {
+    '2025-08':'2025-09-05T20:30:00+08:00',
+    '2025-09':'2025-11-20T21:30:00+08:00',
+    '2025-11':'2025-12-16T21:30:00+08:00',
+    '2025-12':'2026-01-09T21:30:00+08:00',
+    '2026-01':'2026-02-11T21:30:00+08:00',
+    '2026-02':'2026-03-06T21:30:00+08:00',
+    '2026-03':'2026-04-03T20:30:00+08:00',
+    '2026-04':'2026-05-08T20:30:00+08:00',
+    '2026-05':'2026-06-05T20:30:00+08:00',
+    '2026-06':'2026-07-02T20:30:00+08:00'
+  },
+  unemployment: {},
+  avg_hourly_earnings: {}
+};
+VERIFIED_RELEASE_DATETIMES.core_cpi_yoy = VERIFIED_RELEASE_DATETIMES.cpi_yoy;
+VERIFIED_RELEASE_DATETIMES.core_ppi_yoy = VERIFIED_RELEASE_DATETIMES.ppi_yoy;
+VERIFIED_RELEASE_DATETIMES.unemployment = VERIFIED_RELEASE_DATETIMES.nfp;
+VERIFIED_RELEASE_DATETIMES.avg_hourly_earnings = VERIFIED_RELEASE_DATETIMES.nfp;
+
+function verifiedReleaseDateTime(type,period){
+  const canonical=canonicalType({type});
+  const key=String(period||'').trim();
+  const exact=VERIFIED_RELEASE_DATETIMES[canonical]?.[key];
+  if(exact)return exact;
+  // Initial claims are normally released on the Thursday following the
+  // reported week-ending Saturday. This deterministic fallback is used only
+  // when a stored row does not already contain an authoritative timestamp.
+  if(canonical==='jobless_claims'&&/^\d{4}-\d{2}-\d{2}$/.test(key)){
+    const d=new Date(`${key}T00:00:00Z`);
+    if(Number.isFinite(d.getTime())){
+      d.setUTCDate(d.getUTCDate()+5);
+      return `${d.toISOString().slice(0,10)}T20:30:00+08:00`;
+    }
+  }
+  if(canonical==='fomc'&&/^\d{4}-\d{2}-\d{2}$/.test(key)){
+    const d=new Date(`${key}T00:00:00Z`);
+    if(Number.isFinite(d.getTime())){
+      d.setUTCDate(d.getUTCDate()+1);
+      return `${d.toISOString().slice(0,10)}T02:00:00+08:00`;
+    }
+  }
+  return '';
+}
+
 const AUTO_TYPES = new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc']);
 const EVENT_ONLY_TYPES = new Set(['fomc_minutes','fed_speech']);
 
@@ -770,7 +850,7 @@ export async function onRequestGet({request,env}){
     const addHistory=(row,lastRelease=false)=>{
       if(!row?.period||!row?.actual||seenHistory.has(String(row.period)))return;
       seenHistory.add(String(row.period));
-      const dateTime=String(row.dateTime||row.releaseDateTime||releaseDateByPeriod.get(String(row.period))||'');
+      const dateTime=String(row.dateTime||row.releaseDateTime||releaseDateByPeriod.get(String(row.period))||verifiedReleaseDateTime(e.type,row.period)||'');
       history.push({...row,dateTime,forecast:forecastMap[row.period]||row.forecast||'',lastRelease});
     };
     const eventHistory=e.type==='fomc'?sanitizeFomcHistory(e.releaseHistory||[]):(e.releaseHistory||[]);
