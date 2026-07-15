@@ -10,109 +10,60 @@ permissions:
 
 concurrency:
   group: official-release-watcher-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 9
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - run: pip install requests
-
       - name: Detect official release window
         id: window
-        shell: bash
         run: |
-          set -euo pipefail
           python - <<'PY'
           import json, os
           from datetime import datetime, timezone, timedelta
-
           events=json.load(open('data/generated-events.json',encoding='utf-8'))
           now=datetime.now(timezone.utc)
           active=[]
           for event in events:
-              try:
-                  release=datetime.fromisoformat(event['datetime']).astimezone(timezone.utc)
-              except Exception:
-                  continue
+              try: release=datetime.fromisoformat(event['datetime']).astimezone(timezone.utc)
+              except Exception: continue
               if event.get('releasePeriod') and release-timedelta(minutes=15) <= now <= release+timedelta(minutes=90):
                   active.append(event)
-
-          types=sorted({str(x.get('type') or '').strip() for x in active if x.get('type')})
-          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as output:
-              output.write('active='+('true' if types else 'false')+'\n')
-              output.write('types='+','.join(types)+'\n')
-          print('UTC now:', now.isoformat())
-          print('Active official releases:', types)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('active='+('true' if active else 'false')+'\n')
+          print('Active official releases:', [(x.get('type'),x.get('releasePeriod')) for x in active])
           PY
-
-      - name: Poll official sources
-        id: poll
+      - name: Check official sources
         env:
           BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
-          ACTIVE_TYPES: ${{ steps.window.outputs.types }}
-          ACTIVE_WINDOW: ${{ steps.window.outputs.active }}
-        shell: bash
         run: |
           set -euo pipefail
           attempts=1
           delay=0
-          types=""
-          if [ "$ACTIVE_WINDOW" = "true" ]; then
-            attempts=12
+          if [ "${{ steps.window.outputs.active }}" = "true" ]; then
+            attempts=24
             delay=20
-            types="$ACTIVE_TYPES"
           fi
-
-          source_failures=0
           for attempt in $(seq 1 "$attempts"); do
-            echo "Official source check ${attempt}/${attempts}; types=${types:-all}"
-            args=(--status-file poll-status.json)
-            if [ -n "$types" ]; then args+=(--types "$types"); fi
-
-            if python scripts/update_official_data.py "${args[@]}"; then
-              source_failures=0
-            else
-              source_failures=$((source_failures + 1))
-              echo "Official poll failed (${source_failures}/${attempts})."
-            fi
-
+            echo "Official source check ${attempt}/${attempts}"
+            python scripts/update_official_data.py
             if ! git diff --quiet -- data/official-data.json; then
               echo "New verified official value detected."
               break
             fi
             [ "$attempt" = "$attempts" ] || sleep "$delay"
           done
-
-          if [ "$source_failures" = "$attempts" ]; then
-            echo "Every official poll failed."
-            cat poll-status.json 2>/dev/null || true
-            exit 1
-          fi
-
-      - name: Publish poll summary
-        if: always()
-        shell: bash
-        run: |
-          if [ -s poll-status.json ]; then
-            echo '## Official release poll' >> "$GITHUB_STEP_SUMMARY"
-            echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat poll-status.json >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
-
       - name: Commit only verified changed values
-        shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"

@@ -10,12 +10,12 @@ permissions:
 
 concurrency:
   group: release-verification-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Verify recently released events have matching Actual
@@ -23,27 +23,40 @@ jobs:
           SITE_URL: https://goldhunter.site
         run: |
           python - <<'PY'
-          import json, urllib.request
+          import json, os, urllib.request
           from datetime import datetime, timezone, timedelta
           from pathlib import Path
           events=json.loads(Path('data/generated-events.json').read_text(encoding='utf-8'))
+          official=json.loads(Path('data/official-data.json').read_text(encoding='utf-8')).get('metrics',{})
           now=datetime.now(timezone.utc)
           due=[]
           for e in events:
               try: release=datetime.fromisoformat(e['datetime']).astimezone(timezone.utc)
               except Exception: continue
-              if release <= now <= release+timedelta(minutes=20) and e.get('releasePeriod'):
+              if release <= now <= release+timedelta(minutes=90) and e.get('releasePeriod'):
                   due.append(e)
           if not due:
               print('No release requires verification now.'); raise SystemExit(0)
-          with urllib.request.urlopen(f"{__import__('os').environ['SITE_URL']}/api/data-engine?verify={int(now.timestamp())}",timeout=25) as r:
+
+          # First validate the repository snapshot uses the same release period.
+          mismatched=[]
+          for e in due:
+              metric=official.get(str(e.get('type'))) or {}
+              period=str(metric.get('period') or '')
+              if period and period != str(e.get('releasePeriod')):
+                  mismatched.append(f"{e.get('type')}: event={e.get('releasePeriod')} official={period}")
+          if mismatched:
+              print('Official snapshot has not reached the expected period yet: '+ '; '.join(mismatched))
+
+          with urllib.request.urlopen(f"{os.environ['SITE_URL']}/api/data-engine?verify={int(now.timestamp())}",timeout=25) as r:
               payload=json.load(r)
           rows=payload.get('events') or []
           index={(str(x.get('type')),str(x.get('releasePeriod'))):x for x in rows}
           missing=[]
           for e in due:
               row=index.get((str(e.get('type')),str(e.get('releasePeriod'))))
-              if not row or not str(row.get('actual') or '').strip(): missing.append(e.get('name') or e.get('type'))
+              if not row or not str(row.get('actual') or '').strip():
+                  missing.append(f"{e.get('name') or e.get('type')} [{e.get('releasePeriod')}]")
           if missing:
               raise SystemExit('Actual still missing after release: '+', '.join(missing))
           print('Verified live Actual:', ', '.join(e.get('name') or e.get('type') for e in due))
