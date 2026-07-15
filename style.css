@@ -1116,3 +1116,56 @@ body.home-page .hero{padding-top:220px!important;}
   .impact-pill{font-size:11px}
   .calendar-impact-panel p,.calendar-impact-panel em,.impact-difference{margin-left:31px}
 }
+
+/* Home news card layout + standard chart colors */
+:root{--chart-bull:#22c55e;--chart-bear:#ef4444}
+.home-market-events{gap:12px}
+.market-event-row.home-news-card{position:relative;display:grid;grid-template-columns:minmax(145px,.8fr) minmax(0,1.7fr);gap:16px;align-items:stretch;padding:16px;border-radius:18px;overflow:hidden;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(0,0,0,.28))}
+.market-event-row.home-news-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#777}
+.market-event-row.home-news-card.bullish::before{background:var(--chart-bull)}
+.market-event-row.home-news-card.bearish::before{background:var(--chart-bear)}
+.home-event-info{display:flex;flex-direction:column;justify-content:center;min-width:0;padding-left:4px}
+.home-event-info h3{margin:0;color:#fff;font-size:17px;line-height:1.15;font-weight:750;letter-spacing:-.02em;overflow-wrap:anywhere}
+.home-event-info .event-zh{margin:6px 0 8px!important;font-size:11px!important;line-height:1.35}
+.home-event-time{margin:0 0 7px!important;color:#b6b0a5!important;font-size:10px!important;line-height:1.45}
+.home-event-info .event-countdown{align-self:flex-start;padding:4px 7px;border-radius:6px;background:rgba(216,178,72,.1);font-size:9px}
+.home-event-data{display:grid;gap:10px;min-width:0}
+.home-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.home-metrics>div{min-width:0;padding:9px 5px;border:1px solid rgba(255,255,255,.075);border-radius:11px;background:#090909;text-align:center}
+.home-metrics small{display:block;color:#858585;font-size:7px;letter-spacing:.12em;text-transform:uppercase}
+.home-metrics b{display:block;margin-top:4px;color:#eee4bd;font-size:13px;font-variant-numeric:tabular-nums}
+.home-news-card.bullish .home-metrics>div:first-child b{color:var(--chart-bull)}
+.home-news-card.bearish .home-metrics>div:first-child b{color:var(--chart-bear)}
+.home-impact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 14px;padding:12px 14px;border:1px solid rgba(255,255,255,.075);border-radius:12px;background:rgba(255,255,255,.025);min-width:0}
+.home-impact.bullish{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.055);color:var(--chart-bull)}
+.home-impact.bearish{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.055);color:var(--chart-bear)}
+.home-impact-top{display:flex;align-items:center;gap:10px;min-width:0}
+.home-impact-top strong{font-size:10px;line-height:1.35;text-transform:uppercase}
+.home-impact-top b{margin-left:auto;color:#f3f3f3;font-size:12px;white-space:nowrap}
+.home-gold-impact{grid-column:2;grid-row:1/3;align-self:center;text-align:right;max-width:125px}
+.home-gold-impact span{display:block;color:currentColor;font-size:12px;font-weight:800}
+.home-gold-impact small{display:block;margin-top:3px;color:#bbb;font-size:9px;line-height:1.25}
+.home-impact em{grid-column:1;margin:0;font-size:12px;line-height:1.35;color:currentColor}
+.calendar-item-v2.bullish{border-left-color:var(--chart-bull)}
+.calendar-item-v2.bearish{border-left-color:var(--chart-bear)}
+.calendar-item-v2.bullish .calendar-metrics .actual-value{color:var(--chart-bull)}
+.calendar-item-v2.bearish .calendar-metrics .actual-value{color:var(--chart-bear)}
+.calendar-impact-panel.bullish{background:linear-gradient(135deg,rgba(34,197,94,.07),rgba(34,197,94,.018));color:var(--chart-bull)}
+.calendar-impact-panel.bearish{background:linear-gradient(135deg,rgba(239,68,68,.07),rgba(239,68,68,.018));color:var(--chart-bear)}
+.calendar-impact-panel.bullish .impact-pill{background:rgba(34,197,94,.12);color:var(--chart-bull)}
+.calendar-impact-panel.bearish .impact-pill{background:rgba(239,68,68,.12);color:var(--chart-bear)}
+.calendar-title-row h3{font-size:20px;line-height:1.18;letter-spacing:-.015em;overflow-wrap:anywhere}
+.calendar-event-info .event-zh{font-size:12px!important;line-height:1.4;margin:5px 0 10px!important}
+.calendar-meta{align-items:center;gap:10px;flex-wrap:wrap}
+.calendar-links{gap:12px;align-items:center;flex-wrap:wrap}
+.calendar-metrics b{font-size:27px;line-height:1}
+.calendar-impact-head strong{font-size:13px;letter-spacing:.02em}
+.calendar-impact-panel p{font-size:12px;line-height:1.5}
+@media(max-width:680px){
+ .market-event-row.home-news-card{grid-template-columns:1fr;gap:12px;padding:14px}
+ .home-event-info h3{font-size:16px}
+ .home-event-data{gap:8px}
+ .home-impact{grid-template-columns:1fr auto;padding:11px}
+ .home-gold-impact{max-width:105px}
+ .home-impact em{font-size:11px}
+}
