@@ -23,16 +23,16 @@
     const cs=meta.connectorSources||{};const legacy=meta.officialSources||{};
     const normalize=(key,fallback)=>cs[key]||{status:fallback?'live':'offline',lastSuccess:meta.officialUpdatedAt||null,lastChecked:meta.lastCheckedAt||meta.updatedAt||null};
     const items=[['Static Cache',normalize('staticCache',legacy.staticCache)],['BLS',normalize('bls',legacy.bls)],['FRED',normalize('fred',legacy.fred)],['Department of Labor',normalize('dol',legacy.dol)],['BEA',normalize('bea',legacy.bea)],['Federal Reserve',normalize('federalReserve',legacy.federalReserve)],['Cloudflare KV',normalize('cloudflareKv',meta.kvConfigured)]];
-    const label={live:'● Live',cached:'● Cached',offline:'● Offline'};
-    $('#sourceGrid').innerHTML=items.map(([n,v])=>`<div class="source ${v.status==='live'?'ok':'bad'}"><b>${label[v.status]||label.offline}</b>${n}<small style="display:block;opacity:.72;margin-top:5px">Last checked: ${fmt(v.lastChecked||meta.lastCheckedAt||meta.updatedAt)}</small><small style="display:block;opacity:.72;margin-top:3px">Last data change: ${fmt(v.lastSuccess)}</small></div>`).join('');
+    const label={online:'● Online / Idle',watching:'● Watching',live:'● Live',cached:'● Cached fallback',offline:'● Offline'};
+    $('#sourceGrid').innerHTML=items.map(([n,v])=>`<div class="source ${['online','watching','live'].includes(v.status)?'ok':'bad'}"><b>${label[v.status]||label.offline}</b>${n}<small style="display:block;opacity:.72;margin-top:5px">Last checked: ${fmt(v.lastChecked||meta.lastCheckedAt||meta.updatedAt)}</small><small style="display:block;opacity:.72;margin-top:3px">Last data change: ${fmt(v.lastSuccess)}</small></div>`).join('');
     $('#syncLine').textContent=`Last checked：${fmt(meta.lastCheckedAt||meta.updatedAt)} · Last data change：${fmt(meta.lastDataChangeAt||meta.officialUpdatedAt)} · KV write protection：${meta.kvWriteProtection?.enabled?'ON (change only)':'Unknown'}${meta.officialError?' · '+meta.officialError:''}`;updateSyncMonitor(items);}
   function latestSuccess(items){const vals=items.map(([,v])=>new Date(v.lastSuccess||0).getTime()).filter(Number.isFinite);return vals.length?Math.max(...vals):0;}
   function mytClock(ts){return new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(ts))+' MYT';}
   function duration(ms){const t=Math.max(0,Math.floor(ms/1000)),h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=t%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;}
   function updateSyncMonitor(items){
     const now=Date.now(); if(!nextSyncAt||nextSyncAt<=now)nextSyncAt=Math.ceil(now/SYNC_INTERVAL_MS)*SYNC_INTERVAL_MS;
-    const latest=latestSuccess(items), nonLive=items.filter(([,v])=>v.status!=='live').length;
-    const points=items.map(([,v])=>v.status==='live'?100:v.status==='cached'?65:0),health=Math.round(points.reduce((a,b)=>a+b,0)/(points.length||1));
+    const latest=latestSuccess(items), nonLive=items.filter(([,v])=>!['online','watching','live'].includes(v.status)).length;
+    const points=items.map(([,v])=>['online','watching','live'].includes(v.status)?100:v.status==='cached'?65:0),health=Math.round(points.reduce((a,b)=>a+b,0)/(points.length||1));
     const set=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
     set('nextSyncTime',mytClock(nextSyncAt)); set('nextSyncCountdown',duration(nextSyncAt-now));
     set('lastSuccessfulSync',latest?mytClock(latest):'No record'); set('lastSuccessfulAge',latest?`${duration(now-latest)} ago`:'No record');
