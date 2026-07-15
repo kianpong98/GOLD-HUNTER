@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 3,
-  "updatedAt": "2026-07-14T16:03:28.638036+00:00",
+  "schemaVersion": 4,
+  "updatedAt": "2026-07-15T14:12:02.322612+00:00",
   "metrics": {
     "jobless_claims": {
       "actual": "215K",
@@ -328,15 +328,20 @@
       ]
     },
     "ppi_yoy": {
-      "actual": "6.5%",
-      "previous": "5.7%",
-      "period": "2026-05",
+      "actual": "5.5%",
+      "previous": "6%",
+      "period": "2026-06",
       "observationDate": "2026-05",
       "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
+          "period": "2026-06",
+          "actual": "5.5%",
+          "previous": "6%"
+        },
+        {
           "period": "2026-05",
-          "actual": "6.5%",
+          "actual": "6%",
           "previous": "5.7%"
         },
         {
@@ -378,21 +383,21 @@
           "period": "2025-09",
           "actual": "3%",
           "previous": "2.7%"
-        },
-        {
-          "period": "2025-08",
-          "actual": "2.7%",
-          "previous": "3.2%"
         }
       ]
     },
     "core_ppi_yoy": {
       "actual": "5.1%",
-      "previous": "4.4%",
-      "period": "2026-05",
+      "previous": "5.1%",
+      "period": "2026-06",
       "observationDate": "2026-05",
       "source": "U.S. Bureau of Labor Statistics",
       "history": [
+        {
+          "period": "2026-06",
+          "actual": "5.1%",
+          "previous": "5.1%"
+        },
         {
           "period": "2026-05",
           "actual": "5.1%",
@@ -437,11 +442,6 @@
           "period": "2025-09",
           "actual": "3%",
           "previous": "3%"
-        },
-        {
-          "period": "2025-08",
-          "actual": "3%",
-          "previous": "2.9%"
         }
       ]
     },
@@ -832,18 +832,18 @@
   },
   "errors": {},
   "coverage": {
-    "cpi_yoy": true,
-    "core_cpi_yoy": true,
-    "ppi_yoy": true,
-    "core_ppi_yoy": true,
-    "nfp": true,
-    "unemployment": true,
     "avg_hourly_earnings": true,
-    "retail_sales": true,
-    "jobless_claims": true,
-    "gdp": true,
-    "pce": true,
+    "core_cpi_yoy": true,
     "core_pce": true,
-    "fomc": true
+    "core_ppi_yoy": true,
+    "cpi_yoy": true,
+    "fomc": true,
+    "gdp": true,
+    "jobless_claims": true,
+    "nfp": true,
+    "pce": true,
+    "ppi_yoy": true,
+    "retail_sales": true,
+    "unemployment": true
   }
 }
