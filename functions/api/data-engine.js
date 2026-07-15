@@ -208,6 +208,7 @@ const SERIES = {
 const FRED_CACHE_KEY='official-fred-cache-v2';
 const FED_FOMC_CACHE_KEY='official-fed-fomc-cache-v1';
 const OFFICIAL_HISTORY_SNAPSHOT_KEY='official-history-snapshot-v1';
+const OFFICIAL_SOURCE_HEALTH_KEY='official-source-health-state-v1';
 const FRED_CONFIG={
   // FRED fallback coverage for every numeric news type. BLS remains primary where available.
   cpi_yoy:{series:'CPIAUCSL',mode:'yoy',suffix:'%',decimals:1},
@@ -814,13 +815,43 @@ export async function onRequestGet({request,env}){
       historySnapshot=cleanOfficialHistorySnapshot(snapshot.histories||snapshot);
     }catch{historySnapshot={};}
   }
+  let persistedHealth={};
+  if(env.GH_MARKET_DATA){
+    try{
+      const savedHealth=await env.GH_MARKET_DATA.get(OFFICIAL_SOURCE_HEALTH_KEY,{type:'json'})||{};
+      persistedHealth=(savedHealth&&typeof savedHealth.sources==='object')?savedHealth.sources:{};
+    }catch{persistedHealth={};}
+  }
   const staticOfficial=await fetchStaticOfficial(request);
   // Public/admin reads always use the GitHub-generated official snapshot for data.
   // Admin force refresh performs only one lightweight probe per provider. It never
   // downloads every series, so a single Worker invocation stays well below the
   // Cloudflare subrequest limit. Actual data refresh remains handled by GitHub Actions.
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null},fedFomc={metrics:{},histories:{},savedAt:null};
-  const liveProbes=forceRefresh?await probeOfficialSources(env):null;
+  let liveProbes=forceRefresh?await probeOfficialSources(env):null;
+  if(liveProbes){
+    const mergedHealth={};
+    for(const [key,probe] of Object.entries(liveProbes)){
+      const prior=persistedHealth?.[key]||{};
+      const succeeded=probe?.status==='live';
+      const failedAt=succeeded?(prior.lastFailure||null):(probe?.lastChecked||new Date().toISOString());
+      mergedHealth[key]={
+        ...probe,
+        lastSuccess:succeeded?(probe.lastSuccess||probe.lastChecked||new Date().toISOString()):(prior.lastSuccess||null),
+        lastFailure:failedAt,
+        consecutiveFailures:succeeded?0:Number(prior.consecutiveFailures||0)+1,
+        previousError:succeeded?'':(probe.error||prior.previousError||''),
+        recoveredAt:succeeded&&Number(prior.consecutiveFailures||0)>0?(probe.lastChecked||new Date().toISOString()):(prior.recoveredAt||null)
+      };
+    }
+    liveProbes=mergedHealth;
+    if(env.GH_MARKET_DATA){
+      try{
+        await putJsonIfChanged(env.GH_MARKET_DATA,OFFICIAL_SOURCE_HEALTH_KEY,{schemaVersion:1,sources:mergedHealth,updatedAt:new Date().toISOString()});
+        persistedHealth=mergedHealth;
+      }catch{}
+    }
+  }
   const runtimeMetrics={...(fred.metrics||{}),...(bls.metrics||{}),...(fedFomc.metrics||{})};
   const runtimeHistories={...(fred.histories||{}),...(bls.histories||{}),...(fedFomc.histories||{})};
   const official={
@@ -989,8 +1020,27 @@ export async function onRequestGet({request,env}){
   });
   const probeOr=(key,fallback)=>{
     const probe=liveProbes?.[key];
-    if(!probe)return fallback;
-    return {...fallback,...probe,lastDataChanged:staticIso};
+    const prior=persistedHealth?.[key]||{};
+    if(!probe){
+      return {
+        ...fallback,
+        lastSuccess:prior.lastSuccess||fallback.lastSuccess||null,
+        lastFailure:prior.lastFailure||null,
+        consecutiveFailures:Number(prior.consecutiveFailures||0),
+        recoveredAt:prior.recoveredAt||null,
+        previousError:prior.previousError||''
+      };
+    }
+    return {
+      ...fallback,
+      ...probe,
+      lastSuccess:probe.lastSuccess||prior.lastSuccess||fallback.lastSuccess||null,
+      lastFailure:probe.lastFailure||prior.lastFailure||null,
+      consecutiveFailures:Number(probe.consecutiveFailures??prior.consecutiveFailures??0),
+      recoveredAt:probe.recoveredAt||prior.recoveredAt||null,
+      previousError:probe.previousError||prior.previousError||'',
+      lastDataChanged:staticIso
+    };
   };
   const connectorSources={
     staticCache:probeOr('staticCache',{status:staticHealthy?'live':staticAvailable?'cached':'offline',lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso,ageMinutes:staticAgeMinutes,mode:'GitHub Actions verified snapshot'}),
@@ -1040,6 +1090,11 @@ export async function onRequestGet({request,env}){
       httpStatus:active?.httpStatus??null,
       latencyMs:active?.latencyMs??null,
       error,
+      lastFailure:active?.lastFailure||primary?.lastFailure||fallback?.lastFailure||null,
+      consecutiveFailures:Number(active?.consecutiveFailures||primary?.consecutiveFailures||fallback?.consecutiveFailures||0),
+      recoveredAt:active?.recoveredAt||primary?.recoveredAt||fallback?.recoveredAt||null,
+      primaryError:primaryLive?'':(primary?.error||primary?.previousError||''),
+      fallbackError:fallbackLive?'':(fallback?.error||fallback?.previousError||''),
       recovery:primaryLive?'Connected':fallbackLive?'Connected via FRED fallback':status==='cached'?'Primary and FRED temporarily unavailable; verified cache active':'Official source and FRED fallback unavailable'
     };
   };
