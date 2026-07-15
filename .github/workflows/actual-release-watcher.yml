@@ -10,12 +10,12 @@ permissions:
 
 concurrency:
   group: official-release-watcher-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 14
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,52 +25,61 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install requests
-      - name: Detect active official release window
+      - name: Detect official release window
         id: window
         run: |
           python - <<'PY'
           import json, os
           from datetime import datetime, timezone, timedelta
-          e=json.load(open('data/generated-events.json',encoding='utf-8')); now=datetime.now(timezone.utc)
+          events=json.load(open('data/generated-events.json',encoding='utf-8'))
+          now=datetime.now(timezone.utc)
           active=[]
-          for x in e:
-              try:r=datetime.fromisoformat(x['datetime']).astimezone(timezone.utc)
-              except:continue
-              if x.get('releasePeriod') and r-timedelta(minutes=10)<=now<=r+timedelta(minutes=90): active.append(x)
-          routine = now.minute % 30 < 5
-          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
-              f.write('active='+('true' if active else 'false')+'\n')
-              f.write('routine='+('true' if routine else 'false')+'\n')
-          print('Active releases:', [x.get('type') for x in active])
-          print('24-hour connector check:', routine)
+          for event in events:
+              try: release=datetime.fromisoformat(event['datetime']).astimezone(timezone.utc)
+              except Exception: continue
+              if event.get('releasePeriod') and release-timedelta(minutes=12) <= now <= release+timedelta(minutes=90):
+                  active.append(event)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('active='+('true' if active else 'false')+'\n')
+          print('Active official releases:', [x.get('type') for x in active])
           PY
-      - name: Check official sources without writing Workers KV
-        if: steps.window.outputs.active == 'true' || steps.window.outputs.routine == 'true'
+      - name: Check official sources
+        env:
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
         run: |
-          POLLS=1
-          [ "${{ steps.window.outputs.active }}" = "true" ] && POLLS=24
-          for attempt in $(seq 1 "$POLLS"); do
-            echo "Official source poll ${attempt}/${POLLS}"
+          set -u
+          attempts=1
+          delay=0
+          if [ "${{ steps.window.outputs.active }}" = "true" ]; then
+            attempts=12
+            delay=20
+          fi
+          for attempt in $(seq 1 "$attempts"); do
+            echo "Official source check ${attempt}/${attempts}"
             python scripts/update_official_data.py || true
             if ! git diff --quiet -- data/official-data.json; then
-              echo "New official data detected."
+              echo "New verified official value detected."
               break
             fi
-            [ "$attempt" = "$POLLS" ] || sleep 25
+            [ "$attempt" = "$attempts" ] || sleep "$delay"
           done
-      - name: Commit new Actual only when changed
-        if: steps.window.outputs.active == 'true' || steps.window.outputs.routine == 'true'
+      - name: Commit only verified changed values
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/official-data.json
-          if git diff --cached --quiet; then echo "Actual not published yet; next run will retry."; exit 0; fi
-          git commit -m "Update official Actual release"
+          if git diff --cached --quiet; then
+            echo "No official value changed; existing snapshot and KV remain untouched."
+            exit 0
+          fi
+          git commit -m "Update verified official Actual release"
           BRANCH="${GITHUB_REF_NAME}"
           for attempt in 1 2 3 4 5; do
             git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH"
-            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            if git rebase "origin/$BRANCH" && git push origin "HEAD:$BRANCH"; then
+              exit 0
+            fi
             git rebase --abort 2>/dev/null || true
             sleep $((attempt * 2))
           done
