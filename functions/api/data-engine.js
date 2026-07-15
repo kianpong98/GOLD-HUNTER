@@ -582,11 +582,11 @@ function classifyResult(type,actual,forecast){
   const bullishWhenHigher=new Set(['unemployment','jobless_claims']);
   const bearishWhenHigher=new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','avg_hourly_earnings','retail_sales','gdp','pce','core_pce','fomc']);
   let goldImpact='',goldImpactZh='';
-  if(comparison==='In Line'){goldImpact='Neutral for Gold';goldImpactZh='黄金影响中性';}
+  if(comparison==='In Line'){goldImpact='Typically Neutral for Gold';goldImpactZh='通常对黄金影响中性';}
   else if(bullishWhenHigher.has(type)){
-    const bullish=delta>0;goldImpact=bullish?'Bullish for Gold':'Bearish for Gold';goldImpactZh=bullish?'利多黄金':'利空黄金';
+    const bullish=delta>0;goldImpact=bullish?'Typically Supportive for Gold':'Typically Negative for Gold';goldImpactZh=bullish?'通常利好黄金':'通常利空黄金';
   }else if(bearishWhenHigher.has(type)){
-    const bullish=delta<0;goldImpact=bullish?'Bullish for Gold':'Bearish for Gold';goldImpactZh=bullish?'利多黄金':'利空黄金';
+    const bullish=delta<0;goldImpact=bullish?'Typically Supportive for Gold':'Typically Negative for Gold';goldImpactZh=bullish?'通常利好黄金':'通常利空黄金';
   }
   const suffix=String(actual||'').includes('%')?'%':String(actual||'').toUpperCase().includes('K')?'K':'';
   const difference=`${delta>0?'+':''}${delta.toFixed(Math.abs(delta)<1?2:1).replace(/\.0$/,'')}${suffix}`;
@@ -728,10 +728,6 @@ export async function onRequestGet({request,env}){
   if(archiveChanged&&env.GH_MARKET_DATA){
     await putJsonIfChanged(env.GH_MARKET_DATA,EVENTS_KEY,sanitizeEvents(persistable),undefined);
   }
-  const releaseWindows=prepared.map(e=>new Date(e.datetime).getTime()).filter(Number.isFinite);
-  const watching=releaseWindows.some(t=>now>=t-10*60*1000&&now<=t+90*60*1000);
-  const justUpdated=Boolean(official.savedAt&&now-official.savedAt<=15*60*1000);
-  const engineMode=watching?(justUpdated?'live':'watching'):'online';
   const hasMetrics=source=>Boolean(Object.keys(source?.metrics||{}).length);
   const sourceStatus=(source,liveOk)=>liveOk?'live':hasMetrics(source)?'cached':'offline';
   const blsLive=!bls.error&&!bls.refreshError&&!bls.stale;
@@ -739,15 +735,15 @@ export async function onRequestGet({request,env}){
   const fredLive=!fredHasErrors;
   const staticIso=staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null;
   const staticAgeMinutes=staticOfficial.savedAt?Math.round((Date.now()-staticOfficial.savedAt)/60000):null;
-  const staticHealthy=Boolean(Object.keys(staticOfficial.metrics||{}).length);
-  const staticAvailable=staticHealthy;
-  const staticMetricStatus=type=>official.metrics?.[type]?.actual?(watching?engineMode:'online'):'offline';
+  const staticHealthy=Boolean(Object.keys(staticOfficial.metrics||{}).length)&&staticAgeMinutes!==null&&staticAgeMinutes<=45;
+  const staticAvailable=Boolean(Object.keys(staticOfficial.metrics||{}).length);
+  const staticMetricStatus=type=>official.metrics?.[type]?.actual?(staticHealthy?'live':'cached'):'offline';
   const connectorSources={
-    staticCache:{status:staticAvailable?(watching?engineMode:'online'):'offline',lastSuccess:staticIso,lastChecked:new Date().toISOString(),lastDataChanged:staticIso,ageMinutes:staticAgeMinutes,mode:watching?'Official release watcher active':'24-hour online / idle'},
-    bls:{status:forceRefresh?sourceStatus(bls,blsLive):(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings'].some(type=>staticMetricStatus(type)!=='offline')?(watching?engineMode:'online'):'offline'),lastSuccess:forceRefresh&&bls.savedAt?new Date(bls.savedAt).toISOString():staticIso,lastChecked:forceRefresh&&(bls.liveCheckAt||bls.savedAt)?new Date(bls.liveCheckAt||bls.savedAt).toISOString():staticIso,lastDataChanged:staticIso},
-    fred:{status:forceRefresh?sourceStatus(fred,fredLive):(staticAvailable?(watching?engineMode:'online'):'offline'),lastSuccess:forceRefresh&&fred.savedAt?new Date(fred.savedAt).toISOString():staticIso,lastChecked:forceRefresh&&(fred.liveCheckAt||fred.savedAt)?new Date(fred.liveCheckAt||fred.savedAt).toISOString():staticIso,lastDataChanged:staticIso},
+    staticCache:{status:staticHealthy?'live':staticAvailable?'cached':'offline',lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso,ageMinutes:staticAgeMinutes,mode:'GitHub Actions verified snapshot'},
+    bls:{status:forceRefresh?sourceStatus(bls,blsLive):(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings'].some(type=>staticMetricStatus(type)!=='offline')?(staticHealthy?'live':'cached'):'offline'),lastSuccess:forceRefresh&&bls.savedAt?new Date(bls.savedAt).toISOString():staticIso,lastChecked:forceRefresh&&(bls.liveCheckAt||bls.savedAt)?new Date(bls.liveCheckAt||bls.savedAt).toISOString():staticIso,lastDataChanged:staticIso},
+    fred:{status:forceRefresh?sourceStatus(fred,fredLive):(staticAvailable?(staticHealthy?'live':'cached'):'offline'),lastSuccess:forceRefresh&&fred.savedAt?new Date(fred.savedAt).toISOString():staticIso,lastChecked:forceRefresh&&(fred.liveCheckAt||fred.savedAt)?new Date(fred.liveCheckAt||fred.savedAt).toISOString():staticIso,lastDataChanged:staticIso},
     dol:{status:staticMetricStatus('jobless_claims'),lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso},
-    bea:{status:(staticMetricStatus('gdp')!=='offline'||staticMetricStatus('pce')!=='offline'||staticMetricStatus('core_pce')!=='offline')?(watching?engineMode:'online'):'offline',lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso},
+    bea:{status:(staticMetricStatus('gdp')!=='offline'||staticMetricStatus('pce')!=='offline'||staticMetricStatus('core_pce')!=='offline')?(staticHealthy?'live':'cached'):'offline',lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso},
     federalReserve:{status:staticMetricStatus('fomc'),lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso},
     cloudflareKv:{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?new Date().toISOString():null,lastChecked:env.GH_MARKET_DATA?new Date().toISOString():null,lastDataChanged:null}
   };
@@ -757,7 +753,26 @@ export async function onRequestGet({request,env}){
   if(connectorSources.bea.status==='offline')degraded.push('BEA');
   const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
   const responseNow=new Date().toISOString();
-  return json({engineVersion:'stable-data-phase1.3-live-release-home',engineMode,watching,events,updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors:{},staticErrors:{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+
+  // Per-news connection health. Admin requests use ?force=1, so lastChecked is a
+  // real runtime poll and not merely the timestamp of the last data change.
+  const blsTypes=new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings']);
+  const fredErrors=fred.errors||{};
+  const connectionFor=(event)=>{
+    const type=event.type;
+    let provider='FRED official series',source=connectorSources.fred,error=fredErrors[type]||fred.error||fred.refreshError||'';
+    if(blsTypes.has(type)){provider='BLS Public Data API';source=connectorSources.bls;error=bls.error||bls.refreshError||'';}
+    else if(type==='jobless_claims'){provider='U.S. Department of Labor / FRED';source=connectorSources.fred;error=fredErrors[type]||fred.error||fred.refreshError||'';}
+    else if(type==='retail_sales'){provider='U.S. Census / FRED';source=connectorSources.fred;error=fredErrors[type]||fred.error||fred.refreshError||'';}
+    else if(['gdp','pce','core_pce'].includes(type)){provider='BEA / FRED';source=connectorSources.fred;error=fredErrors[type]||fred.error||fred.refreshError||'';}
+    else if(type==='fomc'){provider='Federal Reserve official statements';source=connectorSources.federalReserve;error=fedFomc.error||fedFomc.refreshError||'';}
+    const live=forceRefresh&&source.status==='live'&&!error;
+    const status=live?'live':source.status==='offline'?'offline':'cached';
+    const checked=forceRefresh?responseNow:(source.lastChecked||staticIso);
+    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:checked,lastSuccess:live?responseNow:(source.lastSuccess||null),lastDataChanged:source.lastDataChanged||staticIso,error:error||'',recovery:status==='live'?'Connected':status==='cached'?'Automatic retry and cached fallback active':'Refresh Admin to retry; fallback remains available'};
+  };
+  const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
+  return json({engineVersion:'stable-data-phase1.3-per-news-health',events,connectionHealth,healthMode:forceRefresh?'live-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors,staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
