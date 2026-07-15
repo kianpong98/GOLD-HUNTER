@@ -19,12 +19,12 @@
     }).join(''):'<p class="admin-note">没有符合筛选条件的新闻。</p>';
     updateStats();
   }
+  const ageMinutes=value=>{const t=new Date(value||0).getTime();return Number.isFinite(t)?(Date.now()-t)/60000:Infinity;};
+  const effectiveStatus=v=>{const age=ageMinutes(v?.lastSuccess);if(age<=10)return 'live';if(age<=120)return 'cached';return v?.status||'offline';};
   function updateStats(){const waiting=events.filter(e=>e.previousStatus==='awaiting_official'||(e.released&&!e.actual&&!e.eventOnly)).length;$('#totalCount').textContent=events.length;$('#readyCount').textContent=events.filter(e=>e.officialAuto&&e.previousStatus==='ready').length;$('#waitingCount').textContent=waiting;$('#forecastCount').textContent=events.filter(e=>e.forecast).length;
     const cs=meta.connectorSources||{};const legacy=meta.officialSources||{};
     const normalize=(key,fallback)=>cs[key]||{status:fallback?'live':'offline',lastSuccess:meta.officialUpdatedAt||null,lastChecked:meta.lastCheckedAt||meta.updatedAt||null};
     const items=[['Static Cache',normalize('staticCache',legacy.staticCache)],['BLS',normalize('bls',legacy.bls)],['FRED',normalize('fred',legacy.fred)],['Department of Labor',normalize('dol',legacy.dol)],['BEA',normalize('bea',legacy.bea)],['Federal Reserve',normalize('federalReserve',legacy.federalReserve)],['Cloudflare KV',normalize('cloudflareKv',meta.kvConfigured)]];
-    const ageMinutes=value=>{const t=new Date(value||0).getTime();return Number.isFinite(t)?(Date.now()-t)/60000:Infinity;};
-    const effectiveStatus=v=>{const age=ageMinutes(v.lastSuccess);if(age<=10)return 'live';if(age<=120)return 'cached';return v.status||'offline';};
     const label={live:'● Connected',cached:'● Recovering',offline:'● Offline'};
     const shortError=err=>{const text=String(err||'');if(/too many subrequests/i.test(text))return 'Cloudflare Worker request limit';if(/HTTP\s*520/i.test(text))return 'Temporary upstream response (HTTP 520)';return text.length>90?`${text.slice(0,87)}...`:text;};
     const newsHealth=Array.isArray(meta.connectionHealth)?meta.connectionHealth:[];
