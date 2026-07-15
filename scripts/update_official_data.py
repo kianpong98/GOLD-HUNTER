@@ -15,6 +15,8 @@ import csv
 import io
 import json
 import math
+import os
+import random
 import re
 import time
 from datetime import datetime, timezone
@@ -48,16 +50,25 @@ FRED_SERIES = {
 
 
 def request(method: str, url: str, **kwargs: Any) -> requests.Response:
+    """Request an official endpoint with bounded retries and jitter.
+
+    Release-time traffic can briefly produce 429/5xx responses. Retrying only
+    those transient failures keeps the official connector stable without
+    hammering the provider or replacing the last verified snapshot.
+    """
     last: Exception | None = None
-    for attempt in range(3):
+    timeout = kwargs.pop("timeout", (10, 35))
+    for attempt in range(5):
         try:
-            response = SESSION.request(method, url, timeout=20, **kwargs)
+            response = SESSION.request(method, url, timeout=timeout, **kwargs)
+            if response.status_code in {408, 425, 429, 500, 502, 503, 504}:
+                raise RuntimeError(f"Transient HTTP {response.status_code}")
             response.raise_for_status()
             return response
         except Exception as exc:  # noqa: BLE001
             last = exc
-            if attempt < 2:
-                time.sleep(2 ** attempt)
+            if attempt < 4:
+                time.sleep(min(12, 1.5 * (2 ** attempt)) + random.uniform(0.1, 0.8))
     raise RuntimeError(f"Request failed: {url}: {last}")
 
 
@@ -162,6 +173,7 @@ def fetch_bls() -> tuple[dict[str, Any], dict[str, str]]:
                 "seriesid": series_ids,
                 "startyear": str(current_year - 3),
                 "endyear": str(current_year),
+                **({"registrationkey": os.environ["BLS_API_KEY"]} if os.environ.get("BLS_API_KEY") else {}),
             }),
         )
         payload = response.json()
