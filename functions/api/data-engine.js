@@ -838,7 +838,7 @@ export async function onRequestGet({request,env}){
     }
     return e;
   });
-  const events=prepared.map(e=>{
+  const allEvents=prepared.map(e=>{
     const m=official.metrics?.[e.type];
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
@@ -951,8 +951,13 @@ export async function onRequestGet({request,env}){
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
     const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
-    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
+    const hideAfterRelease=Boolean(!eventOnly&&exactCurrentRelease);
+    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,hideAfterRelease,...result};
   });
+  // Public calendar lifecycle: once a verified release has been copied into Last Release,
+  // remove that completed card from the live calendar. The next scheduled occurrence of
+  // the same news type remains visible as a separate event with its own date and forecast.
+  const events=allEvents.filter(e=>!e.hideAfterRelease);
   if(historyChanged&&env.GH_MARKET_DATA){
     await putJsonIfChanged(env.GH_MARKET_DATA,EVENTS_KEY,sanitizeEvents(persistable),undefined);
   }
@@ -999,7 +1004,7 @@ export async function onRequestGet({request,env}){
     const activeProvider=primaryLive?provider:(fallbackLive?'FRED official fallback':provider);
     return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider:activeProvider,primaryProvider:provider,status,lastChecked:primary?.lastChecked||fallback?.lastChecked||responseNow,lastSuccess:primaryLive?(primary?.lastSuccess||null):(fallback?.lastSuccess||primary?.lastSuccess||null),lastDataChanged:staticIso,httpStatus:primaryLive?(primary?.httpStatus??null):(fallbackLive?(fallback?.httpStatus??null):(primary?.httpStatus??null)),latencyMs:primaryLive?(primary?.latencyMs??null):(fallbackLive?(fallback?.latencyMs??null):(primary?.latencyMs??null)),error,recovery:primaryLive?'Connected':fallbackLive?'Connected via FRED fallback':status==='cached'?'Automatic retry and verified cache active':'Official source and FRED fallback unavailable'};
   };
-  const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
+  const connectionHealth=allEvents.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
   return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
