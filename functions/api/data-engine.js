@@ -20,6 +20,85 @@ const SEED_EVENTS = [
   {id:'fomc-minutes-2026-07-29',releasePeriod:'2026-07-29',type:'fomc_minutes',name:'FOMC Meeting Minutes',nameZh:'美联储会议纪要',datetime:'2026-08-20T02:00:00+08:00',forecast:'',previous:'',sourceName:'Federal Reserve',sourceUrl:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',impact:4,whyZh:'披露政策讨论细节，可能改变市场对未来利率路径的判断。'}
 ];
 
+// Verified official publication timestamps used to backfill older Last Release rows.
+// BLS time is 08:30 ET; these values are stored directly in Malaysia Time (MYT).
+// Keeping the publication date separate from the reference period prevents a data
+// month such as 2026-06 from being displayed as though it were a release date.
+const VERIFIED_RELEASE_DATETIMES = {
+  cpi_yoy: {
+    '2025-08':'2025-09-11T20:30:00+08:00',
+    '2025-09':'2025-10-24T20:30:00+08:00',
+    '2025-11':'2025-12-18T21:30:00+08:00',
+    '2025-12':'2026-01-13T21:30:00+08:00',
+    '2026-01':'2026-02-13T21:30:00+08:00',
+    '2026-02':'2026-03-11T20:30:00+08:00',
+    '2026-03':'2026-04-10T20:30:00+08:00',
+    '2026-04':'2026-05-12T20:30:00+08:00',
+    '2026-05':'2026-06-10T20:30:00+08:00',
+    '2026-06':'2026-07-14T20:30:00+08:00'
+  },
+  core_cpi_yoy: {},
+  ppi_yoy: {
+    '2025-08':'2025-09-10T20:30:00+08:00',
+    '2025-09':'2025-11-25T21:30:00+08:00',
+    // October 2025 had no separate PPI release; October data were published
+    // together with November data on 14 Jan 2026.
+    '2025-10':'2026-01-14T21:30:00+08:00',
+    '2025-11':'2026-01-14T21:30:00+08:00',
+    '2025-12':'2026-01-30T21:30:00+08:00',
+    '2026-01':'2026-02-27T21:30:00+08:00',
+    '2026-02':'2026-03-18T20:30:00+08:00',
+    '2026-03':'2026-04-14T20:30:00+08:00',
+    '2026-04':'2026-05-13T20:30:00+08:00',
+    '2026-05':'2026-06-11T20:30:00+08:00',
+    '2026-06':'2026-07-15T20:30:00+08:00'
+  },
+  core_ppi_yoy: {},
+  nfp: {
+    '2025-08':'2025-09-05T20:30:00+08:00',
+    '2025-09':'2025-11-20T21:30:00+08:00',
+    '2025-11':'2025-12-16T21:30:00+08:00',
+    '2025-12':'2026-01-09T21:30:00+08:00',
+    '2026-01':'2026-02-11T21:30:00+08:00',
+    '2026-02':'2026-03-06T21:30:00+08:00',
+    '2026-03':'2026-04-03T20:30:00+08:00',
+    '2026-04':'2026-05-08T20:30:00+08:00',
+    '2026-05':'2026-06-05T20:30:00+08:00',
+    '2026-06':'2026-07-02T20:30:00+08:00'
+  },
+  unemployment: {},
+  avg_hourly_earnings: {}
+};
+VERIFIED_RELEASE_DATETIMES.core_cpi_yoy = VERIFIED_RELEASE_DATETIMES.cpi_yoy;
+VERIFIED_RELEASE_DATETIMES.core_ppi_yoy = VERIFIED_RELEASE_DATETIMES.ppi_yoy;
+VERIFIED_RELEASE_DATETIMES.unemployment = VERIFIED_RELEASE_DATETIMES.nfp;
+VERIFIED_RELEASE_DATETIMES.avg_hourly_earnings = VERIFIED_RELEASE_DATETIMES.nfp;
+
+function verifiedReleaseDateTime(type,period){
+  const canonical=canonicalType({type});
+  const key=String(period||'').trim();
+  const exact=VERIFIED_RELEASE_DATETIMES[canonical]?.[key];
+  if(exact)return exact;
+  // Initial claims are normally released on the Thursday following the
+  // reported week-ending Saturday. This deterministic fallback is used only
+  // when a stored row does not already contain an authoritative timestamp.
+  if(canonical==='jobless_claims'&&/^\d{4}-\d{2}-\d{2}$/.test(key)){
+    const d=new Date(`${key}T00:00:00Z`);
+    if(Number.isFinite(d.getTime())){
+      d.setUTCDate(d.getUTCDate()+5);
+      return `${d.toISOString().slice(0,10)}T20:30:00+08:00`;
+    }
+  }
+  if(canonical==='fomc'&&/^\d{4}-\d{2}-\d{2}$/.test(key)){
+    const d=new Date(`${key}T00:00:00Z`);
+    if(Number.isFinite(d.getTime())){
+      d.setUTCDate(d.getUTCDate()+1);
+      return `${d.toISOString().slice(0,10)}T02:00:00+08:00`;
+    }
+  }
+  return '';
+}
+
 const AUTO_TYPES = new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc']);
 const EVENT_ONLY_TYPES = new Set(['fomc_minutes','fed_speech']);
 
@@ -691,7 +770,7 @@ export async function onRequestGet({request,env}){
     }catch{/* History persistence must never break the public calendar response. */}
   }
   const now=Date.now();
-  let archiveChanged=false;
+  let historyChanged=false;
   const persistable=stored.map(e=>({...e}));
   const prepared=dedupeEvents(persistable.filter(e=>Number(e.impact)>=4&&!REMOVED_TYPES.has(e.type))).map(e=>{
     const keys=[`${canonicalType(e)}|${String(e.releasePeriod||'')}`,String(e.id||'')].filter(Boolean);
@@ -725,21 +804,57 @@ export async function onRequestGet({request,env}){
       previous=anyMetric?.previous||'';
     }
 
-    // At Malaysia midnight on the day after release, archive the complete released row once.
-    // Forecast is then cleared, so Admin only needs to enter the next release forecast.
+    // As soon as an official release is verified, save the complete row into Last Release.
+    // This records the real scheduled publication timestamp and preserves the exact
+    // Actual / Forecast / Previous values shown on release day. It does not clear the
+    // live forecast or remove the released news from today's homepage.
+    if(!eventOnly&&exactCurrentRelease){
+      const releasedRow={
+        period:e.releasePeriod||'',
+        dateTime:e.datetime||'',
+        releaseDateTime:e.datetime||'',
+        actual:actual||'',
+        forecast:e.forecast||'',
+        previous:previous||''
+      };
+      const previousRow=e.lastRelease||{};
+      const releaseChanged=
+        String(previousRow.period||'')!==String(releasedRow.period)||
+        String(previousRow.dateTime||previousRow.releaseDateTime||'')!==String(releasedRow.dateTime)||
+        String(previousRow.actual||'')!==String(releasedRow.actual)||
+        String(previousRow.forecast||'')!==String(releasedRow.forecast)||
+        String(previousRow.previous||'')!==String(releasedRow.previous);
+      if(releaseChanged){
+        e.lastRelease={...previousRow,...releasedRow};
+        const existing=Array.isArray(e.releaseHistory)?e.releaseHistory:[];
+        const byPeriod=new Map(existing.map(row=>[String(row?.period||''),row]));
+        byPeriod.set(String(releasedRow.period),{...(byPeriod.get(String(releasedRow.period))||{}),...releasedRow});
+        e.releaseHistory=[...byPeriod.values()]
+          .filter(row=>row?.period&&row?.actual)
+          .sort((a,b)=>{
+            const ad=Date.parse(String(a.dateTime||a.releaseDateTime||''));
+            const bd=Date.parse(String(b.dateTime||b.releaseDateTime||''));
+            if(Number.isFinite(ad)&&Number.isFinite(bd))return bd-ad;
+            return String(b.period||'').localeCompare(String(a.period||''));
+          })
+          .slice(0,100);
+        historyChanged=true;
+      }
+    }
+
+    // At Malaysia midnight on the day after release, mark the event as archived.
+    // Forecast is intentionally preserved; it is part of the released record and must
+    // never disappear merely because the lifecycle advanced to the next day.
     const archiveAt=nextMalaysiaDayStart(e.datetime);
     if(!eventOnly&&exactCurrentRelease&&Number.isFinite(archiveAt)&&now>=archiveAt&&e.archivedPeriod!==e.releasePeriod){
       const archivedAt=new Date().toISOString();
-      const archivedRow={period:e.releasePeriod||'',dateTime:e.datetime||'',actual,forecast:e.forecast||'',previous:previous||'',archivedAt};
-      e.lastRelease=archivedRow;
-      const existing=Array.isArray(e.releaseHistory)?e.releaseHistory:[];
-      const byPeriod=new Map(existing.map(row=>[String(row?.period||''),row]));
-      byPeriod.set(String(archivedRow.period),archivedRow);
-      e.releaseHistory=[...byPeriod.values()].filter(row=>row?.period&&row?.actual).sort((a,b)=>String(b.period).localeCompare(String(a.period))).slice(0,100);
       e.archivedPeriod=e.releasePeriod||'';
       e.archivedAt=archivedAt;
-      e.forecast='';
-      archiveChanged=true;
+      if(e.lastRelease)e.lastRelease={...e.lastRelease,archivedAt};
+      if(Array.isArray(e.releaseHistory)){
+        e.releaseHistory=e.releaseHistory.map(row=>String(row?.period||'')===String(e.releasePeriod||'')?{...row,archivedAt}:row);
+      }
+      historyChanged=true;
     }
 
     // Once archived, the released row lives in Last Release rather than the live values.
@@ -750,24 +865,40 @@ export async function onRequestGet({request,env}){
     const history=[];
     const forecastMap=e.releaseForecasts||{};
     const seenHistory=new Set();
+    // Release-history dates must represent the real publication timestamp, not the data month.
+    // Dates are sourced only from authoritative schedule rows or archived releases. We never
+    // convert a period such as 2026-06 into a fake calendar date.
+    const releaseDateByPeriod=new Map();
+    if(e.releasePeriod&&e.datetime)releaseDateByPeriod.set(String(e.releasePeriod),String(e.datetime));
+    for(const row of Array.isArray(e.releaseHistory)?e.releaseHistory:[]){
+      if(row?.period&&(row.dateTime||row.releaseDateTime))releaseDateByPeriod.set(String(row.period),String(row.dateTime||row.releaseDateTime));
+    }
+    if(e.lastRelease?.period&&(e.lastRelease.dateTime||e.lastRelease.releaseDateTime))releaseDateByPeriod.set(String(e.lastRelease.period),String(e.lastRelease.dateTime||e.lastRelease.releaseDateTime));
     const addHistory=(row,lastRelease=false)=>{
       if(!row?.period||!row?.actual||seenHistory.has(String(row.period)))return;
       seenHistory.add(String(row.period));
-      history.push({...row,forecast:forecastMap[row.period]||row.forecast||'',lastRelease});
+      const dateTime=String(row.dateTime||row.releaseDateTime||releaseDateByPeriod.get(String(row.period))||verifiedReleaseDateTime(e.type,row.period)||'');
+      history.push({...row,dateTime,forecast:forecastMap[row.period]||row.forecast||'',lastRelease});
     };
     const eventHistory=e.type==='fomc'?sanitizeFomcHistory(e.releaseHistory||[]):(e.releaseHistory||[]);
     for(const row of eventHistory)addHistory(row,Boolean(e.lastRelease?.period===row.period));
     if(e.lastRelease?.actual&&(e.type!=='fomc'||VERIFIED_FOMC_PERIODS.has(String(e.lastRelease.period||'').slice(0,10))))addHistory(e.lastRelease,true);
     for(const row of (e.type==='fomc'?sanitizeFomcHistory(rawHistory):rawHistory))addHistory(row,false);
     if(e.type==='fomc')for(const row of VERIFIED_FOMC_HISTORY)addHistory(row,false);
-    history.sort((a,b)=>String(b.period).localeCompare(String(a.period)));
+    history.sort((a,b)=>{
+      const ad=Date.parse(String(a.dateTime||'')),bd=Date.parse(String(b.dateTime||''));
+      if(Number.isFinite(ad)&&Number.isFinite(bd))return bd-ad;
+      if(Number.isFinite(ad))return -1;
+      if(Number.isFinite(bd))return 1;
+      return String(b.period).localeCompare(String(a.period));
+    });
     history.splice(10);
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
     const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
-  if(archiveChanged&&env.GH_MARKET_DATA){
+  if(historyChanged&&env.GH_MARKET_DATA){
     await putJsonIfChanged(env.GH_MARKET_DATA,EVENTS_KEY,sanitizeEvents(persistable),undefined);
   }
   const staticIso=staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null;
@@ -795,31 +926,22 @@ export async function onRequestGet({request,env}){
     cloudflareKv:probeOr('cloudflareKv',{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?responseNow:null,lastChecked:responseNow,lastDataChanged:null,httpStatus:env.GH_MARKET_DATA?200:0,latencyMs:0,error:env.GH_MARKET_DATA?'':'GH_MARKET_DATA binding missing'})
   };
   const degraded=Object.entries(connectorSources).filter(([key,v])=>!['staticCache','cloudflareKv'].includes(key)&&v.status!=='live').map(([key])=>key);
-  const serviceImpacting=degraded.filter(key=>!(key==='dol'&&connectorSources.fred?.status==='live'));
-  const connectorMessage=serviceImpacting.length?`${serviceImpacting.join(', ')} temporarily unavailable; verified fallback or cached official data is being used where available.`:(degraded.length?'Primary source temporarily unavailable; official fallback is connected.':'');
+  const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
   const blsTypes=new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings']);
   const connectionFor=(event)=>{
     const type=event.type;
     let provider='FRED official fallback',primary=connectorSources.fred,fallback=null;
     if(blsTypes.has(type)){provider='BLS Public Data API';primary=connectorSources.bls;}
-    else if(type==='jobless_claims'){provider='U.S. Department of Labor → FRED fallback';primary=connectorSources.dol;fallback=connectorSources.fred;}
+    else if(type==='jobless_claims'){provider='U.S. Department of Labor';primary=connectorSources.dol;fallback=connectorSources.fred;}
     else if(type==='retail_sales'){provider='U.S. Census Bureau';primary=connectorSources.census;fallback=connectorSources.fred;}
     else if(['gdp','pce','core_pce'].includes(type)){provider='U.S. Bureau of Economic Analysis';primary=connectorSources.bea;fallback=connectorSources.fred;}
     else if(type==='fomc'){provider='Federal Reserve';primary=connectorSources.federalReserve;}
     const hasCurrentMetric=Boolean(official.metrics?.[type]?.actual);
     const primaryLive=primary?.status==='live';
     const fallbackLive=fallback?.status==='live';
-    // A healthy official fallback is considered connected, not cached/offline.
-    // For Initial Jobless Claims this means DOL remains primary, while FRED ICSA
-    // automatically supplies continuity when DOL returns 403/429/5xx or times out.
-    const usingFallback=!primaryLive&&fallbackLive;
-    const status=primaryLive||usingFallback?'live':hasCurrentMetric?'cached':'offline';
-    const activeSource=primaryLive?primary:(usingFallback?fallback:primary);
+    const status=primaryLive?'live':fallbackLive||hasCurrentMetric?'cached':'offline';
     const error=primaryLive?'':(primary?.error||'');
-    const activeProvider=usingFallback
-      ? (type==='jobless_claims'?'FRED ICSA (official fallback)':`${provider} fallback`)
-      : provider;
-    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider:activeProvider,status,lastChecked:activeSource?.lastChecked||responseNow,lastSuccess:activeSource?.lastSuccess||primary?.lastSuccess||fallback?.lastSuccess||null,lastDataChanged:staticIso,httpStatus:activeSource?.httpStatus??null,latencyMs:activeSource?.latencyMs??null,error,recovery:primaryLive?'Connected':usingFallback?'Connected via official fallback; primary source auto-retrying':status==='cached'?'Verified cache active; automatic recovery running':'Official source and fallback unavailable',primaryProvider:provider,primaryStatus:primary?.status||'offline',fallbackStatus:fallback?.status||null,usingFallback};
+    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess:primary?.lastSuccess||fallback?.lastSuccess||null,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery:status==='live'?'Connected':status==='cached'?(fallbackLive?'Primary unavailable; official fallback connected':'Automatic retry and cached fallback active'):'Official source and fallback unavailable'};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
   return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});

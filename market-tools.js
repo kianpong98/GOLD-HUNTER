@@ -58,16 +58,60 @@
     if(grid) grid.innerHTML=states.map(s=>`<article class="session-card ${s.open?'open':'closed'}"><div><h4>${s.name}</h4><span>${s.status}</span></div><p><b>${s.action}</b> ${s.count}</p></article>`).join('');
   }
   function fmt(iso){try{return new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(iso))+' MYT';}catch{return'TBA';}}
+  function historyFmt(value){if(!value)return'—';const d=new Date(value);if(!Number.isFinite(d.getTime()))return'—';try{return new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' MYT';}catch{return'—';}}
   function countdown(iso){const ms=new Date(iso).getTime()-Date.now();if(!Number.isFinite(ms))return'TBA';if(ms<=0)return'Released';const total=Math.floor(ms/1000),d=Math.floor(total/86400),h=Math.floor((total%86400)/3600),m=Math.floor((total%3600)/60),sec=total%60;return d?`${d}D ${pad(h)}:${pad(m)}:${pad(sec)}`:`${pad(h)}:${pad(m)}:${pad(sec)}`;}
+  function impactTone(e){
+    const text=`${e.goldImpact||''} ${e.goldImpactZh||''}`.toLowerCase();
+    if(/support|bullish|利多|positive/.test(text)) return 'bullish';
+    if(/negative|bearish|pressure|利空/.test(text)) return 'bearish';
+    return 'neutral';
+  }
   function values(e){
     if(e.eventOnly){return `<div class="calendar-values event-only-values"><div><small>Status</small><b>${esc(e.status||'Scheduled')}</b></div><div><small>Release time</small><b>${esc(fmt(e.datetime))}</b></div></div>`;}
-    const insight=(e.comparison||e.goldImpact)?`<div class="release-insight"><span class="comparison ${String(e.comparison||'').toLowerCase().replace(/\s+/g,'-')}">${esc(e.comparison||'')}${e.comparisonZh?` · ${esc(e.comparisonZh)}`:''}</span>${e.difference?`<b>${esc(e.difference)}</b>`:''}${e.goldImpact?`<span>${esc(e.goldImpact)}</span><small>${esc(e.goldImpactZh||'')}</small>`:''}${e.surpriseStrength?`<em>${esc(e.surpriseStrength)} · ${esc(e.surpriseStrengthZh||'')}</em>`:''}</div>`:'';
+    const tone=impactTone(e);
+    const insight=(e.comparison||e.goldImpact)?`<div class="release-insight ${tone}"><span class="comparison">${esc(e.comparison||'')}${e.comparisonZh?` · ${esc(e.comparisonZh)}`:''}</span>${e.difference?`<b>${esc(e.difference)}</b>`:''}${e.goldImpact?`<span class="gold-impact-label">${esc(e.goldImpact)}</span><small>${esc(e.goldImpactZh||'')}</small>`:''}${e.surpriseStrength?`<em>${esc(e.surpriseStrength)}${e.surpriseStrengthZh?` · ${esc(e.surpriseStrengthZh)}`:''}</em>`:''}</div>`:'';
     return `<div class="calendar-values"><div><small>Actual</small><b>${esc(e.actual||'—')}</b></div><div><small>Forecast</small><b>${esc(e.forecast||'—')}</b></div><div><small>Previous</small><b>${esc(e.previous||'—')}</b></div>${insight}</div>`;
   }
-  function historyTable(e){if(e.eventOnly)return'';const rows=Array.isArray(e.history)?e.history.slice(0,10):[];if(!rows.length)return'';return `<details class="release-history"><summary>${e.lastRelease?.actual?'Last Release':'Past releases'} (${rows.length})</summary><div class="history-scroll"><table><thead><tr><th>Date / Period</th><th>Actual</th><th>Forecast</th><th>Previous</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.dateTime||r.period||'—')}</td><td>${esc(r.actual||'—')}</td><td>${esc(r.forecast||'—')}</td><td>${esc(r.previous||'—')}</td></tr>`).join('')}</tbody></table></div></details>`;}
-  function card(e,full=false){const stars='★'.repeat(Number(e.impact)||4);const source=e.sourceUrl?`<a class="event-source" href="${esc(e.sourceUrl)}" target="_blank" rel="noopener">${esc(e.sourceName||'Official source')} ↗</a>`:'';return `<article class="${full?'calendar-item':'market-event-row'}" data-news-type="${esc(e.type||e.id||'economic_event')}" data-event-type="${esc(e.type||e.id||'economic_event')}" data-event-name="${esc(e.name||'Economic event')}" data-analytics-section="economic_news"><div class="${full?'calendar-date':'market-event-main'}"><span class="impact-badge impact-${e.impact}">${stars}</span><div><h3>${esc(e.name)}</h3><p class="event-zh">${esc(e.nameZh||'')}</p><p>${esc(fmt(e.datetime))}</p><strong class="event-countdown" data-date="${esc(e.datetime)}">${esc(countdown(e.datetime))}</strong></div></div>${full?`<div class="calendar-copy"><details><summary>为什么重要？</summary><p>${esc(e.whyZh||'此数据可能影响美元、利率预期与黄金波动。')}</p></details>${source}${historyTable(e)}</div>`:''}${values(e)}</article>`;}
+  function historyTable(e){if(e.eventOnly)return'';const rows=Array.isArray(e.history)?e.history.slice(0,10):[];if(!rows.length)return'';return `<details class="release-history"><summary>Last Release (${rows.length})</summary><div class="history-scroll"><table><thead><tr><th>Release date</th><th>Actual</th><th>Forecast</th><th>Previous</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(historyFmt(r.dateTime||r.releaseDateTime||''))}</td><td>${esc(r.actual||'—')}</td><td>${esc(r.forecast||'—')}</td><td>${esc(r.previous||'—')}</td></tr>`).join('')}</tbody></table></div></details>`;}
+  function card(e,full=false){
+    const source=e.sourceUrl?`<a class="event-source" href="${esc(e.sourceUrl)}" target="_blank" rel="noopener">${esc(e.sourceName||'Official source')} ↗</a>`:'';
+    const tone=impactTone(e);
+    const released=countdown(e.datetime)==='Released';
+    if(!full){
+      return `<article class="market-event-row ${tone}" data-news-type="${esc(e.type||e.id||'economic_event')}" data-event-type="${esc(e.type||e.id||'economic_event')}" data-event-name="${esc(e.name||'Economic event')}" data-analytics-section="economic_news"><div class="market-event-main"><div><h3>${esc(e.name)}</h3><p class="event-zh">${esc(e.nameZh||'')}</p><p>${esc(fmt(e.datetime))}</p><strong class="event-countdown" data-date="${esc(e.datetime)}">${esc(countdown(e.datetime))}</strong></div></div>${values(e)}</article>`;
+    }
+    const statusClass=released?'released':'upcoming';
+    const statusText=released?'Released':countdown(e.datetime);
+    const insight=(e.comparison||e.goldImpact||released)?`<section class="calendar-impact-panel ${tone}"><div class="calendar-impact-head"><span class="impact-arrow">${tone==='bullish'?'↓':tone==='bearish'?'↑':'◷'}</span><strong>${esc(e.comparison||(!released?'Upcoming':'Released'))}${e.comparisonZh?` <i>${esc(e.comparisonZh)}</i>`:''}</strong></div>${e.difference?`<b class="impact-difference">${esc(e.difference)}</b>`:''}${e.goldImpact?`<span class="impact-pill">${esc(e.goldImpactZh||e.goldImpact)}</span><p>${esc(e.goldImpact)}</p>`:`<p>${released?'Official result released.':'Waiting for official release.'}</p>`}${e.surpriseStrength?`<em>${esc(e.surpriseStrength)}${e.surpriseStrengthZh?` · ${esc(e.surpriseStrengthZh)}`:''}</em>`:''}</section>`:'';
+    return `<article class="calendar-item calendar-item-v2 ${tone}" data-news-type="${esc(e.type||e.id||'economic_event')}" data-event-type="${esc(e.type||e.id||'economic_event')}" data-event-name="${esc(e.name||'Economic event')}" data-analytics-section="economic_news"><section class="calendar-event-info"><div class="calendar-title-row"><h3>${esc(e.name)}</h3></div><p class="event-zh">${esc(e.nameZh||'')}</p><div class="calendar-meta"><span>▣ ${esc(fmt(e.datetime))}</span><strong class="event-countdown ${statusClass}" data-date="${esc(e.datetime)}">${esc(statusText)}</strong></div><div class="calendar-links">${source}${historyTable(e)}</div></section><section class="calendar-metrics"><div><small>Actual</small><b class="actual-value">${esc(e.actual||'—')}</b></div><div><small>Forecast</small><b>${esc(e.forecast||'—')}</b></div><div><small>Previous</small><b>${esc(e.previous||'—')}</b></div></section>${insight}</article>`;
+  }
   function updateCountdowns(){document.querySelectorAll('.event-countdown[data-date]').forEach(el=>el.textContent=countdown(el.dataset.date));}
-  async function loadEvents(){const home=document.getElementById('homeMarketEvents'),full=document.getElementById('calendarList');if(!home&&!full)return;try{const eventUrl=`${EVENTS_API}?v=${Date.now()}`;const r=await fetch(eventUrl,{cache:'no-store',headers:{'cache-control':'no-cache','pragma':'no-cache'}}),d=await r.json();if(!r.ok)throw new Error(d.error||'Calendar unavailable');const events=(d.events||[]).filter(e=>Number(e.impact)>=4&&!/ism/i.test(String(e.type||''))&&!/ISM/i.test(String(e.name||''))).sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));const relevant=events.filter(e=>{const t=new Date(e.datetime).getTime();if(!Number.isFinite(t))return false;const day=String(e.datetime||'').slice(0,10);const archiveAt=/^\d{4}-\d{2}-\d{2}$/.test(day)?new Date(`${day}T00:00:00+08:00`).getTime()+86400000:t;return Date.now()<archiveAt;});if(home)home.innerHTML=relevant.slice(0,3).map(e=>card(e,false)).join('')||'<div class="market-empty">No upcoming events.</div>';if(full)full.innerHTML=events.map(e=>card(e,true)).join('')||'<div class="market-empty">No events.</div>';const stamp=document.getElementById('calendarUpdated');if(stamp)stamp.textContent=`Last updated: ${new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'medium',timeStyle:'medium'}).format(new Date(d.updatedAt))} MYT`;updateCountdowns();}catch(e){const msg=`<div class="market-empty"><b>Calendar unavailable.</b><span>${esc(e.message)}</span></div>`;if(home)home.innerHTML=msg;if(full)full.innerHTML=msg;}}
+  async function loadEvents(){
+    const home=document.getElementById('homeMarketEvents'),full=document.getElementById('calendarList');
+    if(!home&&!full)return;
+    try{
+      const eventUrl=`${EVENTS_API}?v=${Date.now()}`;
+      const r=await fetch(eventUrl,{cache:'no-store',headers:{'cache-control':'no-cache','pragma':'no-cache'}}),d=await r.json();
+      if(!r.ok)throw new Error(d.error||'Calendar unavailable');
+      const raw=(d.events||[]).filter(e=>Number(e.impact)>=4&&!/ism/i.test(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
+      const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      const day=e=>String(e.datetime||'').slice(0,10);
+      const ms=e=>new Date(e.datetime).getTime();
+      const ordered=[...raw].sort((a,b)=>{
+        const at=ms(a),bt=ms(b);
+        const ag=day(a)===today?0:(at>=Date.now()?1:2);
+        const bg=day(b)===today?0:(bt>=Date.now()?1:2);
+        if(ag!==bg)return ag-bg;
+        return ag===2?bt-at:at-bt;
+      });
+      const homeEvents=ordered.filter(e=>day(e)===today||ms(e)>=Date.now()).slice(0,3);
+      if(home)home.innerHTML=homeEvents.map(e=>card(e,false)).join('')||'<div class="market-empty">No upcoming events.</div>';
+      if(full)full.innerHTML=ordered.map(e=>card(e,true)).join('')||'<div class="market-empty">No events.</div>';
+      const stamp=document.getElementById('calendarUpdated');
+      if(stamp)stamp.textContent=`Last updated: ${new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'medium',timeStyle:'medium'}).format(new Date(d.updatedAt))} MYT`;
+      updateCountdowns();
+    }catch(e){const msg=`<div class="market-empty"><b>Calendar unavailable.</b><span>${esc(e.message)}</span></div>`;if(home)home.innerHTML=msg;if(full)full.innerHTML=msg;}
+  }
 
   function setQuote(id,value,change,updatedAt){
     const valid=Number.isFinite(Number(value));
