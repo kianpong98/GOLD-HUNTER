@@ -759,9 +759,26 @@ async function probeOfficialSource(name,url,options={}){
 async function probeOfficialSources(env){
   const year=new Date().getUTCFullYear();
   const blsBody=JSON.stringify({seriesid:['CUUR0000SA0'],startyear:String(year-1),endyear:String(year)});
+
+  // FRED is the common fallback for all numeric releases. Probe two lightweight
+  // official CSV endpoints sequentially so one temporary series/CDN failure does
+  // not incorrectly mark every fallback as unavailable. This adds at most one
+  // extra subrequest and remains well below the Worker limit.
+  const probeFred=async()=>{
+    const first=await probeOfficialSource('fred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA',{accept:'text/csv'});
+    if(first.status==='live')return first;
+    const second=await probeOfficialSource('fred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE',{accept:'text/csv'});
+    if(second.status==='live')return second;
+    return {
+      ...second,
+      lastSuccess:first.lastSuccess||second.lastSuccess||null,
+      error:[first.error,second.error].filter(Boolean).join(' | ')||second.error||first.error||'FRED unavailable'
+    };
+  };
+
   const checks=await Promise.all([
     probeOfficialSource('bls','https://api.bls.gov/publicAPI/v2/timeseries/data/',{method:'POST',accept:'application/json',headers:{'content-type':'application/json'},body:blsBody}),
-    probeOfficialSource('fred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE',{accept:'text/csv'}),
+    probeFred(),
     probeOfficialSource('dol','https://www.dol.gov/ui/data.pdf',{accept:'application/pdf'}),
     probeOfficialSource('census','https://www.census.gov/retail/index.html',{accept:'text/html'}),
     probeOfficialSource('bea','https://www.bea.gov/news/schedule',{accept:'text/html'}),
@@ -985,8 +1002,14 @@ export async function onRequestGet({request,env}){
     federalReserve:probeOr('federalReserve',fallbackSource('federalReserve',['fomc'])),
     cloudflareKv:probeOr('cloudflareKv',{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?responseNow:null,lastChecked:responseNow,lastDataChanged:null,httpStatus:env.GH_MARKET_DATA?200:0,latencyMs:0,error:env.GH_MARKET_DATA?'':'GH_MARKET_DATA binding missing'})
   };
-  const degraded=Object.entries(connectorSources).filter(([key,v])=>!['staticCache','cloudflareKv'].includes(key)&&v.status!=='live').map(([key])=>key);
-  const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
+  // Only report a connector as degraded when it is unavailable AND its FRED
+  // fallback is also unavailable. A primary 403/5xx with a healthy FRED fallback
+  // is an operational connection, not an outage.
+  const sourceFallbackMap={bls:'fred',dol:'fred',census:'fred',bea:'fred',federalReserve:'fred'};
+  const degraded=Object.entries(sourceFallbackMap)
+    .filter(([primaryKey,fallbackKey])=>connectorSources[primaryKey]?.status!=='live'&&connectorSources[fallbackKey]?.status!=='live')
+    .map(([primaryKey])=>primaryKey);
+  const connectorMessage=degraded.length?`${degraded.join(', ')} and their FRED fallback are temporarily unavailable; verified cached official data remains in use.`:'';
   const blsTypes=new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings']);
   const connectionFor=(event)=>{
     const type=event.type;
@@ -1000,9 +1023,25 @@ export async function onRequestGet({request,env}){
     const primaryLive=primary?.status==='live';
     const fallbackLive=fallback?.status==='live';
     const status=(primaryLive||fallbackLive)?'live':hasCurrentMetric?'cached':'offline';
-    const error=primaryLive?'':(primary?.error||'');
     const activeProvider=primaryLive?provider:(fallbackLive?'FRED official fallback':provider);
-    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider:activeProvider,primaryProvider:provider,status,lastChecked:primary?.lastChecked||fallback?.lastChecked||responseNow,lastSuccess:primaryLive?(primary?.lastSuccess||null):(fallback?.lastSuccess||primary?.lastSuccess||null),lastDataChanged:staticIso,httpStatus:primaryLive?(primary?.httpStatus??null):(fallbackLive?(fallback?.httpStatus??null):(primary?.httpStatus??null)),latencyMs:primaryLive?(primary?.latencyMs??null):(fallbackLive?(fallback?.latencyMs??null):(primary?.latencyMs??null)),error,recovery:primaryLive?'Connected':fallbackLive?'Connected via FRED fallback':status==='cached'?'Automatic retry and verified cache active':'Official source and FRED fallback unavailable'};
+    // Do not surface the primary 403/5xx as an active error when FRED has already
+    // taken over successfully. Keep the primary failure available in connectorSources
+    // for diagnostics, while the per-news card remains green and truthful.
+    const error=(primaryLive||fallbackLive)?'':(primary?.error||fallback?.error||'');
+    const active=primaryLive?primary:(fallbackLive?fallback:primary);
+    return {
+      id:event.id,type,name:event.name,nameZh:event.nameZh,
+      provider:activeProvider,primaryProvider:provider,
+      fallbackActive:Boolean(!primaryLive&&fallbackLive),
+      status,
+      lastChecked:active?.lastChecked||fallback?.lastChecked||responseNow,
+      lastSuccess:active?.lastSuccess||fallback?.lastSuccess||primary?.lastSuccess||null,
+      lastDataChanged:staticIso,
+      httpStatus:active?.httpStatus??null,
+      latencyMs:active?.latencyMs??null,
+      error,
+      recovery:primaryLive?'Connected':fallbackLive?'Connected via FRED fallback':status==='cached'?'Primary and FRED temporarily unavailable; verified cache active':'Official source and FRED fallback unavailable'
+    };
   };
   const connectionHealth=allEvents.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
   return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
