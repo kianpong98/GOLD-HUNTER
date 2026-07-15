@@ -1083,3 +1083,34 @@ body.home-page .hero{padding-top:220px!important;}
   .release-insight{grid-template-columns:1fr auto;gap:5px 8px;padding:9px}
   .release-insight span:last-of-type,.release-insight small,.release-insight em{grid-column:1/-1}
 }
+
+/* Gold-impact status colours: instant visual direction */
+.release-insight.gold-bullish{
+  border-color:rgba(46,220,220,.42);
+  border-left:4px solid #2edcdc;
+  background:linear-gradient(90deg,rgba(46,220,220,.10),rgba(46,220,220,.025) 58%,rgba(255,255,255,.018));
+}
+.release-insight.gold-bearish{
+  border-color:rgba(255,77,79,.42);
+  border-left:4px solid #ff4d4f;
+  background:linear-gradient(90deg,rgba(255,77,79,.11),rgba(255,77,79,.025) 58%,rgba(255,255,255,.018));
+}
+.release-insight.gold-neutral{
+  border-color:rgba(190,190,190,.25);
+  border-left:4px solid #a9a9a9;
+  background:linear-gradient(90deg,rgba(190,190,190,.07),rgba(255,255,255,.018));
+}
+.release-insight.gold-bullish .comparison,
+.release-insight.gold-bullish .gold-impact-label,
+.release-insight.gold-bullish .gold-impact-zh,
+.release-insight.gold-bullish em{color:#2edcdc!important}
+.release-insight.gold-bearish .comparison,
+.release-insight.gold-bearish .gold-impact-label,
+.release-insight.gold-bearish .gold-impact-zh,
+.release-insight.gold-bearish em{color:#ff6466!important}
+.release-insight.gold-neutral .comparison,
+.release-insight.gold-neutral .gold-impact-label,
+.release-insight.gold-neutral .gold-impact-zh,
+.release-insight.gold-neutral em{color:#b8b8b8!important}
+.release-insight .gold-impact-label{font-weight:800;letter-spacing:.01em}
+.release-insight .gold-impact-zh{font-weight:700;opacity:1}
