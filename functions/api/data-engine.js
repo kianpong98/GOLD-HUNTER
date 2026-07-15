@@ -663,7 +663,7 @@ export async function onRequestGet({request,env}){
     }catch{/* History persistence must never break the public calendar response. */}
   }
   const now=Date.now();
-  let archiveChanged=false;
+  let historyChanged=false;
   const persistable=stored.map(e=>({...e}));
   const prepared=dedupeEvents(persistable.filter(e=>Number(e.impact)>=4&&!REMOVED_TYPES.has(e.type))).map(e=>{
     const keys=[`${canonicalType(e)}|${String(e.releasePeriod||'')}`,String(e.id||'')].filter(Boolean);
@@ -697,21 +697,57 @@ export async function onRequestGet({request,env}){
       previous=anyMetric?.previous||'';
     }
 
-    // At Malaysia midnight on the day after release, archive the complete released row once.
-    // Forecast is then cleared, so Admin only needs to enter the next release forecast.
+    // As soon as an official release is verified, save the complete row into Last Release.
+    // This records the real scheduled publication timestamp and preserves the exact
+    // Actual / Forecast / Previous values shown on release day. It does not clear the
+    // live forecast or remove the released news from today's homepage.
+    if(!eventOnly&&exactCurrentRelease){
+      const releasedRow={
+        period:e.releasePeriod||'',
+        dateTime:e.datetime||'',
+        releaseDateTime:e.datetime||'',
+        actual:actual||'',
+        forecast:e.forecast||'',
+        previous:previous||''
+      };
+      const previousRow=e.lastRelease||{};
+      const releaseChanged=
+        String(previousRow.period||'')!==String(releasedRow.period)||
+        String(previousRow.dateTime||previousRow.releaseDateTime||'')!==String(releasedRow.dateTime)||
+        String(previousRow.actual||'')!==String(releasedRow.actual)||
+        String(previousRow.forecast||'')!==String(releasedRow.forecast)||
+        String(previousRow.previous||'')!==String(releasedRow.previous);
+      if(releaseChanged){
+        e.lastRelease={...previousRow,...releasedRow};
+        const existing=Array.isArray(e.releaseHistory)?e.releaseHistory:[];
+        const byPeriod=new Map(existing.map(row=>[String(row?.period||''),row]));
+        byPeriod.set(String(releasedRow.period),{...(byPeriod.get(String(releasedRow.period))||{}),...releasedRow});
+        e.releaseHistory=[...byPeriod.values()]
+          .filter(row=>row?.period&&row?.actual)
+          .sort((a,b)=>{
+            const ad=Date.parse(String(a.dateTime||a.releaseDateTime||''));
+            const bd=Date.parse(String(b.dateTime||b.releaseDateTime||''));
+            if(Number.isFinite(ad)&&Number.isFinite(bd))return bd-ad;
+            return String(b.period||'').localeCompare(String(a.period||''));
+          })
+          .slice(0,100);
+        historyChanged=true;
+      }
+    }
+
+    // At Malaysia midnight on the day after release, mark the event as archived.
+    // Forecast is intentionally preserved; it is part of the released record and must
+    // never disappear merely because the lifecycle advanced to the next day.
     const archiveAt=nextMalaysiaDayStart(e.datetime);
     if(!eventOnly&&exactCurrentRelease&&Number.isFinite(archiveAt)&&now>=archiveAt&&e.archivedPeriod!==e.releasePeriod){
       const archivedAt=new Date().toISOString();
-      const archivedRow={period:e.releasePeriod||'',dateTime:e.datetime||'',actual,forecast:e.forecast||'',previous:previous||'',archivedAt};
-      e.lastRelease=archivedRow;
-      const existing=Array.isArray(e.releaseHistory)?e.releaseHistory:[];
-      const byPeriod=new Map(existing.map(row=>[String(row?.period||''),row]));
-      byPeriod.set(String(archivedRow.period),archivedRow);
-      e.releaseHistory=[...byPeriod.values()].filter(row=>row?.period&&row?.actual).sort((a,b)=>String(b.period).localeCompare(String(a.period))).slice(0,100);
       e.archivedPeriod=e.releasePeriod||'';
       e.archivedAt=archivedAt;
-      e.forecast='';
-      archiveChanged=true;
+      if(e.lastRelease)e.lastRelease={...e.lastRelease,archivedAt};
+      if(Array.isArray(e.releaseHistory)){
+        e.releaseHistory=e.releaseHistory.map(row=>String(row?.period||'')===String(e.releasePeriod||'')?{...row,archivedAt}:row);
+      }
+      historyChanged=true;
     }
 
     // Once archived, the released row lives in Last Release rather than the live values.
@@ -755,7 +791,7 @@ export async function onRequestGet({request,env}){
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
-  if(archiveChanged&&env.GH_MARKET_DATA){
+  if(historyChanged&&env.GH_MARKET_DATA){
     await putJsonIfChanged(env.GH_MARKET_DATA,EVENTS_KEY,sanitizeEvents(persistable),undefined);
   }
   const hasMetrics=source=>Boolean(Object.keys(source?.metrics||{}).length);
