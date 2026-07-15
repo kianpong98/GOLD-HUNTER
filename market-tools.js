@@ -71,7 +71,14 @@
     const insight=(e.comparison||e.goldImpact)?`<div class="release-insight ${tone}"><span class="comparison">${esc(e.comparison||'')}${e.comparisonZh?` · ${esc(e.comparisonZh)}`:''}</span>${e.difference?`<b>${esc(e.difference)}</b>`:''}${e.goldImpact?`<span class="gold-impact-label">${esc(e.goldImpact)}</span><small>${esc(e.goldImpactZh||'')}</small>`:''}${e.surpriseStrength?`<em>${esc(e.surpriseStrength)}${e.surpriseStrengthZh?` · ${esc(e.surpriseStrengthZh)}`:''}</em>`:''}</div>`:'';
     return `<div class="calendar-values"><div><small>Actual</small><b>${esc(e.actual||'—')}</b></div><div><small>Forecast</small><b>${esc(e.forecast||'—')}</b></div><div><small>Previous</small><b>${esc(e.previous||'—')}</b></div>${insight}</div>`;
   }
-  function historyTable(e){if(e.eventOnly)return'';const rows=Array.isArray(e.history)?e.history.slice(0,10):[];if(!rows.length)return'';return `<details class="release-history"><summary>${e.lastRelease?.actual?'Last Release':'Past releases'} (${rows.length})</summary><div class="history-scroll"><table><thead><tr><th>Date / Period</th><th>Actual</th><th>Forecast</th><th>Previous</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.dateTime||r.period||'—')}</td><td>${esc(r.actual||'—')}</td><td>${esc(r.forecast||'—')}</td><td>${esc(r.previous||'—')}</td></tr>`).join('')}</tbody></table></div></details>`;}
+  function historyReleaseDate(row){
+    const raw=String(row?.dateTime||row?.releaseDateTime||row?.releaseDate||'').trim();
+    if(!raw)return '—';
+    const ms=Date.parse(raw);
+    if(!Number.isFinite(ms))return '—';
+    return new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(ms)).replace(',', '')+' MYT';
+  }
+  function historyTable(e){if(e.eventOnly)return'';const rows=Array.isArray(e.history)?e.history.slice(0,10):[];if(!rows.length)return'';return `<details class="release-history"><summary>${e.lastRelease?.actual?'Last Release':'Past releases'} (${rows.length})</summary><div class="history-scroll"><table><thead><tr><th>Release date</th><th>Actual</th><th>Forecast</th><th>Previous</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(historyReleaseDate(r))}</td><td>${esc(r.actual||'—')}</td><td>${esc(r.forecast||'—')}</td><td>${esc(r.previous||'—')}</td></tr>`).join('')}</tbody></table></div></details>`;}
   function card(e,full=false){
     const source=e.sourceUrl?`<a class="event-source" href="${esc(e.sourceUrl)}" target="_blank" rel="noopener">${esc(e.sourceName||'Official source')} ↗</a>`:'';
     const tone=impactTone(e);

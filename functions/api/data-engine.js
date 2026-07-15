@@ -116,7 +116,7 @@ async function fetchFredCsv(series){
   let lastError=null;
   for(const url of urls){
     try{
-      const r=await fetchWithRetry(url,{headers:{accept:url.includes('file_type=json')?'application/json':'text/csv','user-agent':'GoldHunter/1.0'}},2);
+      const r=await fetchWithRetry(url,{headers:{accept:url.includes('file_type=json')?'application/json':'text/csv','user-agent':'GoldHunter/1.0'}},5);
       if(!r.ok)throw new Error(`FRED ${series} ${r.status}`);
       const rows=csvRows(await r.text());
       if(rows.length)return rows;
@@ -184,7 +184,7 @@ async function fetchFederalReserveFomc(env,forceRefresh=false){
     while((match=re.exec(calendarHtml))){const url=absoluteFedUrl(match[1]);if(url&&!links.includes(url))links.push(url);}
     links.sort().reverse();
     const rows=[];
-    for(const url of links.slice(0,5)){
+    for(const url of links.slice(0,18)){
       const dateMatch=url.match(/monetary(\d{4})(\d{2})(\d{2})a\.htm/i);if(!dateMatch)continue;
       try{
         const response=await fetchWithRetry(url,{headers:{accept:'text/html','user-agent':'GoldHunter/1.0'}},2);if(!response.ok)continue;
@@ -722,17 +722,33 @@ export async function onRequestGet({request,env}){
     const history=[];
     const forecastMap=e.releaseForecasts||{};
     const seenHistory=new Set();
+    // Release-history dates must represent the real publication timestamp, not the data month.
+    // Dates are sourced only from authoritative schedule rows or archived releases. We never
+    // convert a period such as 2026-06 into a fake calendar date.
+    const releaseDateByPeriod=new Map();
+    if(e.releasePeriod&&e.datetime)releaseDateByPeriod.set(String(e.releasePeriod),String(e.datetime));
+    for(const row of Array.isArray(e.releaseHistory)?e.releaseHistory:[]){
+      if(row?.period&&(row.dateTime||row.releaseDateTime))releaseDateByPeriod.set(String(row.period),String(row.dateTime||row.releaseDateTime));
+    }
+    if(e.lastRelease?.period&&(e.lastRelease.dateTime||e.lastRelease.releaseDateTime))releaseDateByPeriod.set(String(e.lastRelease.period),String(e.lastRelease.dateTime||e.lastRelease.releaseDateTime));
     const addHistory=(row,lastRelease=false)=>{
       if(!row?.period||!row?.actual||seenHistory.has(String(row.period)))return;
       seenHistory.add(String(row.period));
-      history.push({...row,forecast:forecastMap[row.period]||row.forecast||'',lastRelease});
+      const dateTime=String(row.dateTime||row.releaseDateTime||releaseDateByPeriod.get(String(row.period))||'');
+      history.push({...row,dateTime,forecast:forecastMap[row.period]||row.forecast||'',lastRelease});
     };
     const eventHistory=e.type==='fomc'?sanitizeFomcHistory(e.releaseHistory||[]):(e.releaseHistory||[]);
     for(const row of eventHistory)addHistory(row,Boolean(e.lastRelease?.period===row.period));
     if(e.lastRelease?.actual&&(e.type!=='fomc'||VERIFIED_FOMC_PERIODS.has(String(e.lastRelease.period||'').slice(0,10))))addHistory(e.lastRelease,true);
     for(const row of (e.type==='fomc'?sanitizeFomcHistory(rawHistory):rawHistory))addHistory(row,false);
     if(e.type==='fomc')for(const row of VERIFIED_FOMC_HISTORY)addHistory(row,false);
-    history.sort((a,b)=>String(b.period).localeCompare(String(a.period)));
+    history.sort((a,b)=>{
+      const ad=Date.parse(String(a.dateTime||'')),bd=Date.parse(String(b.dateTime||''));
+      if(Number.isFinite(ad)&&Number.isFinite(bd))return bd-ad;
+      if(Number.isFinite(ad))return -1;
+      if(Number.isFinite(bd))return 1;
+      return String(b.period).localeCompare(String(a.period));
+    });
     history.splice(10);
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
     const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
@@ -789,11 +805,11 @@ export async function onRequestGet({request,env}){
     return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:checked,lastSuccess:live?responseNow:(source.lastSuccess||null),lastDataChanged:source.lastDataChanged||staticIso,error:error||'',recovery:status==='live'?'Connected':status==='cached'?'Automatic retry and cached fallback active':'Refresh Admin to retry; fallback remains available'};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
-  return json({engineVersion:'stable-data-phase1.4-release-hardened',events,connectionHealth,healthMode:forceRefresh?'live-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors,staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'stable-data-phase1.3-per-news-health',events,connectionHealth,healthMode:forceRefresh?'live-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',fredErrors,staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
-    engineVersion:'stable-data-phase1.4-release-hardened',
+    engineVersion:'stable-data-phase1.2-fomc-history-fixed',
     step:'start',
     timestamp:new Date().toISOString(),
     kvBound:Boolean(env&&env.GH_MARKET_DATA)
