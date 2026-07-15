@@ -107,9 +107,23 @@ async function fetchWithRetry(url,options={},attempts=3){
   throw lastError||new Error('Request failed');
 }
 async function fetchFredCsv(series){
-  const r=await fetchWithRetry(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`,{headers:{accept:'text/csv','user-agent':'GoldHunter/1.0'}},3);
-  if(!r.ok)throw new Error(`FRED ${series} ${r.status}`);
-  const rows=csvRows(await r.text());if(!rows.length)throw new Error(`FRED ${series} empty`);return rows;
+  // Try both official FRED CSV routes. Cloudflare can occasionally receive a
+  // transient 520 from one edge route while the alternate official route works.
+  const urls=[
+    `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`,
+    `https://fred.stlouisfed.org/graph/fredgraph.csv?cosd=1900-01-01&id=${encodeURIComponent(series)}&v=${Date.now()}`
+  ];
+  let lastError=null;
+  for(const url of urls){
+    try{
+      const r=await fetchWithRetry(url,{headers:{accept:url.includes('file_type=json')?'application/json':'text/csv','user-agent':'GoldHunter/1.0'}},5);
+      if(!r.ok)throw new Error(`FRED ${series} ${r.status}`);
+      const rows=csvRows(await r.text());
+      if(rows.length)return rows;
+      throw new Error(`FRED ${series} empty`);
+    }catch(error){lastError=error;}
+  }
+  throw lastError||new Error(`FRED ${series} unavailable`);
 }
 function fredPeriod(date){return String(date||'').slice(0,7)}
 function fredFmt(v,cfg){if(!Number.isFinite(v))return'';const scaled=v*(cfg.scale||1);return `${scaled.toFixed(cfg.decimals??1).replace(/\.0+$/,'')}${cfg.suffix||''}`}
@@ -731,8 +745,10 @@ export async function onRequestGet({request,env}){
   const hasMetrics=source=>Boolean(Object.keys(source?.metrics||{}).length);
   const sourceStatus=(source,liveOk)=>liveOk?'live':hasMetrics(source)?'cached':'offline';
   const blsLive=!bls.error&&!bls.refreshError&&!bls.stale;
-  const fredHasErrors=Boolean(fred.error||fred.refreshError||fred.stale||Object.keys(fred.errors||{}).length);
-  const fredLive=!fredHasErrors;
+  const fredHasErrors=Boolean(fred.error||fred.refreshError||fred.stale);
+  // Individual series errors are reported on their own news cards. A single
+  // failed series must not make every FRED-backed news item appear offline.
+  const fredLive=!fredHasErrors&&Boolean(Object.keys(fred.metrics||{}).length);
   const staticIso=staticOfficial.savedAt?new Date(staticOfficial.savedAt).toISOString():null;
   const staticAgeMinutes=staticOfficial.savedAt?Math.round((Date.now()-staticOfficial.savedAt)/60000):null;
   const staticHealthy=Boolean(Object.keys(staticOfficial.metrics||{}).length)&&staticAgeMinutes!==null&&staticAgeMinutes<=45;
@@ -766,8 +782,9 @@ export async function onRequestGet({request,env}){
     else if(type==='retail_sales'){provider='U.S. Census / FRED';source=connectorSources.fred;error=fredErrors[type]||fred.error||fred.refreshError||'';}
     else if(['gdp','pce','core_pce'].includes(type)){provider='BEA / FRED';source=connectorSources.fred;error=fredErrors[type]||fred.error||fred.refreshError||'';}
     else if(type==='fomc'){provider='Federal Reserve official statements';source=connectorSources.federalReserve;error=fedFomc.error||fedFomc.refreshError||'';}
+    const hasCurrentMetric=Boolean(official.metrics?.[type]?.actual);
     const live=forceRefresh&&source.status==='live'&&!error;
-    const status=live?'live':source.status==='offline'?'offline':'cached';
+    const status=live?'live':(hasCurrentMetric?'cached':source.status==='offline'?'offline':'cached');
     const checked=forceRefresh?responseNow:(source.lastChecked||staticIso);
     return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:checked,lastSuccess:live?responseNow:(source.lastSuccess||null),lastDataChanged:source.lastDataChanged||staticIso,error:error||'',recovery:status==='live'?'Connected':status==='cached'?'Automatic retry and cached fallback active':'Refresh Admin to retry; fallback remains available'};
   };
