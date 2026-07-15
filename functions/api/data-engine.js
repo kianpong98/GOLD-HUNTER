@@ -795,22 +795,31 @@ export async function onRequestGet({request,env}){
     cloudflareKv:probeOr('cloudflareKv',{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?responseNow:null,lastChecked:responseNow,lastDataChanged:null,httpStatus:env.GH_MARKET_DATA?200:0,latencyMs:0,error:env.GH_MARKET_DATA?'':'GH_MARKET_DATA binding missing'})
   };
   const degraded=Object.entries(connectorSources).filter(([key,v])=>!['staticCache','cloudflareKv'].includes(key)&&v.status!=='live').map(([key])=>key);
-  const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
+  const serviceImpacting=degraded.filter(key=>!(key==='dol'&&connectorSources.fred?.status==='live'));
+  const connectorMessage=serviceImpacting.length?`${serviceImpacting.join(', ')} temporarily unavailable; verified fallback or cached official data is being used where available.`:(degraded.length?'Primary source temporarily unavailable; official fallback is connected.':'');
   const blsTypes=new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings']);
   const connectionFor=(event)=>{
     const type=event.type;
     let provider='FRED official fallback',primary=connectorSources.fred,fallback=null;
     if(blsTypes.has(type)){provider='BLS Public Data API';primary=connectorSources.bls;}
-    else if(type==='jobless_claims'){provider='U.S. Department of Labor';primary=connectorSources.dol;fallback=connectorSources.fred;}
+    else if(type==='jobless_claims'){provider='U.S. Department of Labor → FRED fallback';primary=connectorSources.dol;fallback=connectorSources.fred;}
     else if(type==='retail_sales'){provider='U.S. Census Bureau';primary=connectorSources.census;fallback=connectorSources.fred;}
     else if(['gdp','pce','core_pce'].includes(type)){provider='U.S. Bureau of Economic Analysis';primary=connectorSources.bea;fallback=connectorSources.fred;}
     else if(type==='fomc'){provider='Federal Reserve';primary=connectorSources.federalReserve;}
     const hasCurrentMetric=Boolean(official.metrics?.[type]?.actual);
     const primaryLive=primary?.status==='live';
     const fallbackLive=fallback?.status==='live';
-    const status=primaryLive?'live':fallbackLive||hasCurrentMetric?'cached':'offline';
+    // A healthy official fallback is considered connected, not cached/offline.
+    // For Initial Jobless Claims this means DOL remains primary, while FRED ICSA
+    // automatically supplies continuity when DOL returns 403/429/5xx or times out.
+    const usingFallback=!primaryLive&&fallbackLive;
+    const status=primaryLive||usingFallback?'live':hasCurrentMetric?'cached':'offline';
+    const activeSource=primaryLive?primary:(usingFallback?fallback:primary);
     const error=primaryLive?'':(primary?.error||'');
-    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess:primary?.lastSuccess||fallback?.lastSuccess||null,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery:status==='live'?'Connected':status==='cached'?(fallbackLive?'Primary unavailable; official fallback connected':'Automatic retry and cached fallback active'):'Official source and fallback unavailable'};
+    const activeProvider=usingFallback
+      ? (type==='jobless_claims'?'FRED ICSA (official fallback)':`${provider} fallback`)
+      : provider;
+    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider:activeProvider,status,lastChecked:activeSource?.lastChecked||responseNow,lastSuccess:activeSource?.lastSuccess||primary?.lastSuccess||fallback?.lastSuccess||null,lastDataChanged:staticIso,httpStatus:activeSource?.httpStatus??null,latencyMs:activeSource?.latencyMs??null,error,recovery:primaryLive?'Connected':usingFallback?'Connected via official fallback; primary source auto-retrying':status==='cached'?'Verified cache active; automatic recovery running':'Official source and fallback unavailable',primaryProvider:provider,primaryStatus:primary?.status||'offline',fallbackStatus:fallback?.status||null,usingFallback};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
   return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
