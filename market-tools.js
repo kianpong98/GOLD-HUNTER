@@ -60,7 +60,6 @@
   function fmt(iso){try{return new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(iso))+' MYT';}catch{return'TBA';}}
   function historyFmt(value){if(!value)return'—';const d=new Date(value);if(!Number.isFinite(d.getTime()))return'—';try{return new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' MYT';}catch{return'—';}}
   function countdown(iso){const ms=new Date(iso).getTime()-Date.now();if(!Number.isFinite(ms))return'TBA';if(ms<=0)return'Released';const total=Math.floor(ms/1000),d=Math.floor(total/86400),h=Math.floor((total%86400)/3600),m=Math.floor((total%3600)/60),sec=total%60;return d?`${d}D ${pad(h)}:${pad(m)}:${pad(sec)}`:`${pad(h)}:${pad(m)}:${pad(sec)}`;}
-  function releaseStatus(e){const elapsed=countdown(e.datetime)==='Released';if(!elapsed)return {released:false,text:countdown(e.datetime),cls:''};if(e.actual)return {released:true,text:'Released',cls:'released'};return {released:false,text:'Awaiting official result',cls:'awaiting'};}
   function impactTone(e){
     const text=`${e.goldImpact||''} ${e.goldImpactZh||''}`.toLowerCase();
     if(/support|bullish|利多|positive/.test(text)) return 'bullish';
@@ -77,17 +76,16 @@
   function card(e,full=false){
     const source=e.sourceUrl?`<a class="event-source" href="${esc(e.sourceUrl)}" target="_blank" rel="noopener">${esc(e.sourceName||'Official source')} ↗</a>`:'';
     const tone=impactTone(e);
-    const releaseState=releaseStatus(e);
-    const released=releaseState.released;
+    const released=countdown(e.datetime)==='Released';
     if(!full){
-      return `<article class="market-event-row ${tone}" data-news-type="${esc(e.type||e.id||'economic_event')}" data-event-type="${esc(e.type||e.id||'economic_event')}" data-event-name="${esc(e.name||'Economic event')}" data-analytics-section="economic_news"><div class="market-event-main"><div><h3>${esc(e.name)}</h3><p class="event-zh">${esc(e.nameZh||'')}</p><p>${esc(fmt(e.datetime))}</p><strong class="event-countdown ${releaseState.cls}" data-date="${esc(e.datetime)}" data-has-actual="${e.actual?'1':'0'}">${esc(releaseState.text)}</strong></div></div>${values(e)}</article>`;
+      return `<article class="market-event-row ${tone}" data-news-type="${esc(e.type||e.id||'economic_event')}" data-event-type="${esc(e.type||e.id||'economic_event')}" data-event-name="${esc(e.name||'Economic event')}" data-analytics-section="economic_news"><div class="market-event-main"><div><h3>${esc(e.name)}</h3><p class="event-zh">${esc(e.nameZh||'')}</p><p>${esc(fmt(e.datetime))}</p><strong class="event-countdown" data-date="${esc(e.datetime)}">${esc(countdown(e.datetime))}</strong></div></div>${values(e)}</article>`;
     }
-    const statusClass=releaseState.cls||(released?'released':'upcoming');
-    const statusText=releaseState.text;
-    const insight=(e.comparison||e.goldImpact||released)?`<section class="calendar-impact-panel ${tone}"><div class="calendar-impact-head"><span class="impact-arrow">${tone==='bullish'?'↓':tone==='bearish'?'↑':'◷'}</span><strong>${esc(e.comparison||(releaseState.text==='Awaiting official result'?'Awaiting official result':(!released?'Upcoming':'Released')))}${e.comparisonZh?` <i>${esc(e.comparisonZh)}</i>`:''}</strong></div>${e.difference?`<b class="impact-difference">${esc(e.difference)}</b>`:''}${e.goldImpact?`<span class="impact-pill">${esc(e.goldImpactZh||e.goldImpact)}</span><p>${esc(e.goldImpact)}</p>`:`<p>${released?'Official result released.':(releaseState.text==='Awaiting official result'?'Waiting for the verified official Actual.':'Waiting for official release.')}</p>`}${e.surpriseStrength?`<em>${esc(e.surpriseStrength)}${e.surpriseStrengthZh?` · ${esc(e.surpriseStrengthZh)}`:''}</em>`:''}</section>`:'';
-    return `<article class="calendar-item calendar-item-v2 ${tone}" data-news-type="${esc(e.type||e.id||'economic_event')}" data-event-type="${esc(e.type||e.id||'economic_event')}" data-event-name="${esc(e.name||'Economic event')}" data-analytics-section="economic_news"><section class="calendar-event-info"><div class="calendar-title-row"><h3>${esc(e.name)}</h3></div><p class="event-zh">${esc(e.nameZh||'')}</p><div class="calendar-meta"><span>▣ ${esc(fmt(e.datetime))}</span><strong class="event-countdown ${statusClass}" data-date="${esc(e.datetime)}" data-has-actual="${e.actual?'1':'0'}">${esc(statusText)}</strong></div><div class="calendar-links">${source}${historyTable(e)}</div></section><section class="calendar-metrics"><div><small>Actual</small><b class="actual-value">${esc(e.actual||'—')}</b></div><div><small>Forecast</small><b>${esc(e.forecast||'—')}</b></div><div><small>Previous</small><b>${esc(e.previous||'—')}</b></div></section>${insight}</article>`;
+    const statusClass=released?'released':'upcoming';
+    const statusText=released?'Released':countdown(e.datetime);
+    const insight=(e.comparison||e.goldImpact||released)?`<section class="calendar-impact-panel ${tone}"><div class="calendar-impact-head"><span class="impact-arrow">${tone==='bullish'?'↓':tone==='bearish'?'↑':'◷'}</span><strong>${esc(e.comparison||(!released?'Upcoming':'Released'))}${e.comparisonZh?` <i>${esc(e.comparisonZh)}</i>`:''}</strong></div>${e.difference?`<b class="impact-difference">${esc(e.difference)}</b>`:''}${e.goldImpact?`<span class="impact-pill">${esc(e.goldImpactZh||e.goldImpact)}</span><p>${esc(e.goldImpact)}</p>`:`<p>${released?'Official result released.':'Waiting for official release.'}</p>`}${e.surpriseStrength?`<em>${esc(e.surpriseStrength)}${e.surpriseStrengthZh?` · ${esc(e.surpriseStrengthZh)}`:''}</em>`:''}</section>`:'';
+    return `<article class="calendar-item calendar-item-v2 ${tone}" data-news-type="${esc(e.type||e.id||'economic_event')}" data-event-type="${esc(e.type||e.id||'economic_event')}" data-event-name="${esc(e.name||'Economic event')}" data-analytics-section="economic_news"><section class="calendar-event-info"><div class="calendar-title-row"><h3>${esc(e.name)}</h3></div><p class="event-zh">${esc(e.nameZh||'')}</p><div class="calendar-meta"><span>▣ ${esc(fmt(e.datetime))}</span><strong class="event-countdown ${statusClass}" data-date="${esc(e.datetime)}">${esc(statusText)}</strong></div><div class="calendar-links">${source}${historyTable(e)}</div></section><section class="calendar-metrics"><div><small>Actual</small><b class="actual-value">${esc(e.actual||'—')}</b></div><div><small>Forecast</small><b>${esc(e.forecast||'—')}</b></div><div><small>Previous</small><b>${esc(e.previous||'—')}</b></div></section>${insight}</article>`;
   }
-  function updateCountdowns(){document.querySelectorAll('.event-countdown[data-date]').forEach(el=>{const elapsed=countdown(el.dataset.date)==='Released';el.textContent=elapsed?(el.dataset.hasActual==='1'?'Released':'Awaiting official result'):countdown(el.dataset.date);});}
+  function updateCountdowns(){document.querySelectorAll('.event-countdown[data-date]').forEach(el=>el.textContent=countdown(el.dataset.date));}
   async function loadEvents(){
     const home=document.getElementById('homeMarketEvents'),full=document.getElementById('calendarList');
     if(!home&&!full)return;
@@ -95,18 +93,24 @@
       const eventUrl=`${EVENTS_API}?v=${Date.now()}`;
       const r=await fetch(eventUrl,{cache:'no-store',headers:{'cache-control':'no-cache','pragma':'no-cache'}}),d=await r.json();
       if(!r.ok)throw new Error(d.error||'Calendar unavailable');
-      const raw=(d.events||[]).filter(e=>Number(e.impact)>=4&&!/ism/i.test(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
+      const raw=(d.events||[]).filter(e=>e.showOnCalendar!==false&&Number(e.impact)>=4&&!/ism/i.test(String(e.type||''))&&!/ISM/i.test(String(e.name||'')));
       const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
       const day=e=>String(e.datetime||'').slice(0,10);
       const ms=e=>new Date(e.datetime).getTime();
       const ordered=[...raw].sort((a,b)=>{
+        // Verified releases from the previous two days are pinned to the top of
+        // the full Calendar only. Within that group, the latest release is first.
+        const ap=Boolean(a.calendarPinned||a.lifecycleStage==='recent_release');
+        const bp=Boolean(b.calendarPinned||b.lifecycleStage==='recent_release');
+        if(ap!==bp)return ap?-1:1;
         const at=ms(a),bt=ms(b);
+        if(ap&&bp)return bt-at;
         const ag=day(a)===today?0:(at>=Date.now()?1:2);
         const bg=day(b)===today?0:(bt>=Date.now()?1:2);
         if(ag!==bg)return ag-bg;
         return ag===2?bt-at:at-bt;
       });
-      const homeEvents=ordered.filter(e=>day(e)===today||ms(e)>=Date.now()).slice(0,3);
+      const homeEvents=ordered.filter(e=>e.showOnHome!==false&&!e.calendarPinned&&(day(e)===today||ms(e)>=Date.now())).slice(0,3);
       if(home)home.innerHTML=homeEvents.map(e=>card(e,false)).join('')||'<div class="market-empty">No upcoming events.</div>';
       if(full)full.innerHTML=ordered.map(e=>card(e,true)).join('')||'<div class="market-empty">No events.</div>';
       const stamp=document.getElementById('calendarUpdated');

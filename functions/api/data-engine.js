@@ -294,7 +294,7 @@ async function fetchStaticOfficial(request){
   try{
     const url=new URL('/data/official-data.json',new URL(request.url).origin);
     url.searchParams.set('v',String(Date.now()).slice(0,-5));
-    const response=await fetch(url.toString(),{headers:{accept:'application/json','cache-control':'no-cache'},cache:'no-store',cf:{cacheTtl:0,cacheEverything:false}});
+    const response=await fetch(url.toString(),{headers:{accept:'application/json'},cf:{cacheTtl:60,cacheEverything:true}});
     if(!response.ok)throw new Error(`Static official data ${response.status}`);
     const data=await response.json();
     return {
@@ -666,34 +666,12 @@ function nextMalaysiaDayStart(datetime){
   return d.getTime();
 }
 
-function normalizeReleasePeriod(type,value){
-  const raw=String(value||'').trim();
-  if(!raw)return '';
-  if(type==='gdp'){
-    const match=raw.match(/^(\d{4})[- ]?Q([1-4])$/i);
-    return match?`${match[1]}-Q${match[2]}`:raw.toUpperCase();
-  }
-  if(type==='jobless_claims'||type==='fomc'||type==='fomc_minutes'){
-    const ms=Date.parse(raw);
-    return Number.isFinite(ms)?new Date(ms).toISOString().slice(0,10):raw.slice(0,10);
-  }
-  const month=raw.match(/^(\d{4})[-/](\d{1,2})(?:[-/]\d{1,2})?$/);
-  if(month)return `${month[1]}-${String(month[2]).padStart(2,'0')}`;
-  return raw;
-}
-function releasePeriodsMatch(type,officialPeriod,eventPeriod,event){
-  const canonical=canonicalType({type});
-  const a=normalizeReleasePeriod(canonical,officialPeriod);
-  const b=normalizeReleasePeriod(canonical,eventPeriod);
-  if(a&&b&&a===b)return true;
-  if(canonical==='fomc')return a===normalizeReleasePeriod(canonical,fomcReleaseDate(event));
-  return false;
-}
-function isMalaysiaReleaseDay(datetime,now=Date.now()){
-  const releaseMs=Date.parse(String(datetime||''));
-  if(!Number.isFinite(releaseMs))return false;
-  const fmt=ms=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ms));
-  return fmt(releaseMs)===fmt(now);
+// A verified release remains on the full Calendar for the next two Malaysia
+// calendar days. It is hidden from the homepage from the first day after
+// release, then removed from the live Calendar at the start of day three.
+function releasedCalendarRemovalAt(datetime){
+  const archiveAt=nextMalaysiaDayStart(datetime);
+  return Number.isFinite(archiveAt)?archiveAt+(2*24*60*60*1000):NaN;
 }
 
 function classifyResult(type,actual,forecast){
@@ -870,7 +848,7 @@ export async function onRequestGet({request,env}){
     const m=official.metrics?.[e.type];
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
-    const exactCurrentRelease=Boolean(released&&e.releasePeriod&&m&&m.actual&&releasePeriodsMatch(e.type,m.period,e.releasePeriod,e));
+    const exactCurrentRelease=Boolean(released&&e.releasePeriod&&m&&m.actual&&(m.period===e.releasePeriod||(e.type==='fomc'&&String(m.period||'').slice(0,10)===fomcReleaseDate(e))));
     const eventOnly=EVENT_ONLY_TYPES.has(e.type);
     const rawHistory=(official.histories?.[e.type]||[]).slice(0,10);
 
@@ -883,7 +861,7 @@ export async function onRequestGet({request,env}){
     else if(exactCurrentRelease) previous=m.previous||rawHistory.find(r=>r&&r.period!==e.releasePeriod&&r.actual)?.actual||e.lastRelease?.actual||e.previous||'';
     else previous=(m?.actual||rawHistory.find(r=>r&&r.actual)?.actual||e.lastRelease?.actual||e.previous||'');
     if(!previous&&!eventOnly){
-      const anyMetric=Object.entries(official.metrics||{}).find(([type,x])=>x&&x.actual&&releasePeriodsMatch(type,x.period,e.releasePeriod,e))?.[1];
+      const anyMetric=Object.values(official.metrics||{}).find(x=>x&&x.actual&&x.period===e.releasePeriod);
       previous=anyMetric?.previous||'';
     }
 
@@ -940,18 +918,19 @@ export async function onRequestGet({request,env}){
       historyChanged=true;
     }
 
-    // Repair stale lifecycle state left by an older deployment. A current release must
-    // remain live for the full Malaysia release day once its official Actual is verified.
-    // This applies uniformly to every numeric news type and never touches Forecast/history.
-    if(exactCurrentRelease&&isMalaysiaReleaseDay(e.datetime,now)&&String(e.archivedPeriod||'')===String(e.releasePeriod||'')){
-      e.archivedPeriod='';
-      e.archivedAt='';
-      historyChanged=true;
+    // Lifecycle after a verified release:
+    // release day: may remain on homepage + Calendar;
+    // next two Malaysia days: Calendar top only, with the released values;
+    // day three onward: removed from live lists while Last Release is retained.
+    const archivedThisPeriod=Boolean(e.archivedPeriod&&e.archivedPeriod===e.releasePeriod);
+    const removeFromCalendarAt=releasedCalendarRemovalAt(e.datetime);
+    const recentReleased=Boolean(archivedThisPeriod&&Number.isFinite(removeFromCalendarAt)&&now<removeFromCalendarAt);
+    const expiredReleased=Boolean(archivedThisPeriod&&Number.isFinite(removeFromCalendarAt)&&now>=removeFromCalendarAt);
+    if(archivedThisPeriod){
+      actual=recentReleased?(e.lastRelease?.actual||actual||''):'';
+      previous=recentReleased?(e.lastRelease?.previous||previous):(e.lastRelease?.actual||previous);
+      if(recentReleased&&e.lastRelease?.forecast)e.forecast=e.lastRelease.forecast;
     }
-
-    // Once archived, the released row lives in Last Release rather than the live values.
-    const archivedThisPeriod=e.archivedPeriod&&e.archivedPeriod===e.releasePeriod;
-    if(archivedThisPeriod){actual='';previous=e.lastRelease?.actual||previous;}
     if(!previous) previous=eventOnly?'Not applicable':'—';
 
     const history=[];
@@ -986,9 +965,12 @@ export async function onRequestGet({request,env}){
     });
     history.splice(10);
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
-    const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
+    const status=!released?'Scheduled':recentReleased?'Released':expiredReleased?'Completed':'Released';
+    const lifecycleStage=!released?'upcoming':recentReleased?'recent_release':expiredReleased?'expired_release':'release_day';
+    const showOnHome=!archivedThisPeriod;
+    const showOnCalendar=!expiredReleased;
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
-    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
+    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,lifecycleStage,showOnHome,showOnCalendar,calendarPinned:lifecycleStage==='recent_release',calendarRemovalAt:Number.isFinite(removeFromCalendarAt)?new Date(removeFromCalendarAt).toISOString():'',...result};
   });
   if(historyChanged&&env.GH_MARKET_DATA){
     await putJsonIfChanged(env.GH_MARKET_DATA,EVENTS_KEY,sanitizeEvents(persistable),undefined);
@@ -1053,7 +1035,8 @@ export async function onRequestGet({request,env}){
     return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery,accessSource};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
-  return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  const visibleEvents=events.filter(event=>event.showOnCalendar!==false);
+  return json({engineVersion:'stable-data-phase1.5-two-day-release-lifecycle',events:visibleEvents,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={

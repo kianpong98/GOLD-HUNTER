@@ -2,7 +2,18 @@
   const API='/api/market-events'; const FED_API='/api/rate-expectation-engine'; const SYNC_INTERVAL_MS=5*60*1000; let pin='',events=[],meta={},nextSyncAt=0,autoRefreshBusy=false;
   const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const statusText=e=>e.eventOnly?'Event time only':e.actual?'Actual received':e.officialAuto?(e.previousStatus==='ready'?'Official connected':'Awaiting official sync'):'Manual / fallback';
-  function visibleEvents(){const q=$('#searchInput').value.trim().toLowerCase(),f=$('#filterSelect').value,now=Date.now();return events.map((e,i)=>({e,i})).filter(({e})=>{
+  function calendarOrder(a,b){
+    const ap=Boolean(a.calendarPinned||a.lifecycleStage==='recent_release'),bp=Boolean(b.calendarPinned||b.lifecycleStage==='recent_release');
+    if(ap!==bp)return ap?-1:1;
+    const at=new Date(a.datetime).getTime(),bt=new Date(b.datetime).getTime();
+    if(ap&&bp)return bt-at;
+    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    const ad=String(a.datetime||'').slice(0,10),bd=String(b.datetime||'').slice(0,10),now=Date.now();
+    const ag=ad===today?0:(at>=now?1:2),bg=bd===today?0:(bt>=now?1:2);
+    if(ag!==bg)return ag-bg;
+    return ag===2?bt-at:at-bt;
+  }
+  function visibleEvents(){const q=$('#searchInput').value.trim().toLowerCase(),f=$('#filterSelect').value,now=Date.now();return events.map((e,i)=>({e,i})).filter(({e})=>e.showOnCalendar!==false).sort((a,b)=>calendarOrder(a.e,b.e)).filter(({e})=>{
     const text=`${e.name} ${e.nameZh} ${e.type}`.toLowerCase();if(q&&!text.includes(q))return false;
     if(f==='waiting'&&!(e.previousStatus==='awaiting_official'||(e.released&&!e.actual&&!e.eventOnly)))return false;
     if(f==='missingForecast'&&(e.forecast||e.eventOnly))return false;
