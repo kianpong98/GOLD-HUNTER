@@ -21,60 +21,111 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install requests
+
+      - name: Install updater dependency
+        run: pip install requests
+
       - name: Detect official release window
         id: window
+        shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
-          import json, os
-          from datetime import datetime, timezone, timedelta
-          events=json.load(open('data/generated-events.json',encoding='utf-8'))
-          now=datetime.now(timezone.utc)
-          active=[]
+          import json
+          import os
+          from datetime import datetime, timedelta, timezone
+
+          with open('data/generated-events.json', encoding='utf-8') as handle:
+              events = json.load(handle)
+
+          now = datetime.now(timezone.utc)
+          active = []
           for event in events:
-              try: release=datetime.fromisoformat(event['datetime']).astimezone(timezone.utc)
-              except Exception: continue
-              if event.get('releasePeriod') and release-timedelta(minutes=15) <= now <= release+timedelta(minutes=90):
+              event_type = str(event.get('type') or '').strip()
+              period = str(event.get('releasePeriod') or '').strip()
+              raw_datetime = str(event.get('datetime') or '').strip()
+              if not event_type or not period or not raw_datetime:
+                  continue
+              try:
+                  release = datetime.fromisoformat(raw_datetime).astimezone(timezone.utc)
+              except ValueError:
+                  continue
+              if release - timedelta(minutes=15) <= now <= release + timedelta(minutes=90):
                   active.append(event)
-          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
-              output.write('active='+('true' if active else 'false')+'\n')
-          print('Active official releases:', [(x.get('type'),x.get('releasePeriod')) for x in active])
+
+          active_types = sorted({str(event['type']).strip() for event in active})
+          active_periods = sorted({
+              f"{event['type']}={event['releasePeriod']}"
+              for event in active
+          })
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f"active={'true' if active_types else 'false'}\n")
+              output.write(f"types={','.join(active_types)}\n")
+
+          print('UTC now:', now.isoformat())
+          print('Active official releases:', active_periods)
+          print('Selected event types:', active_types or ['all supported types (single background check)'])
           PY
+
       - name: Check official sources
         env:
           BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+          ACTIVE_TYPES: ${{ steps.window.outputs.types }}
+          ACTIVE_WINDOW: ${{ steps.window.outputs.active }}
+        shell: bash
         run: |
           set -euo pipefail
+
           attempts=1
           delay=0
-          if [ "${{ steps.window.outputs.active }}" = "true" ]; then
+          if [ "$ACTIVE_WINDOW" = "true" ]; then
             attempts=24
             delay=20
           fi
+
+          rm -f /tmp/official-poll-status.json
+
           for attempt in $(seq 1 "$attempts"); do
             echo "Official source check ${attempt}/${attempts}"
-            python scripts/update_official_data.py
+
+            args=(--status-file /tmp/official-poll-status.json)
+            if [ -n "$ACTIVE_TYPES" ]; then
+              args+=(--types "$ACTIVE_TYPES")
+            fi
+
+            python scripts/update_official_data.py "${args[@]}"
+
             if ! git diff --quiet -- data/official-data.json; then
               echo "New verified official value detected."
+              cat /tmp/official-poll-status.json || true
               break
             fi
+
+            cat /tmp/official-poll-status.json || true
             [ "$attempt" = "$attempts" ] || sleep "$delay"
           done
+
       - name: Commit only verified changed values
+        shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/official-data.json
+
           if git diff --cached --quiet; then
             echo "No official value changed; existing snapshot and KV remain untouched."
             exit 0
           fi
+
           git commit -m "Update verified official Actual release"
           BRANCH="${GITHUB_REF_NAME}"
+
           for attempt in 1 2 3 4 5; do
             git fetch origin "$BRANCH"
             if git rebase "origin/$BRANCH" && git push origin "HEAD:$BRANCH"; then
@@ -83,4 +134,6 @@ jobs:
             git rebase --abort 2>/dev/null || true
             sleep $((attempt * 2))
           done
+
+          echo "Failed to push verified official data after 5 attempts."
           exit 1
