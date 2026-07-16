@@ -753,19 +753,19 @@ async function probeJoblessClaimsSource(env){
 async function probeOfficialSources(env){
   const year=new Date().getUTCFullYear();
   const blsBody=JSON.stringify({seriesid:['CUUR0000SA0'],startyear:String(year-1),endyear:String(year)});
-  const [checks,joblessClaims]=await Promise.all([
-    Promise.all([
-      probeOfficialSource('bls','https://api.bls.gov/publicAPI/v2/timeseries/data/',{method:'POST',accept:'application/json',headers:{'content-type':'application/json'},body:blsBody}),
-      probeOfficialSource('fred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE',{accept:'text/csv'}),
-      probeOfficialSource('census','https://www.census.gov/retail/index.html',{accept:'text/html'}),
-      probeOfficialSource('bea','https://www.bea.gov/news/schedule',{accept:'text/html'}),
-      probeOfficialSource('federalReserve','https://www.federalreserve.gov/',{accept:'text/html',timeoutMs:10000})
-    ]),
-    probeJoblessClaimsSource(env)
+  const checks=await Promise.all([
+    probeOfficialSource('bls','https://api.bls.gov/publicAPI/v2/timeseries/data/',{method:'POST',accept:'application/json',headers:{'content-type':'application/json'},body:blsBody}),
+    probeOfficialSource('fred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE',{accept:'text/csv'}),
+    probeOfficialSource('census','https://www.census.gov/retail/index.html',{accept:'text/html'}),
+    probeOfficialSource('bea','https://www.bea.gov/news/schedule',{accept:'text/html'}),
+    probeOfficialSource('federalReserve','https://www.federalreserve.gov/',{accept:'text/html',timeoutMs:10000})
   ]);
   const out=Object.fromEntries(checks.map(x=>[x.name,x]));
-  out.joblessClaims=joblessClaims;
-  out.dol=joblessClaims.dol||{name:'dol',status:'offline',httpStatus:0,lastChecked:joblessClaims.lastChecked,lastSuccess:null,latencyMs:null,error:'DOL check deferred while FRED is preferred'};
+  // Initial Jobless Claims Actual is driven by the automatic GitHub Actual Engine.
+  // Do not probe DOL/FRED from Cloudflare because those routes repeatedly return 403/520.
+  // The final status is derived from the verified GitHub snapshot below.
+  out.joblessClaims=null;
+  out.dol={name:'dol',status:'offline',httpStatus:0,lastChecked:null,lastSuccess:null,latencyMs:null,error:'Live probe disabled; GitHub Actual Engine is authoritative'};
   const now=new Date().toISOString();
   out.staticCache={name:'staticCache',status:'live',httpStatus:200,lastChecked:now,lastSuccess:now,latencyMs:0,error:'',mode:'GitHub Actions verified snapshot'};
   out.cloudflareKv={name:'cloudflareKv',status:env.GH_MARKET_DATA?'live':'offline',httpStatus:env.GH_MARKET_DATA?200:0,lastChecked:now,lastSuccess:env.GH_MARKET_DATA?now:null,latencyMs:0,error:env.GH_MARKET_DATA?'':'GH_MARKET_DATA binding missing'};
@@ -973,7 +973,18 @@ export async function onRequestGet({request,env}){
     bls:probeOr('bls',fallbackSource('bls',['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings'])),
     fred:probeOr('fred',fallbackSource('fred',['retail_sales','jobless_claims','gdp','pce','core_pce'])),
     dol:probeOr('dol',fallbackSource('dol',['jobless_claims'])),
-    joblessClaims:probeOr('joblessClaims',fallbackSource('joblessClaims',['jobless_claims'])),
+    joblessClaims:{
+      ...fallbackSource('joblessClaims',['jobless_claims']),
+      status:official.metrics?.jobless_claims?.actual&&staticIso?'live':'offline',
+      provider:'GitHub official snapshot (FRED ICSA / DOL verified)',
+      sourceMode:'github-snapshot',
+      lastSuccess:staticIso,
+      lastChecked:staticIso,
+      lastDataChanged:staticIso,
+      httpStatus:null,
+      latencyMs:null,
+      error:''
+    },
     census:probeOr('census',fallbackSource('census',['retail_sales'])),
     bea:probeOr('bea',fallbackSource('bea',['gdp','pce','core_pce'])),
     federalReserve:probeOr('federalReserve',fallbackSource('federalReserve',['fomc'])),
@@ -986,7 +997,7 @@ export async function onRequestGet({request,env}){
     const type=event.type;
     let provider='FRED official fallback',primary=connectorSources.fred,fallback=null;
     if(blsTypes.has(type)){provider='BLS Public Data API';primary=connectorSources.bls;}
-    else if(type==='jobless_claims'){primary=connectorSources.joblessClaims;provider=primary?.provider||'U.S. Department of Labor / FRED ICSA';fallback=null;}
+    else if(type==='jobless_claims'){primary=connectorSources.joblessClaims;provider=primary?.provider||'GitHub official snapshot';fallback=null;}
     else if(type==='retail_sales'){provider='U.S. Census Bureau';primary=connectorSources.census;fallback=connectorSources.fred;}
     else if(['gdp','pce','core_pce'].includes(type)){provider='U.S. Bureau of Economic Analysis';primary=connectorSources.bea;fallback=connectorSources.fred;}
     else if(type==='fomc'){provider='Federal Reserve';primary=connectorSources.federalReserve;}
@@ -997,8 +1008,9 @@ export async function onRequestGet({request,env}){
     const status=primaryLive?'live':fallbackLive||snapshotAvailable?'cached':'offline';
     const error=primaryLive?'':(primary?.error||'');
     const lastSuccess=primary?.lastSuccess||fallback?.lastSuccess||(snapshotAvailable?staticIso:null);
-    const accessSource=primaryLive?'Live official':fallbackLive?'Live official fallback':snapshotAvailable?'GitHub official snapshot':'';
-    const recovery=status==='live'?'Connected':status==='cached'?(fallbackLive?'Primary unavailable; live official fallback connected':snapshotAvailable?'GitHub verified snapshot active; live source retrying':'Automatic retry and cached fallback active'):'Official source and fallback unavailable';
+    const githubSnapshotPrimary=type==='jobless_claims'&&primary?.sourceMode==='github-snapshot'&&primaryLive;
+    const accessSource=githubSnapshotPrimary?'GitHub official snapshot':primaryLive?'Live official':fallbackLive?'Live official fallback':snapshotAvailable?'GitHub official snapshot':'';
+    const recovery=githubSnapshotPrimary?'Connected via automatic GitHub Actual Engine':status==='live'?'Connected':status==='cached'?(fallbackLive?'Primary unavailable; live official fallback connected':snapshotAvailable?'GitHub verified snapshot active; live source retrying':'Automatic retry and cached fallback active'):'Official source and fallback unavailable';
     return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery,accessSource};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
