@@ -1,8 +1,10 @@
 {
   "source": "World Gold Council / IMF IFS",
   "sourceUrl": "https://www.gold.org/goldhub/data/gold-reserves-by-country",
-  "updatedAt": "2026-07-14T06:19:55.261262Z",
-  "checkedAt": "2026-07-14T06:19:55.261262Z",
+  "updatedAt": "2026-07-16T05:54:46.046118Z",
+  "dataUpdatedAt": "2026-07-16T05:54:46.046118Z",
+  "checkedAt": "2026-07-16T05:54:46.046118Z",
+  "lastSuccessfulConnectionAt": "2026-07-16T05:54:46.046118Z",
   "records": [
     {
       "country": "United States",
