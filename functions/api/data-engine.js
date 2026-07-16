@@ -953,7 +953,7 @@ export async function onRequestGet({request,env}){
     });
     history.splice(10);
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
-    const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
+    const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':exactCurrentRelease?'Released':'Awaiting official result';
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
     return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });

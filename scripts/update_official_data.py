@@ -495,6 +495,11 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional JSON path for a machine-readable poll result.",
     )
+    parser.add_argument(
+        "--expected-periods",
+        default="",
+        help="Comma-separated type=period pairs that must be present before this poll succeeds.",
+    )
     return parser.parse_args()
 
 
@@ -505,6 +510,23 @@ def wanted_types(raw: str) -> set[str]:
     if unknown:
         raise SystemExit("Unsupported official event type(s): " + ", ".join(unknown))
     return requested or supported
+
+
+def expected_periods(raw: str, selected: set[str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for part in str(raw or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "=" not in part:
+            raise SystemExit(f"Invalid expected period pair: {part}")
+        event_type, period = (piece.strip() for piece in part.split("=", 1))
+        if event_type not in selected:
+            raise SystemExit(f"Expected period supplied for unselected type: {event_type}")
+        if not period:
+            raise SystemExit(f"Empty expected period for {event_type}")
+        result[event_type] = period
+    return result
 
 
 def write_status(path: str, payload: dict[str, Any]) -> None:
@@ -518,6 +540,7 @@ def write_status(path: str, payload: dict[str, Any]) -> None:
 def main() -> None:
     args = parse_args()
     selected = wanted_types(args.types)
+    required_periods = expected_periods(args.expected_periods, selected)
     existing: dict[str, Any] = {}
     if OUT.exists():
         try:
@@ -601,6 +624,17 @@ def main() -> None:
     if missing_selected:
         errors["missing_selected"] = ", ".join(missing_selected)
 
+    period_mismatches = []
+    for key, expected in sorted(required_periods.items()):
+        actual_period = str(metrics.get(key, {}).get("period") or "")
+        if actual_period != expected:
+            period_mismatches.append({"type": key, "expected": expected, "actual": actual_period})
+    if period_mismatches:
+        errors["period_mismatch"] = "; ".join(
+            f"{item['type']}: expected {item['expected']}, got {item['actual'] or 'none'}"
+            for item in period_mismatches
+        )
+
     previous_metrics = existing.get("metrics") or {}
     changed_types = sorted(
         key for key in selected
@@ -615,6 +649,8 @@ def main() -> None:
         "successfulSources": successful_sources,
         "changedTypes": changed_types,
         "missingSelected": missing_selected,
+        "expectedPeriods": required_periods,
+        "periodMismatches": period_mismatches,
         "errors": errors,
     }
 
@@ -628,6 +664,13 @@ def main() -> None:
     if missing_selected:
         write_status(args.status_file, status)
         raise SystemExit("Selected official values are unavailable: " + ", ".join(missing_selected))
+    if period_mismatches:
+        write_status(args.status_file, status)
+        details = "; ".join(
+            f"{item['type']} expected {item['expected']} but official snapshot is {item['actual'] or 'empty'}"
+            for item in period_mismatches
+        )
+        raise SystemExit("Expected release period is not available yet: " + details)
 
     if not changed and existing:
         write_status(args.status_file, status)
