@@ -1,0 +1,64 @@
+name: Test news release pipeline (read-only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      live_connectors:
+        description: 'Also test live official connectors (read-only)'
+        required: true
+        default: true
+        type: boolean
+  schedule:
+    # 06:30 Malaysia Time every day. This catches parser/source problems before
+    # the usual 20:30 MYT U.S. release window.
+    - cron: '30 22 * * *'
+  push:
+    paths:
+      - 'data/generated-events.json'
+      - 'data/official-data.json'
+      - 'scripts/update_official_data.py'
+      - 'scripts/test_news_release_pipeline.py'
+      - 'functions/api/data-engine.js'
+      - '.github/workflows/actual-release-watcher.yml'
+      - '.github/workflows/test-news-release-pipeline.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: news-release-pipeline-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependency
+        run: pip install requests
+
+      - name: Run all 13 synthetic release tests
+        run: python scripts/test_news_release_pipeline.py --report news-pipeline-test-report.json
+
+      - name: Run live official connector/parser tests
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'push' || inputs.live_connectors == true }}
+        env:
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+        run: python scripts/test_news_release_pipeline.py --live --report news-pipeline-live-test-report.json
+
+      - name: Upload readable test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-pipeline-test-reports
+          path: |
+            news-pipeline-test-report.json
+            news-pipeline-live-test-report.json
+          if-no-files-found: ignore
+          retention-days: 14
