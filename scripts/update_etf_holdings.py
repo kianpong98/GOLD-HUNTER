@@ -258,22 +258,22 @@ def main() -> None:
     daily_change = round(float(latest["holdings"]) - float(previous["holdings"]), 3)
     old = existing_payload()
     old_records = old.get("records") if isinstance(old.get("records"), list) else []
+    checked_at = datetime.now(timezone.utc).isoformat()
+    records_changed = old_records != records
+    data_updated_at = checked_at if records_changed else (old.get("dataUpdatedAt") or old.get("updatedAt") or checked_at)
 
-    # Do not create a commit/deployment when the official archive is unchanged.
-    if old_records == records:
-        print(
-            "Official SPDR archive unchanged:",
-            latest["date"],
-            f"{latest['holdings']:.3f} t",
-        )
-        return
-
+    # Persist the latest successful official connection even when SPDR has not
+    # published a new record. This lets the website distinguish "checked and
+    # unchanged" from "not connected" without altering the holdings history.
     payload = {
         "engineVersion": "etf-stable-2",
         "source": "SPDR Gold Shares official historical archive",
         "sourceUrl": PAGE,
         "archiveUrl": API,
-        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "updatedAt": data_updated_at,
+        "dataUpdatedAt": data_updated_at,
+        "checkedAt": checked_at,
+        "lastSuccessfulConnectionAt": checked_at,
         "officialDate": latest["date"],
         "latestHoldings": latest["holdings"],
         "dailyChange": daily_change,
@@ -281,9 +281,10 @@ def main() -> None:
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    action = "Updated official holdings" if records_changed else "Official archive checked; no new record"
     print(
-        f"Wrote {len(records)} official records to {OUT}; latest {latest['date']} "
-        f"{latest['holdings']:.3f} t ({daily_change:+.3f} t)"
+        f"{action}. Wrote {len(records)} records to {OUT}; latest {latest['date']} "
+        f"{latest['holdings']:.3f} t ({daily_change:+.3f} t); checked {checked_at}"
     )
 
 

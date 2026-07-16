@@ -59,7 +59,9 @@ export async function onRequestGet({request,env}){
     latestHoldings:Number(latest.holdings),
     dailyChange,
     lastCheckedAt,
-    lastSuccessfulUpdateAt:chosen.updatedAt||chosen.sourceUpdatedAt||officialDate||null,
+    lastSuccessfulUpdateAt:chosen.lastSuccessfulConnectionAt||chosen.checkedAt||chosen.updatedAt||chosen.sourceUpdatedAt||officialDate||null,
+    lastSuccessfulConnectionAt:chosen.lastSuccessfulConnectionAt||chosen.checkedAt||chosen.updatedAt||null,
+    dataUpdatedAt:chosen.dataUpdatedAt||chosen.updatedAt||null,
     kvWrite:false,
     writePolicy:'read-only API; scheduled GitHub workflow commits only changed official records',
     errors:[staticError,kvError].filter(Boolean)
