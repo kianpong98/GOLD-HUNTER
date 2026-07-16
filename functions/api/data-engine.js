@@ -103,15 +103,6 @@ const AUTO_TYPES = new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','n
 const JOBLESS_HEALTH_STATE_KEY='jobless-health-source-v1';
 const EVENT_ONLY_TYPES = new Set(['fomc_minutes','fed_speech']);
 
-const VERIFIED_FALLBACK_METRICS = {
-  jobless_claims:{actual:'215K',previous:'217K',period:'2026-07-04',observationDate:'2026-07-04',source:'U.S. Department of Labor verified fallback',history:[
-    {period:'2026-07-04',actual:'215K',previous:'217K'},{period:'2026-06-27',actual:'217K',previous:'216K'},{period:'2026-06-20',actual:'216K',previous:'227K'},{period:'2026-06-13',actual:'227K',previous:'230K'},{period:'2026-06-06',actual:'229K',previous:'225K'},{period:'2026-05-30',actual:'225K',previous:'212K'},{period:'2026-05-23',actual:'215K',previous:'210K'},{period:'2026-05-16',actual:'209K',previous:'212K'},{period:'2026-05-09',actual:'211K',previous:'199K'},{period:'2026-05-02',actual:'200K',previous:'190K'}]},
-  fomc:{actual:'3.5–3.75%',previous:'3.5–3.75%',period:'2026-06-18',observationDate:'2026-06-18',source:'Federal Reserve verified fallback',history:VERIFIED_FOMC_HISTORY},
-  gdp:{actual:'2.1%',previous:'0.5%',period:'2026-Q1',observationDate:'2026-04-01',source:'U.S. Bureau of Economic Analysis verified fallback',history:[
-    {period:'2026-Q1',actual:'2.1%',previous:'0.5%'},{period:'2025-Q4',actual:'0.5%',previous:'4.4%'},{period:'2025-Q3',actual:'4.4%',previous:''}]}
-};
-
-
 const VERIFIED_FOMC_HISTORY = [
   {period:'2026-06-18',actual:'3.5–3.75%',previous:'3.5–3.75%'},
   {period:'2026-04-30',actual:'3.5–3.75%',previous:'3.5–3.75%'},
@@ -124,6 +115,17 @@ const VERIFIED_FOMC_HISTORY = [
   {period:'2025-06-19',actual:'4.25–4.5%',previous:'4.25–4.5%'},
   {period:'2025-05-08',actual:'4.25–4.5%',previous:'4.25–4.5%'}
 ];
+
+const VERIFIED_FALLBACK_METRICS = {
+  jobless_claims:{actual:'215K',previous:'217K',period:'2026-07-04',observationDate:'2026-07-04',source:'U.S. Department of Labor verified fallback',history:[
+    {period:'2026-07-04',actual:'215K',previous:'217K'},{period:'2026-06-27',actual:'217K',previous:'216K'},{period:'2026-06-20',actual:'216K',previous:'227K'},{period:'2026-06-13',actual:'227K',previous:'230K'},{period:'2026-06-06',actual:'229K',previous:'225K'},{period:'2026-05-30',actual:'225K',previous:'212K'},{period:'2026-05-23',actual:'215K',previous:'210K'},{period:'2026-05-16',actual:'209K',previous:'212K'},{period:'2026-05-09',actual:'211K',previous:'199K'},{period:'2026-05-02',actual:'200K',previous:'190K'}]},
+  fomc:{actual:'3.5–3.75%',previous:'3.5–3.75%',period:'2026-06-18',observationDate:'2026-06-18',source:'Federal Reserve verified fallback',history:VERIFIED_FOMC_HISTORY},
+  gdp:{actual:'2.1%',previous:'0.5%',period:'2026-Q1',observationDate:'2026-04-01',source:'U.S. Bureau of Economic Analysis verified fallback',history:[
+    {period:'2026-Q1',actual:'2.1%',previous:'0.5%'},{period:'2025-Q4',actual:'0.5%',previous:'4.4%'},{period:'2025-Q3',actual:'4.4%',previous:''}]}
+};
+
+
+
 const VERIFIED_FOMC_PERIODS = new Set(VERIFIED_FOMC_HISTORY.map(row=>row.period));
 function sanitizeFomcHistory(list){
   const byPeriod=new Map();
@@ -608,8 +610,12 @@ function parseComparable(value){
   return nums.length>=2?(nums[0]+nums[1])/2:nums[0];
 }
 function metricFreshness(metric){
-  const raw=metric?.observationDate||metric?.period||'';
-  if(/^\d{4}-Q[1-4]$/.test(raw))return Number(raw.slice(0,4))*10+Number(raw.slice(-1))*3;
+  const period=String(metric?.period||'');
+  if(/^\d{4}-Q[1-4]$/.test(period)){
+    const year=Number(period.slice(0,4)),quarter=Number(period.slice(-1));
+    return Date.UTC(year,(quarter-1)*3,1);
+  }
+  const raw=metric?.observationDate||period||'';
   const parsed=Date.parse(String(raw).length===7?`${raw}-01`:raw);
   return Number.isFinite(parsed)?parsed:0;
 }
@@ -664,14 +670,6 @@ function nextMalaysiaDayStart(datetime){
   const d=new Date(`${day}T00:00:00+08:00`);
   d.setUTCDate(d.getUTCDate()+1);
   return d.getTime();
-}
-
-// A verified release remains on the full Calendar for the next two Malaysia
-// calendar days. It is hidden from the homepage from the first day after
-// release, then removed from the live Calendar at the start of day three.
-function releasedCalendarRemovalAt(datetime){
-  const archiveAt=nextMalaysiaDayStart(datetime);
-  return Number.isFinite(archiveAt)?archiveAt+(2*24*60*60*1000):NaN;
 }
 
 function classifyResult(type,actual,forecast){
@@ -918,19 +916,9 @@ export async function onRequestGet({request,env}){
       historyChanged=true;
     }
 
-    // Lifecycle after a verified release:
-    // release day: may remain on homepage + Calendar;
-    // next two Malaysia days: Calendar top only, with the released values;
-    // day three onward: removed from live lists while Last Release is retained.
-    const archivedThisPeriod=Boolean(e.archivedPeriod&&e.archivedPeriod===e.releasePeriod);
-    const removeFromCalendarAt=releasedCalendarRemovalAt(e.datetime);
-    const recentReleased=Boolean(archivedThisPeriod&&Number.isFinite(removeFromCalendarAt)&&now<removeFromCalendarAt);
-    const expiredReleased=Boolean(archivedThisPeriod&&Number.isFinite(removeFromCalendarAt)&&now>=removeFromCalendarAt);
-    if(archivedThisPeriod){
-      actual=recentReleased?(e.lastRelease?.actual||actual||''):'';
-      previous=recentReleased?(e.lastRelease?.previous||previous):(e.lastRelease?.actual||previous);
-      if(recentReleased&&e.lastRelease?.forecast)e.forecast=e.lastRelease.forecast;
-    }
+    // Once archived, the released row lives in Last Release rather than the live values.
+    const archivedThisPeriod=e.archivedPeriod&&e.archivedPeriod===e.releasePeriod;
+    if(archivedThisPeriod){actual='';previous=e.lastRelease?.actual||previous;}
     if(!previous) previous=eventOnly?'Not applicable':'—';
 
     const history=[];
@@ -965,12 +953,9 @@ export async function onRequestGet({request,env}){
     });
     history.splice(10);
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
-    const status=!released?'Scheduled':recentReleased?'Released':expiredReleased?'Completed':'Released';
-    const lifecycleStage=!released?'upcoming':recentReleased?'recent_release':expiredReleased?'expired_release':'release_day';
-    const showOnHome=!archivedThisPeriod;
-    const showOnCalendar=!expiredReleased;
+    const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
-    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,lifecycleStage,showOnHome,showOnCalendar,calendarPinned:lifecycleStage==='recent_release',calendarRemovalAt:Number.isFinite(removeFromCalendarAt)?new Date(removeFromCalendarAt).toISOString():'',...result};
+    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
   if(historyChanged&&env.GH_MARKET_DATA){
     await putJsonIfChanged(env.GH_MARKET_DATA,EVENTS_KEY,sanitizeEvents(persistable),undefined);
@@ -1035,8 +1020,7 @@ export async function onRequestGet({request,env}){
     return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery,accessSource};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
-  const visibleEvents=events.filter(event=>event.showOnCalendar!==false);
-  return json({engineVersion:'stable-data-phase1.5-two-day-release-lifecycle',events:visibleEvents,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={
