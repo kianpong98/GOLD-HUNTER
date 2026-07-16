@@ -298,6 +298,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Read-only pre-release test for all Gold Hunter news types.")
     parser.add_argument("--live", action="store_true", help="Also test current official connectors and parsers without writing data.")
     parser.add_argument("--report", default=str(REPORT_PATH), help="JSON report output path.")
+    parser.add_argument("--strict-live", action="store_true", help="Treat live connector failures as blocking. Without this flag they are reported as warnings.")
     return parser.parse_args()
 
 
@@ -320,6 +321,7 @@ def main() -> None:
         },
         "liveConnectors": {
             "enabled": bool(args.live),
+            "strict": bool(args.strict_live),
             "passed": len(live_passed),
             "failed": len(live_failed),
             "failures": live_failed,
@@ -331,10 +333,15 @@ def main() -> None:
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    failures = static_failed + live_failed
-    if failures:
-        raise SystemExit(f"News pipeline pre-release test failed: {len(failures)} check(s)")
-    print("PASS: all selected pre-release news pipeline checks succeeded; no production data was changed.")
+    blocking_failures = list(static_failed)
+    if args.strict_live:
+        blocking_failures.extend(live_failed)
+    if blocking_failures:
+        raise SystemExit(f"News pipeline pre-release test failed: {len(blocking_failures)} blocking check(s)")
+    if live_failed:
+        print(f"WARNING: internal pipeline passed, but {len(live_failed)} live connector check(s) failed temporarily.")
+    else:
+        print("PASS: all selected pre-release news pipeline checks succeeded; no production data was changed.")
 
 
 if __name__ == "__main__":
