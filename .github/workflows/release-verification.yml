@@ -1,4 +1,4 @@
-name: Verify official release delivery
+name: Verify and self-heal official release delivery
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     - cron: '*/5 * * * *'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: release-verification-${{ github.ref }}
@@ -15,49 +15,147 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
-      - name: Verify recently released events have matching Actual
-        env:
-          SITE_URL: https://goldhunter.site
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install updater dependency
+        run: pip install requests
+
+      - name: Detect recently released events
+        id: due
+        shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
-          import json, os, urllib.request
+          import json, os
           from datetime import datetime, timezone, timedelta
           from pathlib import Path
+
           events=json.loads(Path('data/generated-events.json').read_text(encoding='utf-8'))
-          official=json.loads(Path('data/official-data.json').read_text(encoding='utf-8')).get('metrics',{})
           now=datetime.now(timezone.utc)
           due=[]
-          for e in events:
-              try: release=datetime.fromisoformat(e['datetime']).astimezone(timezone.utc)
-              except Exception: continue
-              if release <= now <= release+timedelta(minutes=90) and e.get('releasePeriod'):
-                  due.append(e)
-          if not due:
-              print('No release requires verification now.'); raise SystemExit(0)
-
-          # First validate the repository snapshot uses the same release period.
-          mismatched=[]
-          for e in due:
-              metric=official.get(str(e.get('type'))) or {}
-              period=str(metric.get('period') or '')
-              if period and period != str(e.get('releasePeriod')):
-                  mismatched.append(f"{e.get('type')}: event={e.get('releasePeriod')} official={period}")
-          if mismatched:
-              print('Official snapshot has not reached the expected period yet: '+ '; '.join(mismatched))
-
-          with urllib.request.urlopen(f"{os.environ['SITE_URL']}/api/data-engine?verify={int(now.timestamp())}",timeout=25) as r:
-              payload=json.load(r)
-          rows=payload.get('events') or []
-          index={(str(x.get('type')),str(x.get('releasePeriod'))):x for x in rows}
-          missing=[]
-          for e in due:
-              row=index.get((str(e.get('type')),str(e.get('releasePeriod'))))
-              if not row or not str(row.get('actual') or '').strip():
-                  missing.append(f"{e.get('name') or e.get('type')} [{e.get('releasePeriod')}]")
-          if missing:
-              raise SystemExit('Actual still missing after release: '+', '.join(missing))
-          print('Verified live Actual:', ', '.join(e.get('name') or e.get('type') for e in due))
+          for event in events:
+              try:
+                  release=datetime.fromisoformat(event['datetime']).astimezone(timezone.utc)
+              except Exception:
+                  continue
+              if release <= now <= release + timedelta(hours=6) and event.get('releasePeriod') and event.get('type'):
+                  due.append(event)
+          by_type={str(event['type']):str(event['releasePeriod']) for event in sorted(due,key=lambda x:x['datetime'])}
+          expected=','.join(f'{kind}={period}' for kind,period in sorted(by_type.items()))
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as output:
+              output.write(f"active={'true' if by_type else 'false'}\n")
+              output.write(f"types={','.join(sorted(by_type))}\n")
+              output.write(f"expected={expected}\n")
+          print('Due releases:', expected or 'none')
           PY
+
+      - name: Verify live delivery and automatically repair when missing
+        if: steps.due.outputs.active == 'true'
+        env:
+          SITE_URL: https://goldhunter.site
+          ACTIVE_TYPES: ${{ steps.due.outputs.types }}
+          EXPECTED_PERIODS: ${{ steps.due.outputs.expected }}
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+          ADMIN_PIN: ${{ secrets.GH_ADMIN_PIN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request, time
+
+          site=os.environ['SITE_URL'].rstrip('/')
+          expected=dict(part.split('=',1) for part in os.environ['EXPECTED_PERIODS'].split(',') if '=' in part)
+          pin=os.environ.get('ADMIN_PIN','')
+
+          def live_missing():
+              request=urllib.request.Request(
+                  f'{site}/api/data-engine?verify={int(time.time())}',
+                  headers={'cache-control':'no-cache', **({'x-admin-pin':pin} if pin else {})},
+              )
+              with urllib.request.urlopen(request,timeout=30) as response:
+                  payload=json.load(response)
+              index={(str(row.get('type')),str(row.get('releasePeriod'))):row for row in payload.get('events') or []}
+              return [f'{kind} [{period}]' for kind,period in expected.items() if not str((index.get((kind,period)) or {}).get('actual') or '').strip()]
+
+          try:
+              missing=live_missing()
+          except Exception as exc:
+              print('Initial live verification failed:',exc)
+              missing=list(f'{kind} [{period}]' for kind,period in expected.items())
+          if not missing:
+              print('Live release delivery already verified.')
+              raise SystemExit(0)
+          print('Missing Actual detected; starting automatic self-heal:',', '.join(missing))
+          PY
+
+          verified=false
+          for attempt in $(seq 1 12); do
+            echo "Self-heal official poll ${attempt}/12"
+            set +e
+            python scripts/update_official_data.py \
+              --types "$ACTIVE_TYPES" \
+              --expected-periods "$EXPECTED_PERIODS" \
+              --status-file /tmp/release-self-heal.json
+            rc=$?
+            set -e
+            cat /tmp/release-self-heal.json 2>/dev/null || true
+            if [ "$rc" -eq 0 ]; then verified=true; break; fi
+            [ "$attempt" = "12" ] || sleep 20
+          done
+          if [ "$verified" != "true" ]; then
+            echo "Automatic self-heal could not obtain the expected official period."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/official-data.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Self-heal missing official Actual release"
+            BRANCH="${GITHUB_REF_NAME}"
+            for attempt in 1 2 3 4 5; do
+              git fetch origin "$BRANCH"
+              if git rebase "origin/$BRANCH" && git push origin "HEAD:$BRANCH"; then break; fi
+              git rebase --abort 2>/dev/null || true
+              [ "$attempt" = "5" ] && exit 1
+              sleep $((attempt * 2))
+            done
+          fi
+
+          python - <<'PY'
+          import json, os, urllib.request, time
+          site=os.environ['SITE_URL'].rstrip('/')
+          expected=dict(part.split('=',1) for part in os.environ['EXPECTED_PERIODS'].split(',') if '=' in part)
+          pin=os.environ.get('ADMIN_PIN','')
+          last=''
+          for attempt in range(1,31):
+              try:
+                  req=urllib.request.Request(
+                      f'{site}/api/data-engine?selfHealProof={int(time.time())}',
+                      headers={'cache-control':'no-cache', **({'x-admin-pin':pin} if pin else {})},
+                  )
+                  with urllib.request.urlopen(req,timeout=30) as response: payload=json.load(response)
+                  index={(str(row.get('type')),str(row.get('releasePeriod'))):row for row in payload.get('events') or []}
+                  missing=[f'{kind} [{period}]' for kind,period in expected.items() if not str((index.get((kind,period)) or {}).get('actual') or '').strip()]
+                  if not missing:
+                      print('SELF-HEAL PASS: website now exposes all due Actual values.')
+                      raise SystemExit(0)
+                  last=', '.join(missing)
+              except Exception as exc:
+                  last=str(exc)
+              print(f'Live proof {attempt}/30 waiting: {last}')
+              time.sleep(20)
+          raise SystemExit('SELF-HEAL FAILED: live website still missing '+last)
+          PY
+
+      - name: No release requires verification
+        if: steps.due.outputs.active != 'true'
+        run: echo "No release requires verification now."
