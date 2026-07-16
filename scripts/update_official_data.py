@@ -620,9 +620,14 @@ def main() -> None:
 
     # A connector failure must be visible to GitHub Actions. Existing verified
     # values stay untouched, but the workflow becomes red instead of a false success.
+    # During a release window, every selected type must still have a verified value;
+    # success from an unrelated connector must not hide a missing target release.
     if attempted_sources and not successful_sources:
         write_status(args.status_file, status)
         raise SystemExit("All selected official sources failed: " + json.dumps(errors, ensure_ascii=False))
+    if missing_selected:
+        write_status(args.status_file, status)
+        raise SystemExit("Selected official values are unavailable: " + ", ".join(missing_selected))
 
     if not changed and existing:
         write_status(args.status_file, status)
