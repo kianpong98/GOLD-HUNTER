@@ -294,7 +294,7 @@ async function fetchStaticOfficial(request){
   try{
     const url=new URL('/data/official-data.json',new URL(request.url).origin);
     url.searchParams.set('v',String(Date.now()).slice(0,-5));
-    const response=await fetch(url.toString(),{headers:{accept:'application/json'},cf:{cacheTtl:60,cacheEverything:true}});
+    const response=await fetch(url.toString(),{headers:{accept:'application/json','cache-control':'no-cache'},cache:'no-store',cf:{cacheTtl:0,cacheEverything:false}});
     if(!response.ok)throw new Error(`Static official data ${response.status}`);
     const data=await response.json();
     return {
@@ -666,6 +666,36 @@ function nextMalaysiaDayStart(datetime){
   return d.getTime();
 }
 
+function normalizeReleasePeriod(type,value){
+  const raw=String(value||'').trim();
+  if(!raw)return '';
+  if(type==='gdp'){
+    const match=raw.match(/^(\d{4})[- ]?Q([1-4])$/i);
+    return match?`${match[1]}-Q${match[2]}`:raw.toUpperCase();
+  }
+  if(type==='jobless_claims'||type==='fomc'||type==='fomc_minutes'){
+    const ms=Date.parse(raw);
+    return Number.isFinite(ms)?new Date(ms).toISOString().slice(0,10):raw.slice(0,10);
+  }
+  const month=raw.match(/^(\d{4})[-/](\d{1,2})(?:[-/]\d{1,2})?$/);
+  if(month)return `${month[1]}-${String(month[2]).padStart(2,'0')}`;
+  return raw;
+}
+function releasePeriodsMatch(type,officialPeriod,eventPeriod,event){
+  const canonical=canonicalType({type});
+  const a=normalizeReleasePeriod(canonical,officialPeriod);
+  const b=normalizeReleasePeriod(canonical,eventPeriod);
+  if(a&&b&&a===b)return true;
+  if(canonical==='fomc')return a===normalizeReleasePeriod(canonical,fomcReleaseDate(event));
+  return false;
+}
+function isMalaysiaReleaseDay(datetime,now=Date.now()){
+  const releaseMs=Date.parse(String(datetime||''));
+  if(!Number.isFinite(releaseMs))return false;
+  const fmt=ms=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ms));
+  return fmt(releaseMs)===fmt(now);
+}
+
 function classifyResult(type,actual,forecast){
   const a=parseComparable(actual),f=parseComparable(forecast);
   if(a===null||f===null)return {comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:''};
@@ -840,7 +870,7 @@ export async function onRequestGet({request,env}){
     const m=official.metrics?.[e.type];
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
-    const exactCurrentRelease=Boolean(released&&e.releasePeriod&&m&&m.actual&&(m.period===e.releasePeriod||(e.type==='fomc'&&String(m.period||'').slice(0,10)===fomcReleaseDate(e))));
+    const exactCurrentRelease=Boolean(released&&e.releasePeriod&&m&&m.actual&&releasePeriodsMatch(e.type,m.period,e.releasePeriod,e));
     const eventOnly=EVENT_ONLY_TYPES.has(e.type);
     const rawHistory=(official.histories?.[e.type]||[]).slice(0,10);
 
@@ -853,7 +883,7 @@ export async function onRequestGet({request,env}){
     else if(exactCurrentRelease) previous=m.previous||rawHistory.find(r=>r&&r.period!==e.releasePeriod&&r.actual)?.actual||e.lastRelease?.actual||e.previous||'';
     else previous=(m?.actual||rawHistory.find(r=>r&&r.actual)?.actual||e.lastRelease?.actual||e.previous||'');
     if(!previous&&!eventOnly){
-      const anyMetric=Object.values(official.metrics||{}).find(x=>x&&x.actual&&x.period===e.releasePeriod);
+      const anyMetric=Object.entries(official.metrics||{}).find(([type,x])=>x&&x.actual&&releasePeriodsMatch(type,x.period,e.releasePeriod,e))?.[1];
       previous=anyMetric?.previous||'';
     }
 
@@ -907,6 +937,15 @@ export async function onRequestGet({request,env}){
       if(Array.isArray(e.releaseHistory)){
         e.releaseHistory=e.releaseHistory.map(row=>String(row?.period||'')===String(e.releasePeriod||'')?{...row,archivedAt}:row);
       }
+      historyChanged=true;
+    }
+
+    // Repair stale lifecycle state left by an older deployment. A current release must
+    // remain live for the full Malaysia release day once its official Actual is verified.
+    // This applies uniformly to every numeric news type and never touches Forecast/history.
+    if(exactCurrentRelease&&isMalaysiaReleaseDay(e.datetime,now)&&String(e.archivedPeriod||'')===String(e.releasePeriod||'')){
+      e.archivedPeriod='';
+      e.archivedAt='';
       historyChanged=true;
     }
 
