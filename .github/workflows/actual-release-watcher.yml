@@ -190,7 +190,7 @@ jobs:
       - name: Publish proof — verify the live website received every Actual
         if: steps.window.outputs.active == 'true'
         env:
-          SITE_URL: https://goldhunter.site
+          SITE_URLS: https://goldhunter.site,https://goldhunter-eas.pages.dev
           EXPECTED_PERIODS: ${{ steps.window.outputs.expected }}
           ADMIN_PIN: ${{ secrets.GH_ADMIN_PIN }}
         shell: bash
@@ -206,42 +206,43 @@ jobs:
               print('No active release requires publish proof.')
               raise SystemExit(0)
 
-          site = os.environ['SITE_URL'].rstrip('/')
+          sites = [x.strip().rstrip('/') for x in os.environ.get('SITE_URLS', '').split(',') if x.strip()]
           admin_pin = os.environ.get('ADMIN_PIN', '')
           last_error = ''
           for attempt in range(1, 31):
-              try:
-                  stamp = int(time.time())
-                  with urllib.request.urlopen(f'{site}/data/official-data.json?proof={stamp}', timeout=25) as response:
-                      snapshot = json.load(response)
-                  metrics = snapshot.get('metrics') or {}
-                  snapshot_missing = [
-                      f'{kind} expected {period}, got {(metrics.get(kind) or {}).get("period") or "none"}'
-                      for kind, period in expected.items()
-                      if (metrics.get(kind) or {}).get('period') != period or not str((metrics.get(kind) or {}).get('actual') or '').strip()
-                  ]
-                  if snapshot_missing:
-                      raise RuntimeError('Static snapshot not deployed: ' + '; '.join(snapshot_missing))
+              for site in sites:
+                  try:
+                      stamp = int(time.time())
+                      with urllib.request.urlopen(f'{site}/data/official-data.json?proof={stamp}', timeout=25) as response:
+                          snapshot = json.load(response)
+                      metrics = snapshot.get('metrics') or {}
+                      snapshot_missing = [
+                          f'{kind} expected {period}, got {(metrics.get(kind) or {}).get("period") or "none"}'
+                          for kind, period in expected.items()
+                          if (metrics.get(kind) or {}).get('period') != period or not str((metrics.get(kind) or {}).get('actual') or '').strip()
+                      ]
+                      if snapshot_missing:
+                          raise RuntimeError('Static snapshot not deployed: ' + '; '.join(snapshot_missing))
 
-                  request = urllib.request.Request(
-                      f'{site}/api/data-engine?publishProof={stamp}',
-                      headers={'cache-control': 'no-cache', **({'x-admin-pin': admin_pin} if admin_pin else {})},
-                  )
-                  with urllib.request.urlopen(request, timeout=30) as response:
-                      payload = json.load(response)
-                  rows = payload.get('events') or []
-                  index = {(str(row.get('type')), str(row.get('releasePeriod'))): row for row in rows}
-                  live_missing = []
-                  for kind, period in expected.items():
-                      row = index.get((kind, period))
-                      if not row or not str(row.get('actual') or '').strip():
-                          live_missing.append(f'{kind} [{period}]')
-                  if not live_missing:
-                      print('PUBLISH PROOF PASS:', ', '.join(f'{kind}={period}' for kind, period in expected.items()))
-                      raise SystemExit(0)
-                  last_error = 'Website API still missing Actual: ' + ', '.join(live_missing)
-              except Exception as exc:
-                  last_error = str(exc)
+                      request = urllib.request.Request(
+                          f'{site}/api/data-engine?publishProof={stamp}',
+                          headers={'cache-control': 'no-cache', **({'x-admin-pin': admin_pin} if admin_pin else {})},
+                      )
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          payload = json.load(response)
+                      rows = payload.get('events') or []
+                      index = {(str(row.get('type')), str(row.get('releasePeriod'))): row for row in rows}
+                      live_missing = []
+                      for kind, period in expected.items():
+                          row = index.get((kind, period))
+                          if not row or not str(row.get('actual') or '').strip():
+                              live_missing.append(f'{kind} [{period}]')
+                      if not live_missing:
+                          print('PUBLISH PROOF PASS via', site, ':', ', '.join(f'{kind}={period}' for kind, period in expected.items()))
+                          raise SystemExit(0)
+                      last_error = f'{site}: Website API still missing Actual: ' + ', '.join(live_missing)
+                  except Exception as exc:
+                      last_error = f'{site}: {exc}'
               print(f'Publish proof {attempt}/30 waiting: {last_error}')
               time.sleep(20)
           raise SystemExit('PUBLISH PROOF FAILED after 10 minutes: ' + last_error)

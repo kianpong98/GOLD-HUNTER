@@ -46,7 +46,7 @@ jobs:
                   release=datetime.fromisoformat(event['datetime']).astimezone(timezone.utc)
               except Exception:
                   continue
-              if release <= now <= release + timedelta(hours=6) and event.get('releasePeriod') and event.get('type'):
+              if release <= now <= release + timedelta(hours=24) and event.get('releasePeriod') and event.get('type'):
                   due.append(event)
           by_type={str(event['type']):str(event['releasePeriod']) for event in sorted(due,key=lambda x:x['datetime'])}
           expected=','.join(f'{kind}={period}' for kind,period in sorted(by_type.items()))
@@ -60,7 +60,7 @@ jobs:
       - name: Verify live delivery and automatically repair when missing
         if: steps.due.outputs.active == 'true'
         env:
-          SITE_URL: https://goldhunter.site
+          SITE_URLS: https://goldhunter.site,https://goldhunter-eas.pages.dev
           ACTIVE_TYPES: ${{ steps.due.outputs.types }}
           EXPECTED_PERIODS: ${{ steps.due.outputs.expected }}
           BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
@@ -71,19 +71,30 @@ jobs:
           python - <<'PY'
           import json, os, urllib.request, time
 
-          site=os.environ['SITE_URL'].rstrip('/')
+          sites=[x.strip().rstrip('/') for x in os.environ.get('SITE_URLS','').split(',') if x.strip()]
           expected=dict(part.split('=',1) for part in os.environ['EXPECTED_PERIODS'].split(',') if '=' in part)
           pin=os.environ.get('ADMIN_PIN','')
 
           def live_missing():
-              request=urllib.request.Request(
-                  f'{site}/api/data-engine?verify={int(time.time())}',
-                  headers={'cache-control':'no-cache', **({'x-admin-pin':pin} if pin else {})},
-              )
-              with urllib.request.urlopen(request,timeout=30) as response:
-                  payload=json.load(response)
-              index={(str(row.get('type')),str(row.get('releasePeriod'))):row for row in payload.get('events') or []}
-              return [f'{kind} [{period}]' for kind,period in expected.items() if not str((index.get((kind,period)) or {}).get('actual') or '').strip()]
+              errors=[]
+              for site in sites:
+                  try:
+                      request=urllib.request.Request(
+                          f'{site}/api/data-engine?verify={int(time.time())}',
+                          headers={'cache-control':'no-cache', **({'x-admin-pin':pin} if pin else {})},
+                      )
+                      with urllib.request.urlopen(request,timeout=30) as response:
+                          payload=json.load(response)
+                      index={(str(row.get('type')),str(row.get('releasePeriod'))):row for row in payload.get('events') or []}
+                      missing=[f'{kind} [{period}]' for kind,period in expected.items() if not str((index.get((kind,period)) or {}).get('actual') or '').strip()]
+                      if not missing:
+                          print('Live verification passed via',site)
+                          return []
+                      errors.append(f'{site}: '+', '.join(missing))
+                  except Exception as exc:
+                      errors.append(f'{site}: {exc}')
+              print('Live verification details:', ' | '.join(errors))
+              return [f'{kind} [{period}]' for kind,period in expected.items()]
 
           try:
               missing=live_missing()
@@ -132,25 +143,26 @@ jobs:
 
           python - <<'PY'
           import json, os, urllib.request, time
-          site=os.environ['SITE_URL'].rstrip('/')
+          sites=[x.strip().rstrip('/') for x in os.environ.get('SITE_URLS','').split(',') if x.strip()]
           expected=dict(part.split('=',1) for part in os.environ['EXPECTED_PERIODS'].split(',') if '=' in part)
           pin=os.environ.get('ADMIN_PIN','')
           last=''
           for attempt in range(1,31):
-              try:
-                  req=urllib.request.Request(
-                      f'{site}/api/data-engine?selfHealProof={int(time.time())}',
-                      headers={'cache-control':'no-cache', **({'x-admin-pin':pin} if pin else {})},
-                  )
-                  with urllib.request.urlopen(req,timeout=30) as response: payload=json.load(response)
-                  index={(str(row.get('type')),str(row.get('releasePeriod'))):row for row in payload.get('events') or []}
-                  missing=[f'{kind} [{period}]' for kind,period in expected.items() if not str((index.get((kind,period)) or {}).get('actual') or '').strip()]
-                  if not missing:
-                      print('SELF-HEAL PASS: website now exposes all due Actual values.')
-                      raise SystemExit(0)
-                  last=', '.join(missing)
-              except Exception as exc:
-                  last=str(exc)
+              for site in sites:
+                  try:
+                      req=urllib.request.Request(
+                          f'{site}/api/data-engine?selfHealProof={int(time.time())}',
+                          headers={'cache-control':'no-cache', **({'x-admin-pin':pin} if pin else {})},
+                      )
+                      with urllib.request.urlopen(req,timeout=30) as response: payload=json.load(response)
+                      index={(str(row.get('type')),str(row.get('releasePeriod'))):row for row in payload.get('events') or []}
+                      missing=[f'{kind} [{period}]' for kind,period in expected.items() if not str((index.get((kind,period)) or {}).get('actual') or '').strip()]
+                      if not missing:
+                          print('SELF-HEAL PASS via',site,': website now exposes all due Actual values.')
+                          raise SystemExit(0)
+                      last=f'{site}: '+', '.join(missing)
+                  except Exception as exc:
+                      last=f'{site}: {exc}'
               print(f'Live proof {attempt}/30 waiting: {last}')
               time.sleep(20)
           raise SystemExit('SELF-HEAL FAILED: live website still missing '+last)
