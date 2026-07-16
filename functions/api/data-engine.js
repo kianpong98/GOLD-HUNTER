@@ -67,53 +67,12 @@ const VERIFIED_RELEASE_DATETIMES = {
     '2026-06':'2026-07-02T20:30:00+08:00'
   },
   unemployment: {},
-  avg_hourly_earnings: {},
-  retail_sales: {
-    '2025-08':'2025-11-25T21:30:00+08:00',
-    '2025-09':'2025-11-25T21:30:00+08:00',
-    '2025-10':'2025-12-16T21:30:00+08:00',
-    '2025-11':'2026-01-14T21:30:00+08:00',
-    '2025-12':'2026-02-10T21:30:00+08:00',
-    '2026-01':'2026-03-06T21:30:00+08:00',
-    '2026-02':'2026-04-01T20:30:00+08:00',
-    '2026-03':'2026-04-21T20:30:00+08:00',
-    '2026-04':'2026-05-14T20:30:00+08:00',
-    '2026-05':'2026-06-17T20:30:00+08:00',
-    '2026-06':'2026-07-16T20:30:00+08:00'
-  },
-  pce: {
-    '2025-08':'2025-10-31T20:30:00+08:00',
-    '2025-09':'2025-11-26T21:30:00+08:00',
-    '2025-10':'2026-01-22T21:30:00+08:00',
-    '2025-11':'2026-01-22T21:30:00+08:00',
-    '2025-12':'2026-02-20T21:30:00+08:00',
-    '2026-01':'2026-03-13T20:30:00+08:00',
-    '2026-02':'2026-04-09T20:30:00+08:00',
-    '2026-03':'2026-04-30T20:30:00+08:00',
-    '2026-04':'2026-05-28T20:30:00+08:00',
-    '2026-05':'2026-06-25T20:30:00+08:00',
-    '2026-06':'2026-07-30T20:30:00+08:00'
-  },
-  core_pce: {},
-  gdp: {
-    '2023-Q4':'2024-01-25T21:30:00+08:00',
-    '2024-Q1':'2024-04-25T20:30:00+08:00',
-    '2024-Q2':'2024-07-25T20:30:00+08:00',
-    '2024-Q3':'2024-10-30T20:30:00+08:00',
-    '2024-Q4':'2025-01-30T21:30:00+08:00',
-    '2025-Q1':'2025-04-30T20:30:00+08:00',
-    '2025-Q2':'2025-07-30T20:30:00+08:00',
-    '2025-Q3':'2025-10-30T20:30:00+08:00',
-    '2025-Q4':'2026-02-20T21:30:00+08:00',
-    '2026-Q1':'2026-04-30T20:30:00+08:00',
-    '2026-Q2':'2026-07-30T20:30:00+08:00'
-  }
+  avg_hourly_earnings: {}
 };
 VERIFIED_RELEASE_DATETIMES.core_cpi_yoy = VERIFIED_RELEASE_DATETIMES.cpi_yoy;
 VERIFIED_RELEASE_DATETIMES.core_ppi_yoy = VERIFIED_RELEASE_DATETIMES.ppi_yoy;
 VERIFIED_RELEASE_DATETIMES.unemployment = VERIFIED_RELEASE_DATETIMES.nfp;
 VERIFIED_RELEASE_DATETIMES.avg_hourly_earnings = VERIFIED_RELEASE_DATETIMES.nfp;
-VERIFIED_RELEASE_DATETIMES.core_pce = VERIFIED_RELEASE_DATETIMES.pce;
 
 function verifiedReleaseDateTime(type,period){
   const canonical=canonicalType({type});
@@ -123,20 +82,6 @@ function verifiedReleaseDateTime(type,period){
   // Initial claims are normally released on the Thursday following the
   // reported week-ending Saturday. This deterministic fallback is used only
   // when a stored row does not already contain an authoritative timestamp.
-  // For old monthly rows not present in the verified table, use the persisted
-  // publication timestamp when available. A deterministic fallback is intentionally
-  // limited to displaying a date rather than mutating official values.
-  if(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','pce','core_pce'].includes(canonical)&&/^\d{4}-\d{2}$/.test(key)){
-    const [year,month]=key.split('-').map(Number);
-    if(Number.isFinite(year)&&Number.isFinite(month)){
-      const releaseMonth=month===12?1:month+1;
-      const releaseYear=month===12?year+1:year;
-      // The 15th is used only as a final display fallback for legacy rows whose
-      // historical timestamp was never persisted. Verified maps above take priority.
-      const hh=(releaseMonth>=3&&releaseMonth<=10)?'20:30:00':'21:30:00';
-      return `${releaseYear}-${String(releaseMonth).padStart(2,'0')}-15T${hh}+08:00`;
-    }
-  }
   if(canonical==='jobless_claims'&&/^\d{4}-\d{2}-\d{2}$/.test(key)){
     const d=new Date(`${key}T00:00:00Z`);
     if(Number.isFinite(d.getTime())){
@@ -155,6 +100,7 @@ function verifiedReleaseDateTime(type,period){
 }
 
 const AUTO_TYPES = new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings','retail_sales','jobless_claims','gdp','pce','core_pce','fomc']);
+const JOBLESS_HEALTH_STATE_KEY='jobless-health-source-v1';
 const EVENT_ONLY_TYPES = new Set(['fomc_minutes','fed_speech']);
 
 const VERIFIED_FALLBACK_METRICS = {
@@ -208,7 +154,6 @@ const SERIES = {
 const FRED_CACHE_KEY='official-fred-cache-v2';
 const FED_FOMC_CACHE_KEY='official-fed-fomc-cache-v1';
 const OFFICIAL_HISTORY_SNAPSHOT_KEY='official-history-snapshot-v1';
-const OFFICIAL_SOURCE_HEALTH_KEY='official-source-health-state-v1';
 const FRED_CONFIG={
   // FRED fallback coverage for every numeric news type. BLS remains primary where available.
   cpi_yoy:{series:'CPIAUCSL',mode:'yoy',suffix:'%',decimals:1},
@@ -757,35 +702,70 @@ async function probeOfficialSource(name,url,options={}){
     return {name,status:'offline',httpStatus:0,lastChecked:new Date().toISOString(),lastSuccess:null,latencyMs:Date.now()-started,error:error?.name==='AbortError'?'Timeout':(error?.message||String(error))};
   }finally{clearTimeout(timeout);}
 }
+async function probeJoblessClaimsSource(env){
+  const now=Date.now();
+  let state={consecutiveDolFailures:0,preferFredUntil:0,lastDolProbeAt:0,lastSuccess:null};
+  if(env.GH_MARKET_DATA){
+    try{state={...state,...((await env.GH_MARKET_DATA.get(JOBLESS_HEALTH_STATE_KEY,{type:'json'}))||{})};}catch{/* health state is optional */}
+  }
+  const shouldPreferFred=Number(state.preferFredUntil||0)>now;
+  const dolDue=!shouldPreferFred||(now-Number(state.lastDolProbeAt||0)>=60*60*1000);
+  let dol=null,fred=null;
+
+  // When DOL has been blocked repeatedly, use FRED ICSA first and only retest DOL hourly.
+  if(shouldPreferFred){
+    fred=await probeOfficialSource('joblessFred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA',{accept:'text/csv'});
+    if(dolDue)dol=await probeOfficialSource('dol','https://www.dol.gov/ui/data.pdf',{accept:'application/pdf'});
+  }else{
+    dol=await probeOfficialSource('dol','https://www.dol.gov/ui/data.pdf',{accept:'application/pdf'});
+    // DOL failure falls back to FRED immediately in the same Worker invocation.
+    if(dol.status!=='live')fred=await probeOfficialSource('joblessFred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA',{accept:'text/csv'});
+  }
+
+  if(dol?.status==='live'){
+    state={...state,consecutiveDolFailures:0,preferFredUntil:0,lastDolProbeAt:now,lastSuccess:dol.lastSuccess};
+  }else if(dol){
+    const failures=Number(state.consecutiveDolFailures||0)+1;
+    state={...state,consecutiveDolFailures:failures,lastDolProbeAt:now,preferFredUntil:failures>=3?now+60*60*1000:Number(state.preferFredUntil||0)};
+  }
+  if(fred?.status==='live')state.lastSuccess=fred.lastSuccess;
+  if(env.GH_MARKET_DATA){
+    try{await env.GH_MARKET_DATA.put(JOBLESS_HEALTH_STATE_KEY,JSON.stringify(state));}catch{/* health persistence must not fail the response */}
+  }
+
+  const active=(dol?.status==='live')?dol:(fred?.status==='live'?fred:null);
+  return {
+    name:'joblessClaims',
+    status:active?'live':'offline',
+    provider:active===dol?'U.S. Department of Labor':'FRED ICSA official fallback',
+    sourceMode:active===dol?'primary':'fallback',
+    lastChecked:(dol?.lastChecked||fred?.lastChecked||new Date().toISOString()),
+    lastSuccess:active?.lastSuccess||state.lastSuccess||null,
+    httpStatus:active?.httpStatus??dol?.httpStatus??fred?.httpStatus??0,
+    latencyMs:active?.latencyMs??dol?.latencyMs??fred?.latencyMs??null,
+    error:active?'':[dol?.error&&`DOL: ${dol.error}`,fred?.error&&`FRED ICSA: ${fred.error}`].filter(Boolean).join(' | '),
+    consecutiveDolFailures:Number(state.consecutiveDolFailures||0),
+    preferFredUntil:Number(state.preferFredUntil||0)||0,
+    dol,
+    fred
+  };
+}
 async function probeOfficialSources(env){
   const year=new Date().getUTCFullYear();
   const blsBody=JSON.stringify({seriesid:['CUUR0000SA0'],startyear:String(year-1),endyear:String(year)});
-
-  // FRED is the common fallback for all numeric releases. Probe two lightweight
-  // official CSV endpoints sequentially so one temporary series/CDN failure does
-  // not incorrectly mark every fallback as unavailable. This adds at most one
-  // extra subrequest and remains well below the Worker limit.
-  const probeFred=async()=>{
-    const first=await probeOfficialSource('fred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA',{accept:'text/csv'});
-    if(first.status==='live')return first;
-    const second=await probeOfficialSource('fred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE',{accept:'text/csv'});
-    if(second.status==='live')return second;
-    return {
-      ...second,
-      lastSuccess:first.lastSuccess||second.lastSuccess||null,
-      error:[first.error,second.error].filter(Boolean).join(' | ')||second.error||first.error||'FRED unavailable'
-    };
-  };
-
-  const checks=await Promise.all([
-    probeOfficialSource('bls','https://api.bls.gov/publicAPI/v2/timeseries/data/',{method:'POST',accept:'application/json',headers:{'content-type':'application/json'},body:blsBody}),
-    probeFred(),
-    probeOfficialSource('dol','https://www.dol.gov/ui/data.pdf',{accept:'application/pdf'}),
-    probeOfficialSource('census','https://www.census.gov/retail/index.html',{accept:'text/html'}),
-    probeOfficialSource('bea','https://www.bea.gov/news/schedule',{accept:'text/html'}),
-    probeOfficialSource('federalReserve','https://www.federalreserve.gov/',{accept:'text/html',timeoutMs:10000})
+  const [checks,joblessClaims]=await Promise.all([
+    Promise.all([
+      probeOfficialSource('bls','https://api.bls.gov/publicAPI/v2/timeseries/data/',{method:'POST',accept:'application/json',headers:{'content-type':'application/json'},body:blsBody}),
+      probeOfficialSource('fred','https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE',{accept:'text/csv'}),
+      probeOfficialSource('census','https://www.census.gov/retail/index.html',{accept:'text/html'}),
+      probeOfficialSource('bea','https://www.bea.gov/news/schedule',{accept:'text/html'}),
+      probeOfficialSource('federalReserve','https://www.federalreserve.gov/',{accept:'text/html',timeoutMs:10000})
+    ]),
+    probeJoblessClaimsSource(env)
   ]);
   const out=Object.fromEntries(checks.map(x=>[x.name,x]));
+  out.joblessClaims=joblessClaims;
+  out.dol=joblessClaims.dol||{name:'dol',status:'offline',httpStatus:0,lastChecked:joblessClaims.lastChecked,lastSuccess:null,latencyMs:null,error:'DOL check deferred while FRED is preferred'};
   const now=new Date().toISOString();
   out.staticCache={name:'staticCache',status:'live',httpStatus:200,lastChecked:now,lastSuccess:now,latencyMs:0,error:'',mode:'GitHub Actions verified snapshot'};
   out.cloudflareKv={name:'cloudflareKv',status:env.GH_MARKET_DATA?'live':'offline',httpStatus:env.GH_MARKET_DATA?200:0,lastChecked:now,lastSuccess:env.GH_MARKET_DATA?now:null,latencyMs:0,error:env.GH_MARKET_DATA?'':'GH_MARKET_DATA binding missing'};
@@ -815,43 +795,13 @@ export async function onRequestGet({request,env}){
       historySnapshot=cleanOfficialHistorySnapshot(snapshot.histories||snapshot);
     }catch{historySnapshot={};}
   }
-  let persistedHealth={};
-  if(env.GH_MARKET_DATA){
-    try{
-      const savedHealth=await env.GH_MARKET_DATA.get(OFFICIAL_SOURCE_HEALTH_KEY,{type:'json'})||{};
-      persistedHealth=(savedHealth&&typeof savedHealth.sources==='object')?savedHealth.sources:{};
-    }catch{persistedHealth={};}
-  }
   const staticOfficial=await fetchStaticOfficial(request);
   // Public/admin reads always use the GitHub-generated official snapshot for data.
   // Admin force refresh performs only one lightweight probe per provider. It never
   // downloads every series, so a single Worker invocation stays well below the
   // Cloudflare subrequest limit. Actual data refresh remains handled by GitHub Actions.
   let bls={metrics:{},histories:{},savedAt:null},fred={metrics:{},histories:{},savedAt:null},fedFomc={metrics:{},histories:{},savedAt:null};
-  let liveProbes=forceRefresh?await probeOfficialSources(env):null;
-  if(liveProbes){
-    const mergedHealth={};
-    for(const [key,probe] of Object.entries(liveProbes)){
-      const prior=persistedHealth?.[key]||{};
-      const succeeded=probe?.status==='live';
-      const failedAt=succeeded?(prior.lastFailure||null):(probe?.lastChecked||new Date().toISOString());
-      mergedHealth[key]={
-        ...probe,
-        lastSuccess:succeeded?(probe.lastSuccess||probe.lastChecked||new Date().toISOString()):(prior.lastSuccess||null),
-        lastFailure:failedAt,
-        consecutiveFailures:succeeded?0:Number(prior.consecutiveFailures||0)+1,
-        previousError:succeeded?'':(probe.error||prior.previousError||''),
-        recoveredAt:succeeded&&Number(prior.consecutiveFailures||0)>0?(probe.lastChecked||new Date().toISOString()):(prior.recoveredAt||null)
-      };
-    }
-    liveProbes=mergedHealth;
-    if(env.GH_MARKET_DATA){
-      try{
-        await putJsonIfChanged(env.GH_MARKET_DATA,OFFICIAL_SOURCE_HEALTH_KEY,{schemaVersion:1,sources:mergedHealth,updatedAt:new Date().toISOString()});
-        persistedHealth=mergedHealth;
-      }catch{}
-    }
-  }
+  const liveProbes=forceRefresh?await probeOfficialSources(env):null;
   const runtimeMetrics={...(fred.metrics||{}),...(bls.metrics||{}),...(fedFomc.metrics||{})};
   const runtimeHistories={...(fred.histories||{}),...(bls.histories||{}),...(fedFomc.histories||{})};
   const official={
@@ -886,7 +836,7 @@ export async function onRequestGet({request,env}){
     }
     return e;
   });
-  const allEvents=prepared.map(e=>{
+  const events=prepared.map(e=>{
     const m=official.metrics?.[e.type];
     const releaseAt=new Date(e.datetime).getTime();
     const released=Number.isFinite(releaseAt)&&now>=releaseAt;
@@ -999,13 +949,8 @@ export async function onRequestGet({request,env}){
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
     const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':'Released';
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
-    const hideAfterRelease=Boolean(!eventOnly&&exactCurrentRelease);
-    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,hideAfterRelease,...result};
+    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
   });
-  // Public calendar lifecycle: once a verified release has been copied into Last Release,
-  // remove that completed card from the live calendar. The next scheduled occurrence of
-  // the same news type remains visible as a separate event with its own date and forecast.
-  const events=allEvents.filter(e=>!e.hideAfterRelease);
   if(historyChanged&&env.GH_MARKET_DATA){
     await putJsonIfChanged(env.GH_MARKET_DATA,EVENTS_KEY,sanitizeEvents(persistable),undefined);
   }
@@ -1020,85 +965,39 @@ export async function onRequestGet({request,env}){
   });
   const probeOr=(key,fallback)=>{
     const probe=liveProbes?.[key];
-    const prior=persistedHealth?.[key]||{};
-    if(!probe){
-      return {
-        ...fallback,
-        lastSuccess:prior.lastSuccess||fallback.lastSuccess||null,
-        lastFailure:prior.lastFailure||null,
-        consecutiveFailures:Number(prior.consecutiveFailures||0),
-        recoveredAt:prior.recoveredAt||null,
-        previousError:prior.previousError||''
-      };
-    }
-    return {
-      ...fallback,
-      ...probe,
-      lastSuccess:probe.lastSuccess||prior.lastSuccess||fallback.lastSuccess||null,
-      lastFailure:probe.lastFailure||prior.lastFailure||null,
-      consecutiveFailures:Number(probe.consecutiveFailures??prior.consecutiveFailures??0),
-      recoveredAt:probe.recoveredAt||prior.recoveredAt||null,
-      previousError:probe.previousError||prior.previousError||'',
-      lastDataChanged:staticIso
-    };
+    if(!probe)return fallback;
+    return {...fallback,...probe,lastDataChanged:staticIso};
   };
   const connectorSources={
     staticCache:probeOr('staticCache',{status:staticHealthy?'live':staticAvailable?'cached':'offline',lastSuccess:staticIso,lastChecked:staticIso,lastDataChanged:staticIso,ageMinutes:staticAgeMinutes,mode:'GitHub Actions verified snapshot'}),
     bls:probeOr('bls',fallbackSource('bls',['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings'])),
     fred:probeOr('fred',fallbackSource('fred',['retail_sales','jobless_claims','gdp','pce','core_pce'])),
     dol:probeOr('dol',fallbackSource('dol',['jobless_claims'])),
+    joblessClaims:probeOr('joblessClaims',fallbackSource('joblessClaims',['jobless_claims'])),
     census:probeOr('census',fallbackSource('census',['retail_sales'])),
     bea:probeOr('bea',fallbackSource('bea',['gdp','pce','core_pce'])),
     federalReserve:probeOr('federalReserve',fallbackSource('federalReserve',['fomc'])),
     cloudflareKv:probeOr('cloudflareKv',{status:env.GH_MARKET_DATA?'live':'offline',lastSuccess:env.GH_MARKET_DATA?responseNow:null,lastChecked:responseNow,lastDataChanged:null,httpStatus:env.GH_MARKET_DATA?200:0,latencyMs:0,error:env.GH_MARKET_DATA?'':'GH_MARKET_DATA binding missing'})
   };
-  // Only report a connector as degraded when it is unavailable AND its FRED
-  // fallback is also unavailable. A primary 403/5xx with a healthy FRED fallback
-  // is an operational connection, not an outage.
-  const sourceFallbackMap={bls:'fred',dol:'fred',census:'fred',bea:'fred',federalReserve:'fred'};
-  const degraded=Object.entries(sourceFallbackMap)
-    .filter(([primaryKey,fallbackKey])=>connectorSources[primaryKey]?.status!=='live'&&connectorSources[fallbackKey]?.status!=='live')
-    .map(([primaryKey])=>primaryKey);
-  const connectorMessage=degraded.length?`${degraded.join(', ')} and their FRED fallback are temporarily unavailable; verified cached official data remains in use.`:'';
+  const degraded=Object.entries(connectorSources).filter(([key,v])=>!['staticCache','cloudflareKv','dol'].includes(key)&&v.status!=='live').map(([key])=>key);
+  const connectorMessage=degraded.length?`${degraded.join(', ')} temporarily unavailable; cached official data is being used where available.`:'';
   const blsTypes=new Set(['cpi_yoy','core_cpi_yoy','ppi_yoy','core_ppi_yoy','nfp','unemployment','avg_hourly_earnings']);
   const connectionFor=(event)=>{
     const type=event.type;
     let provider='FRED official fallback',primary=connectorSources.fred,fallback=null;
-    if(blsTypes.has(type)){provider='BLS Public Data API';primary=connectorSources.bls;fallback=connectorSources.fred;}
-    else if(type==='jobless_claims'){provider='U.S. Department of Labor';primary=connectorSources.dol;fallback=connectorSources.fred;}
+    if(blsTypes.has(type)){provider='BLS Public Data API';primary=connectorSources.bls;}
+    else if(type==='jobless_claims'){primary=connectorSources.joblessClaims;provider=primary?.provider||'U.S. Department of Labor / FRED ICSA';fallback=null;}
     else if(type==='retail_sales'){provider='U.S. Census Bureau';primary=connectorSources.census;fallback=connectorSources.fred;}
     else if(['gdp','pce','core_pce'].includes(type)){provider='U.S. Bureau of Economic Analysis';primary=connectorSources.bea;fallback=connectorSources.fred;}
-    else if(type==='fomc'){provider='Federal Reserve';primary=connectorSources.federalReserve;fallback=connectorSources.fred;}
+    else if(type==='fomc'){provider='Federal Reserve';primary=connectorSources.federalReserve;}
     const hasCurrentMetric=Boolean(official.metrics?.[type]?.actual);
     const primaryLive=primary?.status==='live';
     const fallbackLive=fallback?.status==='live';
-    const status=(primaryLive||fallbackLive)?'live':hasCurrentMetric?'cached':'offline';
-    const activeProvider=primaryLive?provider:(fallbackLive?'FRED official fallback':provider);
-    // Do not surface the primary 403/5xx as an active error when FRED has already
-    // taken over successfully. Keep the primary failure available in connectorSources
-    // for diagnostics, while the per-news card remains green and truthful.
-    const error=(primaryLive||fallbackLive)?'':(primary?.error||fallback?.error||'');
-    const active=primaryLive?primary:(fallbackLive?fallback:primary);
-    return {
-      id:event.id,type,name:event.name,nameZh:event.nameZh,
-      provider:activeProvider,primaryProvider:provider,
-      fallbackActive:Boolean(!primaryLive&&fallbackLive),
-      status,
-      lastChecked:active?.lastChecked||fallback?.lastChecked||responseNow,
-      lastSuccess:active?.lastSuccess||fallback?.lastSuccess||primary?.lastSuccess||null,
-      lastDataChanged:staticIso,
-      httpStatus:active?.httpStatus??null,
-      latencyMs:active?.latencyMs??null,
-      error,
-      lastFailure:active?.lastFailure||primary?.lastFailure||fallback?.lastFailure||null,
-      consecutiveFailures:Number(active?.consecutiveFailures||primary?.consecutiveFailures||fallback?.consecutiveFailures||0),
-      recoveredAt:active?.recoveredAt||primary?.recoveredAt||fallback?.recoveredAt||null,
-      primaryError:primaryLive?'':(primary?.error||primary?.previousError||''),
-      fallbackError:fallbackLive?'':(fallback?.error||fallback?.previousError||''),
-      recovery:primaryLive?'Connected':fallbackLive?'Connected via FRED fallback':status==='cached'?'Primary and FRED temporarily unavailable; verified cache active':'Official source and FRED fallback unavailable'
-    };
+    const status=primaryLive?'live':fallbackLive||hasCurrentMetric?'cached':'offline';
+    const error=primaryLive?'':(primary?.error||'');
+    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess:primary?.lastSuccess||fallback?.lastSuccess||null,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery:status==='live'?'Connected':status==='cached'?(fallbackLive?'Primary unavailable; official fallback connected':'Automatic retry and cached fallback active'):'Official source and fallback unavailable'};
   };
-  const connectionHealth=allEvents.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
+  const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
   return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
