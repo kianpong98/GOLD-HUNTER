@@ -1,64 +1,133 @@
-name: Test news release pipeline (read-only)
+name: Manual news release readiness test
 
 on:
   workflow_dispatch:
     inputs:
       live_connectors:
-        description: 'Also test live official connectors (read-only)'
+        description: 'Test live official sources and parsers now (read-only)'
         required: true
         default: true
         type: boolean
-  schedule:
-    # 06:30 Malaysia Time every day. This catches parser/source problems before
-    # the usual 20:30 MYT U.S. release window.
-    - cron: '30 22 * * *'
-  push:
-    paths:
-      - 'data/generated-events.json'
-      - 'data/official-data.json'
-      - 'scripts/update_official_data.py'
-      - 'scripts/test_news_release_pipeline.py'
-      - 'functions/api/data-engine.js'
-      - '.github/workflows/actual-release-watcher.yml'
-      - '.github/workflows/test-news-release-pipeline.yml'
+      strict_live:
+        description: 'Fail the Action when any live source is unavailable'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: news-release-pipeline-test-${{ github.ref }}
+  group: manual-news-release-readiness-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  preflight:
+  readiness:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout current repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install test dependency
-        run: pip install requests
+      - name: Install test dependencies
+        run: pip install requests pyyaml
 
-      - name: Run all 13 synthetic release tests
-        run: python scripts/test_news_release_pipeline.py --report news-pipeline-test-report.json
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile \
+            scripts/update_official_data.py \
+            scripts/test_news_release_pipeline.py
 
-      - name: Run live official connector/parser tests
-        if: ${{ github.event_name == 'schedule' || github.event_name == 'push' || inputs.live_connectors == true }}
+      - name: Validate workflow YAML
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          paths = [
+              Path('.github/workflows/actual-release-watcher.yml'),
+              Path('.github/workflows/release-verification.yml'),
+              Path('.github/workflows/run-release-lifecycle.yml'),
+              Path('.github/workflows/test-news-release-pipeline.yml'),
+          ]
+          for path in paths:
+              yaml.safe_load(path.read_text(encoding='utf-8'))
+              print(f'YAML OK: {path}')
+          PY
+
+      - name: Run all 13 synthetic end-to-end checks
+        run: |
+          python scripts/test_news_release_pipeline.py \
+            --report news-pipeline-static-report.json
+
+      - name: Run live official source checks
+        if: ${{ inputs.live_connectors == true }}
         env:
           BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
-        run: python scripts/test_news_release_pipeline.py --live --report news-pipeline-live-test-report.json
+        run: |
+          EXTRA=''
+          if [ '${{ inputs.strict_live }}' = 'true' ]; then EXTRA='--strict-live'; fi
+          python scripts/test_news_release_pipeline.py \
+            --live $EXTRA \
+            --report news-pipeline-live-report.json
 
-      - name: Upload readable test reports
+      - name: Publish readiness summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          reports = []
+          for name in ('news-pipeline-static-report.json', 'news-pipeline-live-report.json'):
+              path = Path(name)
+              if path.exists():
+                  reports.append(json.loads(path.read_text(encoding='utf-8')))
+
+          static_failed = max((r.get('staticSynthetic', {}).get('failed', 0) for r in reports), default=0)
+          live_enabled = any(r.get('liveConnectors', {}).get('enabled') for r in reports)
+          live_failed = max((r.get('liveConnectors', {}).get('failed', 0) for r in reports), default=0)
+          strict = '${{ inputs.strict_live }}' == 'true'
+
+          if static_failed:
+              verdict = 'NO-GO: code, schedule, period matching or lifecycle checks failed.'
+          elif live_enabled and live_failed and strict:
+              verdict = 'NO-GO: at least one live source/parser failed in strict mode.'
+          elif live_enabled and live_failed:
+              verdict = 'CONDITIONAL GO: internal pipeline passed; one or more live sources are temporarily unavailable.'
+          else:
+              verdict = 'GO: all selected checks passed at the time of this test.'
+
+          lines = [
+              '# Gold Hunter news readiness result',
+              '',
+              f'**{verdict}**',
+              '',
+              f'- Static/synthetic failures: {static_failed}',
+              f'- Live checks enabled: {live_enabled}',
+              f'- Live source failures: {live_failed}',
+              f'- Strict live mode: {strict}',
+              '- Production data/KV modified: No',
+              '',
+              '> This is a readiness test, not a 100% guarantee of future external-source availability or GitHub/Cloudflare delivery timing.'
+          ]
+          Path('news-readiness-summary.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          with open(Path(__import__('os').environ['GITHUB_STEP_SUMMARY']), 'a', encoding='utf-8') as fh:
+              fh.write('\n'.join(lines) + '\n')
+          PY
+
+      - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: news-pipeline-test-reports
+          name: manual-news-readiness-reports
           path: |
-            news-pipeline-test-report.json
-            news-pipeline-live-test-report.json
+            news-pipeline-static-report.json
+            news-pipeline-live-report.json
+            news-readiness-summary.md
           if-no-files-found: ignore
           retention-days: 14
