@@ -1,0 +1,40 @@
+name: Manual full news release simulation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  simulate-release-pipeline:
+    name: Simulate all 13 news releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run read-only end-to-end simulation
+        run: node scripts/test_news_release_e2e.mjs
+
+      - name: Show report
+        if: always()
+        run: |
+          test -f news-e2e-report.md && cat news-e2e-report.md || true
+
+      - name: Upload detailed report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-e2e-report-${{ github.run_number }}
+          path: |
+            news-e2e-report.json
+            news-e2e-report.md
+          retention-days: 14
+          if-no-files-found: warn
