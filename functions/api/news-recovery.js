@@ -36,32 +36,27 @@ async function readLive(origin,pin){
   if(!response.ok)throw new Error(payload.error||`Data Engine HTTP ${response.status}`);
   return payload;
 }
-async function dispatchWatcher(env,missing){
-  const token=String(env.GITHUB_ACTION_TOKEN||'').trim();
-  const repo=String(env.GITHUB_REPO||'').trim();
-  const ref=String(env.GITHUB_BRANCH||'main').trim()||'main';
-  if(!token||!repo){
-    return {dispatched:false,configured:false,error:'Set GITHUB_ACTION_TOKEN and GITHUB_REPO in Cloudflare Pages environment variables to enable one-tap recovery.'};
+async function reconcileNow(origin,pin){
+  let lastPayload=null;
+  let lastError='';
+  for(let attempt=1;attempt<=3;attempt++){
+    try{
+      const response=await fetch(`${origin}/api/data-engine?force=1&reconcile=${Date.now()}-${attempt}`,{
+        headers:{'x-admin-pin':pin,'cache-control':'no-cache','pragma':'no-cache'},
+        cf:{cacheTtl:0,cacheEverything:false}
+      });
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(payload.error||`Data Engine HTTP ${response.status}`);
+      lastPayload=payload;
+      const missing=recentMissing(payload.events);
+      if(!missing.length)return {reconciled:true,ready:true,missing:[],attempts:attempt,engineVersion:payload.engineVersion||''};
+      lastError=`Still waiting for ${missing.map(item=>item.name).join(', ')}`;
+    }catch(error){lastError=error?.message||String(error);}
+    if(attempt<3)await new Promise(resolve=>setTimeout(resolve,1200));
   }
-  const types=[...new Set(missing.map(item=>item.type).filter(Boolean))].join(',');
-  const url=`https://api.github.com/repos/${repo}/actions/workflows/actual-release-watcher.yml/dispatches`;
-  const response=await fetch(url,{
-    method:'POST',
-    headers:{
-      authorization:`Bearer ${token}`,
-      accept:'application/vnd.github+json',
-      'content-type':'application/json',
-      'user-agent':'Gold-Hunter-Admin-Recovery',
-      'x-github-api-version':'2022-11-28'
-    },
-    body:JSON.stringify({ref,inputs:{event_types:types,force_poll:'true'}})
-  });
-  if(response.status!==204){
-    const text=await response.text();
-    return {dispatched:false,configured:true,error:`GitHub dispatch failed (${response.status}): ${text.slice(0,300)}`};
-  }
-  return {dispatched:true,configured:true,types,ref};
+  return {reconciled:Boolean(lastPayload),ready:false,missing:recentMissing(lastPayload?.events||[]),attempts:3,error:lastError,engineVersion:lastPayload?.engineVersion||''};
 }
+
 
 export async function onRequestGet({request,env}){
   if(!authorized(request,env))return reply({error:'Incorrect PIN, or ADMIN_PIN is not configured.'},401);
@@ -86,16 +81,18 @@ export async function onRequestPost({request,env}){
     if(!missing.length){
       return reply({ok:true,ready:true,dispatched:false,message:'No recently released news is missing Actual. The live payload is already complete.',checkedAt:new Date().toISOString()});
     }
-    const dispatch=await dispatchWatcher(env,missing);
+    const reconcile=await reconcileNow(origin,pin);
     return reply({
-      ok:dispatch.dispatched,
-      ready:false,
-      missing,
-      ...dispatch,
-      message:dispatch.dispatched
-        ?'Automatic GitHub Actual Engine recovery started. Admin can stay open on a phone; status will be checked automatically.'
-        :'The current GitHub snapshot was reconciled, but one-tap GitHub recovery is not configured.'
-    },dispatch.dispatched?202:503);
+      ok:true,
+      ready:reconcile.ready,
+      missing:reconcile.missing?.length?reconcile.missing:missing,
+      automaticWatcher:true,
+      automaticVerification:true,
+      ...reconcile,
+      message:reconcile.ready
+        ?'The deployed official snapshot was reconciled and the website now exposes every due Actual.'
+        :'The deployed snapshot was reconciled. GitHub Actual Watcher and release self-heal continue automatically every 5 minutes; no computer or token is required.'
+    },reconcile.ready?200:202);
   }catch(error){
     return reply({error:error?.message||String(error)},500);
   }

@@ -176,18 +176,18 @@
     try{
       const before=await checkNewsRecoveryStatus();
       if(before.ready){st.textContent='发布链路完整：最近已发布新闻全部已有 Actual。';await load();return;}
-      st.textContent=`发现 ${before.missing.length} 条缺少 Actual，正在启动 GitHub 自动修复…`;
+      st.textContent=`发现 ${before.missing.length} 条缺少 Actual，正在重新合并已部署的官方快照…`;
       const r=await fetch(`/api/news-recovery?repair=${Date.now()}`,{method:'POST',headers:{'content-type':'application/json','x-admin-pin':pin,'cache-control':'no-cache'},body:JSON.stringify({action:'repair'})});
       const d=await r.json();
-      if(!r.ok)throw new Error(d.error||d.message||'无法启动 GitHub 自动修复');
-      st.textContent=`自动修复已启动：${(d.missing||[]).map(x=>x.name).join('、')}。Admin 将自动检查结果。`;
+      if(!r.ok)throw new Error(d.error||d.message||'无法执行新闻重新合并');
+      st.textContent=d.ready?'重新合并成功，网站已显示全部应发布 Actual。':`已完成立即重新合并；仍等待 ${(d.missing||[]).map(x=>x.name).join('、')}。后台 GitHub Watcher 会继续每5分钟自动抓取和自修复。`;
       for(let attempt=1;attempt<=18;attempt++){
         await new Promise(resolve=>setTimeout(resolve,20000));
         const status=await checkNewsRecoveryStatus();
         if(status.ready){st.textContent='修复成功：网站 API 已显示全部应发布的 Actual。';await load();return;}
-        st.textContent=`自动修复进行中（${attempt}/18）：仍等待 ${(status.missing||[]).map(x=>x.name).join('、')}`;
+        st.textContent=`自动验证中（${attempt}/18）：仍等待 ${(status.missing||[]).map(x=>x.name).join('、')}；无需保持 Admin 或电脑开启。`;
       }
-      st.textContent='自动修复仍在后台运行；系统会继续每5分钟验证。稍后刷新 Admin 查看结果。';
+      st.textContent='后台自动抓取与自修复仍在运行；无需保持 Admin 或电脑开启。稍后重新打开即可查看结果。';
     }catch(e){st.textContent=`自动修复未启动：${e.message}`;}finally{btn.disabled=false;btn.textContent=old;}
   }
   async function load(){const r=await fetch(`${API}?force=1&t=${Date.now()}`,{headers:{'x-admin-pin':pin},cache:'no-store'}),d=await r.json();if(!r.ok)throw new Error(d.error||'无法打开后台');events=d.events||[];meta=d;nextSyncAt=Math.ceil(Date.now()/SYNC_INTERVAL_MS)*SYNC_INTERVAL_MS;render();}
