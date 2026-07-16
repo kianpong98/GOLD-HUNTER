@@ -25,7 +25,7 @@
     const items=[['Static Cache',normalize('staticCache',legacy.staticCache)],['BLS',normalize('bls',legacy.bls)],['FRED',normalize('fred',legacy.fred)],['Department of Labor',normalize('dol',legacy.dol)],['BEA',normalize('bea',legacy.bea)],['Federal Reserve',normalize('federalReserve',legacy.federalReserve)],['Cloudflare KV',normalize('cloudflareKv',meta.kvConfigured)]];
     const label={live:'● Connected',cached:'● Retrying / Cached',offline:'● Offline'};
     const newsHealth=Array.isArray(meta.connectionHealth)?meta.connectionHealth:[];
-    $('#sourceGrid').innerHTML=newsHealth.length?newsHealth.map(v=>`<div class="source ${v.status==='live'?'ok':'bad'}"><b>${label[v.status]||label.offline}</b><strong class="source-news-name">${esc(v.name)}</strong><span class="source-provider">${esc(v.provider||'Official source')}</span><small>Last successful access: ${fmt(v.lastSuccess)}</small><small>Last poll: ${fmt(v.lastChecked)}</small><small>Last data change: ${fmt(v.lastDataChanged)}</small>${v.error?`<small class="source-error">Error: ${esc(v.error)}</small>`:''}<small class="source-recovery">${esc(v.recovery||'')}</small></div>`).join(''):items.map(([n,v])=>`<div class="source ${v.status==='live'?'ok':'bad'}"><b>${label[v.status]||label.offline}</b>${n}<small>Last checked: ${fmt(v.lastChecked||meta.lastCheckedAt||meta.updatedAt)}</small><small>Last data change: ${fmt(v.lastSuccess)}</small></div>`).join('');
+    $('#sourceGrid').innerHTML=newsHealth.length?newsHealth.map(v=>`<div class="source ${v.status==='live'?'ok':'bad'}"><b>${label[v.status]||label.offline}</b><strong class="source-news-name">${esc(v.name)}</strong><span class="source-provider">${esc(v.provider||'Official source')}</span><small>Last successful access: ${fmt(v.lastSuccess)}${v.lastSuccess?` · ${relativeAge(v.lastSuccess)}`:''}</small><small>Last poll: ${fmt(v.lastChecked)}${v.lastChecked?` · ${relativeAge(v.lastChecked)}`:''}</small><small>Last data change: ${fmt(v.lastDataChanged)}${v.lastDataChanged?` · ${relativeAge(v.lastDataChanged)}`:''}</small>${v.error?`<small class="source-error">Error: ${esc(v.error)}</small>`:''}<small class="source-recovery">${esc(v.recovery||'')}</small></div>`).join(''):items.map(([n,v])=>`<div class="source ${v.status==='live'?'ok':'bad'}"><b>${label[v.status]||label.offline}</b>${n}<small>Last checked: ${fmt(v.lastChecked||meta.lastCheckedAt||meta.updatedAt)} · ${relativeAge(v.lastChecked||meta.lastCheckedAt||meta.updatedAt)}</small><small>Last data change: ${fmt(v.lastSuccess)}${v.lastSuccess?` · ${relativeAge(v.lastSuccess)}`:''}</small></div>`).join('');
     $('#syncLine').textContent=`Last checked：${fmt(meta.lastCheckedAt||meta.updatedAt)} · Last data change：${fmt(meta.lastDataChangeAt||meta.officialUpdatedAt)} · KV write protection：${meta.kvWriteProtection?.enabled?'ON (change only)':'Unknown'}${meta.officialError?' · '+meta.officialError:''}`;updateSyncMonitor(items);}
   function latestSuccess(items){const vals=items.map(([,v])=>new Date(v.lastSuccess||0).getTime()).filter(Number.isFinite);return vals.length?Math.max(...vals):0;}
   function mytClock(ts){return new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(ts))+' MYT';}
@@ -45,6 +45,19 @@
     const items=[['Static Cache',normalize('staticCache',legacy.staticCache)],['BLS',normalize('bls',legacy.bls)],['FRED',normalize('fred',legacy.fred)],['Department of Labor',normalize('dol',legacy.dol)],['BEA',normalize('bea',legacy.bea)],['Federal Reserve',normalize('federalReserve',legacy.federalReserve)],['Cloudflare KV',normalize('cloudflareKv',meta.kvConfigured)]];updateSyncMonitor(items);
   }
   const fmt=v=>v?new Date(v).toLocaleString('zh-CN',{timeZone:'Asia/Kuala_Lumpur',hour12:false}):'尚无记录';
+  const relativeAge=value=>{
+    if(!value)return 'No record';
+    const ts=new Date(value).getTime();
+    if(!Number.isFinite(ts))return 'Invalid time';
+    const seconds=Math.max(0,Math.floor((Date.now()-ts)/1000));
+    if(seconds<60)return 'Just now';
+    const minutes=Math.floor(seconds/60);
+    if(minutes<60)return `${minutes} min ago`;
+    const hours=Math.floor(minutes/60);
+    if(hours<24)return `${hours} hr ago`;
+    const days=Math.floor(hours/24);
+    return `${days} day${days===1?'':'s'} ago`;
+  };
   function collect(){document.querySelectorAll('.event').forEach(card=>{const i=+card.dataset.i;card.querySelectorAll('[data-k]').forEach(input=>{if(input.disabled)return;let v=input.value.trim();const key=input.dataset.k;if(key==='datetime'&&v&&!/[zZ]|[+-]\d\d:\d\d$/.test(v))v+=':00+08:00';events[i][key]=v;});events[i].releaseForecasts=events[i].releaseForecasts||{};card.querySelectorAll('[data-history-period]').forEach(input=>{const period=input.dataset.historyPeriod;const value=input.value.trim();if(period){if(value)events[i].releaseForecasts[period]=value;else delete events[i].releaseForecasts[period];}});});}
   const metric=(v)=>Number(v||0).toLocaleString('en-US');
   const listHtml=(rows,labelIndex=0,valueIndex=0)=>rows&&rows.length?rows.map(r=>`<div class="mini-row"><span>${esc(r.dimensions?.[labelIndex]||'Unknown')}</span><b>${metric(r.metrics?.[valueIndex])}</b></div>`).join(''):'<span>No data yet</span>';

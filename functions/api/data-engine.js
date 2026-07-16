@@ -995,7 +995,13 @@ export async function onRequestGet({request,env}){
     const fallbackLive=fallback?.status==='live';
     const status=primaryLive?'live':fallbackLive||hasCurrentMetric?'cached':'offline';
     const error=primaryLive?'':(primary?.error||'');
-    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess:primary?.lastSuccess||fallback?.lastSuccess||null,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery:status==='live'?'Connected':status==='cached'?(fallbackLive?'Primary unavailable; official fallback connected':'Automatic retry and cached fallback active'):'Official source and fallback unavailable'};
+    const lastSuccess=primary?.lastSuccess||fallback?.lastSuccess||(hasCurrentMetric?staticIso:null);
+    const recovery=status==='live'
+      ?'Connected'
+      :status==='cached'
+        ?(fallbackLive?'Primary unavailable; official fallback connected':hasCurrentMetric?'GitHub verified snapshot active; live source retrying':'Automatic retry and cached fallback active')
+        :'Official source and fallback unavailable';
+    return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
   return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
