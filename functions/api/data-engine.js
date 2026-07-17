@@ -939,11 +939,15 @@ export async function onRequestGet({request,env}){
       }
     }
 
-    // At Malaysia midnight on the day after release, mark the event as archived.
-    // Forecast is intentionally preserved; it is part of the released record and must
-    // never disappear merely because the lifecycle advanced to the next day.
-    const archiveAt=nextMalaysiaDayStart(e.datetime);
-    if(!eventOnly&&exactCurrentRelease&&Number.isFinite(archiveAt)&&now>=archiveAt&&e.archivedPeriod!==e.releasePeriod){
+    // Archive into Last Release only once the card is about to be removed from
+    // display (Day 3+ — see the lifecycle block below), not the day after release.
+    // This used to fire at the very start of Day 1 (via nextMalaysiaDayStart),
+    // which wiped Actual and flipped status to "Archived to Last Release" a full
+    // day before the intended Day 1-2 pinned-with-full-detail window even began —
+    // exactly the bug where a release "went straight into Last Release" instead
+    // of showing pinned at the top of the Calendar with Actual/Forecast/Previous.
+    const releaseDayAge=malaysiaCalendarDayDiff(e.datetime,now);
+    if(!eventOnly&&exactCurrentRelease&&Number.isFinite(releaseDayAge)&&releaseDayAge>=3&&e.archivedPeriod!==e.releasePeriod){
       const archivedAt=new Date().toISOString();
       e.archivedPeriod=e.releasePeriod||'';
       e.archivedAt=archivedAt;
@@ -1000,7 +1004,6 @@ export async function onRequestGet({request,env}){
     // Day 3+: remove the released card completely; Last Release remains permanent and
     // the next separately scheduled event becomes the visible upcoming card.
     // An event whose Actual has not arrived remains visible as "Awaiting official result".
-    const releaseDayAge=malaysiaCalendarDayDiff(e.datetime,now);
     let showOnHome=true,showOnCalendar=true,calendarPinned=false,lifecycleStage='upcoming';
     if(exactCurrentRelease&&!eventOnly&&Number.isFinite(releaseDayAge)){
       if(releaseDayAge===0){

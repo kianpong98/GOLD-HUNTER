@@ -256,7 +256,7 @@
           <p>${impactText}</p>
         </div>
         <div class="rate-source-row">
-          <small>${d.sourceMode==='manual-admin-primary'?'Admin controlled':d.sourceMode==='cloudflare-cron-calculated'?'Gold Hunter calculated':d.live?'Live CME':d.sourceStatus==='cached-last-good'?'Cached last verified CME':d.sourceStatus==='browser-last-verified'?'Browser last verified CME':'Verified fallback'} · Checked ${esc((d.lastCheckedAt||d.updatedAt)?new Date(d.lastCheckedAt||d.updatedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}):'pending')} · Total ${formatProbability(total)}% · No KV writes</small>
+          <small>${d.sourceMode==='manual-admin-primary'?'Admin controlled':d.sourceMode==='cloudflare-cron-calculated'?'Gold Hunter calculated':d.live?'Live CME':d.sourceStatus==='cached-last-good'?'Cached last verified CME':d.sourceStatus==='browser-last-verified'?'Browser last verified CME':'Verified fallback'} · Checked ${esc((d.lastCheckedAt||d.updatedAt)?new Date(d.lastCheckedAt||d.updatedAt).toLocaleString('en-MY',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'medium',timeStyle:'short'}):'pending')} MYT · Total ${formatProbability(total)}% · No KV writes</small>
           <a href="${esc(d.sourceUrl||'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html')}" target="_blank" rel="noopener">View source ↗</a>
         </div>`;
       const countdownEl=box.querySelector('[data-rate-countdown]');
