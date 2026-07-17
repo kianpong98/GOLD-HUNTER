@@ -6,7 +6,22 @@ window.addEventListener('load',()=>setTimeout(()=>loader?.classList.add('hide'),
 setTimeout(()=>loader?.classList.add('hide'),1200); // safety cap
 
 const nav=document.getElementById('navbar');
-window.addEventListener('scroll',()=>nav?.classList.toggle('scrolled',window.scrollY>20));
+const sessionStrip=document.querySelector('.session-strip');
+function syncHeaderStack(){
+  if(!nav||!sessionStrip)return;
+  // .navbar is position:fixed, so getBoundingClientRect() already gives its real
+  // on-screen bottom edge for the current state (scrolled/unscrolled, any
+  // breakpoint) — session-strip's top always matches it exactly, with no more
+  // guessed magic-number pixel gaps that drift out of sync when the navbar's
+  // height changes (e.g. on scroll).
+  const bottom=nav.getBoundingClientRect().bottom;
+  document.documentElement.style.setProperty('--session-strip-top',`${Math.max(0,Math.round(bottom))}px`);
+}
+syncHeaderStack();
+window.addEventListener('scroll',()=>{nav?.classList.toggle('scrolled',window.scrollY>20);syncHeaderStack();});
+window.addEventListener('resize',syncHeaderStack);
+window.addEventListener('load',syncHeaderStack);
+document.fonts?.ready?.then(syncHeaderStack).catch(()=>{});
 
 const menu=document.getElementById('menuToggle'),links=document.getElementById('navLinks');
 menu?.addEventListener('click',()=>links?.classList.toggle('open'));
