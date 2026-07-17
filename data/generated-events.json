@@ -75,21 +75,6 @@
     "scheduleAuthority": "curated-master-v1"
   },
   {
-    "id": "jobless-claims-2026-07-16",
-    "releasePeriod": "2026-07-11",
-    "type": "jobless_claims",
-    "name": "Initial Jobless Claims",
-    "nameZh": "初请失业金人数",
-    "datetime": "2026-07-16T20:30:00+08:00",
-    "forecast": "",
-    "previous": "",
-    "sourceName": "U.S. Department of Labor",
-    "sourceUrl": "https://www.dol.gov/ui/data.pdf",
-    "impact": 4,
-    "whyZh": "反映就业市场短期变化，可能影响美元与黄金。",
-    "scheduleAuthority": "fixed-weekly-rule-v1"
-  },
-  {
     "id": "jobless-claims-2026-07-23",
     "releasePeriod": "2026-07-18",
     "type": "jobless_claims",
