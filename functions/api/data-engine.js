@@ -994,23 +994,24 @@ export async function onRequestGet({request,env}){
     const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':exactCurrentRelease?'Released':'Awaiting official result';
 
     // Released-event display lifecycle (Malaysia calendar days):
-    // Day 0: once Actual is verified, remove this release from both Home and Calendar.
-    // Day 1-2: show it only at the top of the full News Calendar.
+    // Day 0: stays visible on Home exactly like before release, now with Actual filled in.
+    // Day 1-2: removed from Home; shown only pinned at the top of the full News Calendar,
+    // with the same full detail view (Actual/Forecast/Previous + gold-impact panel).
     // Day 3+: remove the released card completely; Last Release remains permanent and
     // the next separately scheduled event becomes the visible upcoming card.
     // An event whose Actual has not arrived remains visible as "Awaiting official result".
     const releaseDayAge=malaysiaCalendarDayDiff(e.datetime,now);
     let showOnHome=true,showOnCalendar=true,calendarPinned=false,lifecycleStage='upcoming';
     if(exactCurrentRelease&&!eventOnly&&Number.isFinite(releaseDayAge)){
-      showOnHome=false;
       if(releaseDayAge===0){
-        showOnCalendar=false;
-        lifecycleStage='released_today_hidden';
+        lifecycleStage='released_today';
       }else if(releaseDayAge===1||releaseDayAge===2){
+        showOnHome=false;
         showOnCalendar=true;
         calendarPinned=true;
         lifecycleStage='recent_release';
       }else if(releaseDayAge>=3){
+        showOnHome=false;
         showOnCalendar=false;
         lifecycleStage='release_expired';
       }
