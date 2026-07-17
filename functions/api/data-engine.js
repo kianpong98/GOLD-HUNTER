@@ -672,6 +672,19 @@ function nextMalaysiaDayStart(datetime){
   return d.getTime();
 }
 
+function malaysiaDateKey(value=Date.now()){
+  const ms=value instanceof Date?value.getTime():typeof value==='number'?value:Date.parse(String(value||''));
+  if(!Number.isFinite(ms))return '';
+  return new Date(ms+8*60*60*1000).toISOString().slice(0,10);
+}
+
+function malaysiaCalendarDayDiff(datetime,nowMs=Date.now()){
+  const releaseDay=String(datetime||'').slice(0,10);
+  const today=malaysiaDateKey(nowMs);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(releaseDay)||!today)return NaN;
+  return Math.round((Date.parse(`${today}T00:00:00Z`)-Date.parse(`${releaseDay}T00:00:00Z`))/86400000);
+}
+
 function classifyResult(type,actual,forecast){
   const a=parseComparable(actual),f=parseComparable(forecast);
   if(a===null||f===null)return {comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:''};
@@ -954,8 +967,32 @@ export async function onRequestGet({request,env}){
     history.splice(10);
     const previousStatus=previous&&!/unavailable|Syncing|Manual|pending/i.test(previous)?'ready':(AUTO_TYPES.has(e.type)?'awaiting_official':'manual_required');
     const status=!released?'Scheduled':archivedThisPeriod?'Archived to Last Release':exactCurrentRelease?'Released':'Awaiting official result';
+
+    // Released-event display lifecycle (Malaysia calendar days):
+    // Day 0: once Actual is verified, remove this release from both Home and Calendar.
+    // Day 1-2: show it only at the top of the full News Calendar.
+    // Day 3+: remove the released card completely; Last Release remains permanent and
+    // the next separately scheduled event becomes the visible upcoming card.
+    // An event whose Actual has not arrived remains visible as "Awaiting official result".
+    const releaseDayAge=malaysiaCalendarDayDiff(e.datetime,now);
+    let showOnHome=true,showOnCalendar=true,calendarPinned=false,lifecycleStage='upcoming';
+    if(exactCurrentRelease&&!eventOnly&&Number.isFinite(releaseDayAge)){
+      showOnHome=false;
+      if(releaseDayAge===0){
+        showOnCalendar=false;
+        lifecycleStage='released_today_hidden';
+      }else if(releaseDayAge===1||releaseDayAge===2){
+        showOnCalendar=true;
+        calendarPinned=true;
+        lifecycleStage='recent_release';
+      }else if(releaseDayAge>=3){
+        showOnCalendar=false;
+        lifecycleStage='release_expired';
+      }
+    }
+
     const result=eventOnly?{comparison:'',comparisonZh:'',difference:'',goldImpact:'',goldImpactZh:'',surpriseStrength:'',surpriseStrengthZh:''}:classifyResult(e.type,actual,e.forecast);
-    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,...result};
+    return {...e,actual,previous,history,officialPeriod:m?.period||'',officialAuto:Boolean(m),released,previousStatus,eventOnly,status,showOnHome,showOnCalendar,calendarPinned,lifecycleStage,releaseDayAge,...result};
   });
   if(historyChanged&&env.GH_MARKET_DATA){
     await putJsonIfChanged(env.GH_MARKET_DATA,EVENTS_KEY,sanitizeEvents(persistable),undefined);
