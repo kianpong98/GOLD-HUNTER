@@ -69,20 +69,30 @@
   );
   const seenSections=new Set();
   const sectionEnteredAt=new Map();
+  const visibleRatios=new Map();
+  const currentSection=()=>{
+    let best=null,bestRatio=0;
+    for(const [element,ratio] of visibleRatios){if(ratio>bestRatio){bestRatio=ratio;best=element;}}
+    return best?sectionName(best):([...seenSections].pop()||'unknown');
+  };
   const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{
     const element=entry.target;
     const section=sectionName(element);
     if(!section||section==='unknown')return;
     if(entry.isIntersecting&&entry.intersectionRatio>=0.45){
+      visibleRatios.set(element,entry.intersectionRatio);
       if(!sectionEnteredAt.has(element))sectionEnteredAt.set(element,Date.now());
       if(!seenSections.has(section)){
         seenSections.add(section);
         send('section_view',{page_section:section,section_name:section,section_id:section});
       }
-    }else if(sectionEnteredAt.has(element)){
-      const seconds=Math.round((Date.now()-sectionEnteredAt.get(element))/1000);
-      sectionEnteredAt.delete(element);
-      if(seconds>=3)send('section_engagement',{page_section:section,section_id:section,engaged_seconds:seconds});
+    }else{
+      visibleRatios.delete(element);
+      if(sectionEnteredAt.has(element)){
+        const seconds=Math.round((Date.now()-sectionEnteredAt.get(element))/1000);
+        sectionEnteredAt.delete(element);
+        if(seconds>=3)send('section_engagement',{page_section:section,section_id:section,engaged_seconds:seconds});
+      }
     }
   }),{threshold:[0,0.45,0.75]});
 
@@ -111,14 +121,7 @@
     const doc=document.documentElement;
     const height=Math.max(1,doc.scrollHeight-innerHeight);
     const percent=Math.min(100,Math.round(scrollY/height*100));
-    [25,50,75,90,100].forEach(mark=>{
-      if(percent>=mark&&maxScroll<mark){
-        maxScroll=mark;
-        const center=document.elementFromPoint(innerWidth/2,Math.min(innerHeight-1,innerHeight/2));
-        const section=sectionName(center?.closest?.('section,[data-analytics-section],[id]'));
-        send('scroll_depth',{percent_scrolled:String(mark),page_section:section,section_id:section});
-      }
-    });
+    if(percent>maxScroll)maxScroll=percent;
   };
   addEventListener('scroll',scrollHandler,{passive:true});
   scrollHandler();
@@ -175,12 +178,19 @@
     video.addEventListener('ended',()=>{if(!completed){completed=true;send('video_complete',{video_name:label});}});
   });
 
-  let activeStarted=Date.now(),activeMs=0,visible=!document.hidden;
+  let activeStarted=Date.now(),activeMs=0,visible=!document.hidden,lastExitSent=0;
   const pause=()=>{if(visible){activeMs+=Date.now()-activeStarted;visible=false;}};
   const resume=()=>{if(!visible){activeStarted=Date.now();visible=true;}};
   const flush=()=>{
     pause();
-    if(activeMs>=5000)send('engaged_time',{engaged_seconds:Math.round(activeMs/1000),max_scroll_percent:maxScroll,last_section:[...seenSections].pop()||'unknown',event_time:nowIso()});
+    const section=currentSection();
+    if(activeMs>=5000)send('engaged_time',{engaged_seconds:Math.round(activeMs/1000),max_scroll_percent:maxScroll,last_section:section,event_time:nowIso()});
+    // What visitors actually asked for: which part of the page they were reading right
+    // before they left, instead of an abstract 25/50/75/90/100% scroll-depth number.
+    if(Date.now()-lastExitSent>2000){
+      lastExitSent=Date.now();
+      send('exit_section',{page_section:section,section_id:section});
+    }
     activeMs=0;
   };
   document.addEventListener('visibilitychange',()=>document.hidden?pause():resume());

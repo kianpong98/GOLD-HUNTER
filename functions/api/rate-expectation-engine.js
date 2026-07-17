@@ -1,6 +1,8 @@
 const STATIC_URL = '/assets/data/rate-expectation.json';
 const MANUAL_KEY = 'fed-rate-manual-override-v2';
 const LEGACY_MANUAL_KEY = 'fed-rate-manual-override-v1';
+const CRON_LIVE_KEY = 'fed-rate-live-v1';
+const CRON_LIVE_MAX_AGE_MS = 30 * 60 * 1000; // must stay comfortably above the Worker's own heartbeat interval (15 min) so a normal quiet heartbeat is never mistaken for a stalled Worker.
 const ENGINE_VERSION = 'fed-rate-full-admin-control-4.0';
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -51,15 +53,33 @@ function validatePayload(input){
 }
 async function loadStatic(origin){const r=await fetch(new URL(`${STATIC_URL}?v=${Date.now()}`,origin),{headers:{accept:'application/json','cache-control':'no-cache'},cf:{cacheTtl:0,cacheEverything:false}});if(!r.ok)throw new Error(`Static Fed snapshot HTTP ${r.status}`);return r.json();}
 async function loadManual(env){if(!env.GH_MARKET_DATA)return null;for(const key of [MANUAL_KEY,LEGACY_MANUAL_KEY]){try{const v=await env.GH_MARKET_DATA.get(key,{type:'json'});if(v)return v;}catch{}}return null;}
+async function loadCronLive(env){
+  if(!env.GH_MARKET_DATA)return null;
+  try{
+    const v=await env.GH_MARKET_DATA.get(CRON_LIVE_KEY,{type:'json'});
+    if(!v||!Array.isArray(v.outcomes)||!v.outcomes.length)return null;
+    const ageMs=Date.now()-Date.parse(v.updatedAt||0);
+    if(!Number.isFinite(ageMs)||ageMs>CRON_LIVE_MAX_AGE_MS)return null; // stale: the Worker may not be deployed or stopped running
+    return v;
+  }catch{return null;}
+}
 function isOfficialLive(s){return Boolean(s&&Array.isArray(s.outcomes)&&s.officialFetchSucceeded===true&&s.sourceMode==='official-github-sync');}
 function buildManualResult(manual,snapshot,checkedAt){return {...manual,updatedAt:manual.displayUpdatedAt||manual.updatedAt,lastCheckedAt:checkedAt,officialDataChangedAt:manual.displayUpdatedAt||manual.updatedAt,sourceMode:'manual-admin-primary',sourceStatus:'manual',live:true,exactOfficialValues:false,officialFetchSucceeded:false,cmeLastCheckedAt:snapshot?.lastCheckedAt||null,cmeLastError:snapshot?.lastOfficialFetchError||snapshot?.errors?.join?.(' | ')||'',cacheMode:'Admin manual control is primary. CME snapshot is retained only as a reference.',kvWrite:false,engineVersion:ENGINE_VERSION,manualOverrideAvailable:true};}
+function buildCronLiveResult(cronLive,checkedAt){return {...cronLive,lastApiCheckedAt:checkedAt,lastCheckedAt:cronLive.updatedAt||checkedAt,sourceStatus:'live',live:true,exactOfficialValues:false,cacheMode:'Calculated automatically every ~5 minutes from public Fed Funds futures pricing (Cloudflare Cron Worker). Not CME\u2019s own data feed.',kvWrite:false,engineVersion:ENGINE_VERSION,manualOverrideAvailable:true};}
 function buildOfficialResult(snapshot,checkedAt){return {...snapshot,lastApiCheckedAt:checkedAt,sourceStatus:'live',sourceMode:'official-github-sync',live:true,exactOfficialValues:true,cacheMode:'CME official snapshot is active because Admin manual priority is disabled.',kvWrite:false,engineVersion:ENGINE_VERSION,manualOverrideAvailable:true};}
 function buildStaticFallback(snapshot,checkedAt){return {...snapshot,lastApiCheckedAt:checkedAt,sourceStatus:'verified-static-fallback',sourceMode:'verified-static-fallback',live:false,cacheMode:'No active Admin override and no live CME result. Using last verified snapshot.',kvWrite:false,engineVersion:ENGINE_VERSION,manualOverrideAvailable:true};}
 export async function onRequestOptions(){return new Response(null,{status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,OPTIONS','access-control-allow-headers':'content-type,x-admin-pin'}});}
 export async function onRequestGet({request,env}){
-  const checkedAt=new Date().toISOString(),origin=new URL(request.url).origin;let snapshot=null,staticError='';try{snapshot=await loadStatic(origin);}catch(e){staticError=String(e?.message||e);}const manual=await loadManual(env);
-  let result;if(manual?.manualEnabled!==false&&manual?.outcomes?.length)result=buildManualResult(manual,snapshot,checkedAt);else if(isOfficialLive(snapshot))result=buildOfficialResult(snapshot,checkedAt);else if(snapshot?.outcomes?.length)result=buildStaticFallback(snapshot,checkedAt);else return json({error:'Fed rate expectation is unavailable.',detail:staticError,lastApiCheckedAt:checkedAt,live:false,kvWrite:false,engineVersion:ENGINE_VERSION},503);
-  if(authorized(request,env))result.admin={manualOverride:manual||null,officialSnapshot:snapshot||null,effectiveSource:result.sourceMode};
+  const checkedAt=new Date().toISOString(),origin=new URL(request.url).origin;let snapshot=null,staticError='';try{snapshot=await loadStatic(origin);}catch(e){staticError=String(e?.message||e);}
+  const manual=await loadManual(env);
+  const cronLive=await loadCronLive(env);
+  let result;
+  if(manual?.manualEnabled!==false&&manual?.outcomes?.length)result=buildManualResult(manual,snapshot,checkedAt);
+  else if(isOfficialLive(snapshot))result=buildOfficialResult(snapshot,checkedAt);
+  else if(cronLive)result=buildCronLiveResult(cronLive,checkedAt);
+  else if(snapshot?.outcomes?.length)result=buildStaticFallback(snapshot,checkedAt);
+  else return json({error:'Fed rate expectation is unavailable.',detail:staticError,lastApiCheckedAt:checkedAt,live:false,kvWrite:false,engineVersion:ENGINE_VERSION},503);
+  if(authorized(request,env))result.admin={manualOverride:manual||null,officialSnapshot:snapshot||null,cronLiveSnapshot:cronLive||null,effectiveSource:result.sourceMode};
   return json(result,200,{'x-gh-fed-source':result.sourceMode});
 }
 export async function onRequestPost({request,env}){

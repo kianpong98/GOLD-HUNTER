@@ -1,0 +1,19 @@
+name = "gold-hunter-fast-cron"
+main = "src/worker.js"
+compatibility_date = "2024-11-01"
+
+# Runs every 5 minutes, all day — "minutes-level" freshness as requested, while
+# keeping outbound fetch volume (Yahoo Finance / FRED) and KV activity modest.
+# Combined with the change-only + heartbeat write logic in src/worker.js, this
+# stays well inside the Workers KV Free plan's 1,000-writes/day quota — see the
+# comment block at the top of src/worker.js for the exact math.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# IMPORTANT: replace <YOUR_KV_NAMESPACE_ID> with the SAME KV namespace ID your
+# Cloudflare Pages project already binds as GH_MARKET_DATA. Find it in the
+# Cloudflare dashboard under Workers & Pages -> KV, or by running:
+#   wrangler kv namespace list
+[[kv_namespaces]]
+binding = "GH_MARKET_DATA"
+id = "<YOUR_KV_NAMESPACE_ID>"

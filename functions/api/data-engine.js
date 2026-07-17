@@ -791,6 +791,25 @@ async function probeOfficialSources(env){
   return out;
 }
 
+async function fetchLiveOfficial(env){
+  // Optional fast layer: functions/api/../../cloudflare-cron writes here every ~5 minutes
+  // using free, keyless FRED CSV data. Safe no-op if that Worker is not deployed — the key
+  // simply won't exist and this returns null, leaving today's behavior unchanged.
+  if(!env.GH_MARKET_DATA)return null;
+  try{
+    const data=await env.GH_MARKET_DATA.get('official-live-snapshot-v1',{type:'json'});
+    if(!data||!data.metrics||!Object.keys(data.metrics).length)return null;
+    const ageMs=Date.now()-Date.parse(data.updatedAt||0);
+    if(!Number.isFinite(ageMs)||ageMs>30*60*1000)return null; // treat as stale if the Worker stopped running (comfortably above its own 15-min heartbeat)
+    return {
+      metrics:data.metrics,
+      histories:Object.fromEntries(Object.entries(data.metrics).map(([key,value])=>[key,Array.isArray(value?.history)?value.history:[]])),
+      savedAt:Date.parse(data.updatedAt)||0,
+      source:'Cloudflare Cron fast layer (FRED)'
+    };
+  }catch{return null;}
+}
+
 export async function onRequestOptions(){return new Response(null,{status:204,headers});}
 export async function onRequestGet({request,env}){
   const wantsAdmin=request.headers.has('x-admin-pin');
@@ -815,6 +834,7 @@ export async function onRequestGet({request,env}){
     }catch{historySnapshot={};}
   }
   const staticOfficial=await fetchStaticOfficial(request);
+  const liveOfficial=await fetchLiveOfficial(env);
   // Public/admin reads always use the GitHub-generated official snapshot for data.
   // Admin force refresh performs only one lightweight probe per provider. It never
   // downloads every series, so a single Worker invocation stays well below the
@@ -824,11 +844,16 @@ export async function onRequestGet({request,env}){
   const runtimeMetrics={...(fred.metrics||{}),...(bls.metrics||{}),...(fedFomc.metrics||{})};
   const runtimeHistories={...(fred.histories||{}),...(bls.histories||{}),...(fedFomc.histories||{})};
   const official={
-    metrics:mergeOfficialMetrics(mergeOfficialMetrics(VERIFIED_FALLBACK_METRICS,runtimeMetrics),staticOfficial.metrics||{}),
-    histories:mergeOfficialHistories(fedFomc.histories||{},bls.histories||{},fred.histories||{},staticOfficial.histories||{},historySnapshot,Object.fromEntries(Object.entries(VERIFIED_FALLBACK_METRICS).map(([k,v])=>[k,v.history||[]]))),
-    savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,fedFomc.savedAt||0,staticOfficial.savedAt||0),
+    // mergeOfficialMetrics/chooseMetric always keeps whichever source has the newest
+    // reporting period (see metricFreshness below), so appending the Cloudflare Cron
+    // fast layer here is purely additive: it only wins when it is genuinely ahead of
+    // the GitHub-committed snapshot, and is a no-op if that Worker isn't deployed.
+    metrics:mergeOfficialMetrics(mergeOfficialMetrics(mergeOfficialMetrics(VERIFIED_FALLBACK_METRICS,runtimeMetrics),staticOfficial.metrics||{}),liveOfficial?.metrics||{}),
+    histories:mergeOfficialHistories(fedFomc.histories||{},bls.histories||{},fred.histories||{},staticOfficial.histories||{},liveOfficial?.histories||{},historySnapshot,Object.fromEntries(Object.entries(VERIFIED_FALLBACK_METRICS).map(([k,v])=>[k,v.history||[]]))),
+    savedAt:Math.max(bls.savedAt||0,fred.savedAt||0,fedFomc.savedAt||0,staticOfficial.savedAt||0,liveOfficial?.savedAt||0),
     error:[bls.error,fred.error,fedFomc.error,...Object.values(staticOfficial.errors||{})].filter(Boolean).join(' | '),
-    staticSource:staticOfficial.source
+    staticSource:staticOfficial.source,
+    fastLayerActive:Boolean(liveOfficial)
   };
   // Preserve the latest ten official releases independently from connector caches.
   // This prevents Last Releases from disappearing when BLS/FRED/BEA is temporarily
@@ -1057,7 +1082,7 @@ export async function onRequestGet({request,env}){
     return {id:event.id,type,name:event.name,nameZh:event.nameZh,provider,status,lastChecked:primary?.lastChecked||responseNow,lastSuccess,lastDataChanged:staticIso,httpStatus:primary?.httpStatus??null,latencyMs:primary?.latencyMs??null,error,recovery,accessSource};
   };
   const connectionHealth=events.filter(e=>AUTO_TYPES.has(e.type)).map(connectionFor);
-  return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
+  return json({engineVersion:'stable-data-phase1.4-source-health',events,connectionHealth,healthMode:forceRefresh?'source-runtime-poll':'cached-status',updatedAt:responseNow,lastCheckedAt:responseNow,lastDataChangeAt:official.savedAt?new Date(official.savedAt).toISOString():null,officialUpdatedAt:official.savedAt?new Date(official.savedAt).toISOString():null,kvConfigured:Boolean(env.GH_MARKET_DATA),fastLayerActive:Boolean(official.fastLayerActive),kvWriteProtection:{enabled:true,mode:'change-only',dailyCountTracked:false},officialError:connectorMessage,connectorSources,officialSources:{staticCache:Boolean(Object.keys(staticOfficial.metrics||{}).length),bls:connectorSources.bls.status!=='offline',fred:connectorSources.fred.status!=='offline',dol:connectorSources.dol.status!=='offline',bea:connectorSources.bea.status!=='offline',federalReserve:connectorSources.federalReserve.status!=='offline',census:connectorSources.census.status!=='offline',fredErrors:{},staticErrors:staticOfficial.errors||{}}},200,{'cache-control':'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0','cdn-cache-control':'no-store','cloudflare-cdn-cache-control':'no-store'});
 }
 export async function onRequestPost({request,env}){
   const debug={

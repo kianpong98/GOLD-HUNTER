@@ -6,7 +6,7 @@ This patch upgrades GA4 event collection without changing the website design.
 - content_view
 - section_view
 - section_engagement
-- scroll_depth (25, 50, 75, 90, 100)
+- exit_section (which section the visitor was viewing right before leaving — replaces the old percent-based scroll_depth event, which was hard to read at a glance)
 - content_click
 - whatsapp_click
 - news_interest
@@ -22,7 +22,6 @@ Create event-scoped custom dimensions for:
 - button_name
 - whatsapp_type
 - news_type
-- percent_scrolled
 - first_source
 - first_medium
 - first_campaign
