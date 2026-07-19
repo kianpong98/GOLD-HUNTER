@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-07-19T18:06:16.156765+00:00",
+  "updatedAt": "2026-07-19T20:33:47.673604+00:00",
   "gold": {
     "price": 4018.8,
-    "changePct": 0.668820921319613,
+    "changePct": 0.0,
     "timestamp": "2026-07-17T20:59:59+00:00",
     "source": "Yahoo Finance GC=F",
     "delayed": true
