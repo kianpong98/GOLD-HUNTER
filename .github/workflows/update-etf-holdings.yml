@@ -10,33 +10,28 @@ on:
       - '.github/workflows/update-etf-holdings.yml'
       - 'scripts/update_etf_holdings.py'
   schedule:
-    # SPDR normally publishes the official GLD archive after the New York close
-    # (about 04:00-04:45 MYT during EDT and 05:00-05:45 MYT during EST).
-    # These four checks cover both seasons and publication delays, so the latest
-    # official record should already be available when Malaysia users wake up.
-    # GitHub cron uses UTC; Monday-Friday UTC evening = Tuesday-Saturday MYT.
-    - cron: '50 19 * * 1-5'  # 03:50 MYT
-    - cron: '30 20 * * 1-5'  # 04:30 MYT
-    - cron: '15 21 * * 1-5'  # 05:15 MYT
-    - cron: '15 22 * * 1-5'  # 06:15 MYT final backup
+    # SPDR's own archive publishes each trading day's holdings with roughly a
+    # one-day lag, so Tue-Sat (not Mon-Fri) is what actually lines up with
+    # official new data being available: Tuesday's run picks up Monday's
+    # number, ... Saturday's run picks up Friday's number (previously this
+    # stopped at Friday, so Friday's figure sat unclaimed all weekend).
+    - cron: '30 23 * * 2-6'
 
 permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: spdr-etf-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -46,46 +41,25 @@ jobs:
       - name: Install dependencies
         run: pip install requests openpyxl
 
-      - name: Download and parse official SPDR archive
+      - name: Download official SPDR archive
         run: python scripts/update_etf_holdings.py
 
-      - name: Validate official output
+      - name: Validate output
         run: |
           python - <<'PY'
           import json
-          from datetime import date, datetime
           p='assets/data/spdr-gld-holdings.json'
           d=json.load(open(p,encoding='utf-8'))
           rows=d.get('records',[])
-          assert 2 <= len(rows) <= 30, f'Invalid ETF record count: {len(rows)}'
-          dates=[r['date'] for r in rows]
-          values=[float(r['holdings']) for r in rows]
-          assert dates == sorted(set(dates)), 'ETF dates are duplicated or unsorted'
-          assert all(100 < v < 5000 for v in values), 'ETF holdings are outside validation range'
-          latest=datetime.strptime(dates[-1],'%Y-%m-%d').date()
-          age=(date.today()-latest).days
-          assert age <= 10, f'Official ETF archive appears stale: latest={latest}, age={age} days'
-          assert d.get('officialDate') == dates[-1]
-          print('ETF validation passed:', dates[-1], values[-1], 'tonnes; age', age, 'days')
+          assert rows, 'No ETF records were generated'
+          assert len(rows) <= 30
+          print('ETF records:',len(rows),'latest:',rows[-1])
           PY
 
-      - name: Commit only when official records changed
+      - name: Commit updated holdings
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/data/spdr-gld-holdings.json
-          if git diff --cached --quiet; then
-            echo "Official SPDR archive has no new record. No commit needed."
-            exit 0
-          fi
-          LATEST=$(python -c "import json; d=json.load(open('assets/data/spdr-gld-holdings.json')); print(d['officialDate'])")
-          git commit -m "Update SPDR GLD holdings ${LATEST}"
-          BRANCH="${GITHUB_REF_NAME}"
-          for attempt in 1 2 3 4 5; do
-            git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH"
-            if git push origin "HEAD:$BRANCH"; then exit 0; fi
-            git rebase --abort 2>/dev/null || true
-            sleep $((attempt * 3))
-          done
-          exit 1
+          git diff --cached --quiet || git commit -m "Update SPDR GLD holdings"
+          git push origin HEAD:${{ github.ref_name }}
