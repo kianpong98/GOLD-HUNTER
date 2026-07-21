@@ -93,6 +93,36 @@ def make_event(event_type: str, dt_et: datetime, release_period: str = "", suffi
     }
 
 
+# Officially published 2026 release-date schedule (day of the release month),
+# sourced from the White House OMB/OIRA "Schedule of Release Dates for Principal
+# Federal Economic Indicators for 2026" — the same authoritative annual calendar
+# the issuing agencies themselves publish and follow. Keyed by release month
+# (1-12); the value is the day-of-month the release actually lands on. This
+# replaces algorithmic guessing (e.g. "2nd Wednesday") which does NOT reliably
+# match real agency scheduling — for example real 2026 CPI dates fall on a mix
+# of Tuesdays, Wednesdays, Thursdays and Fridays depending on the month.
+# NOTE: agencies do sometimes shift a date afterward (holidays, shutdowns, etc.)
+# — update this table if/when a newer official calendar is published.
+REAL_SCHEDULE_2026 = {
+    "cpi_yoy":       {1: 13, 2: 11, 3: 11, 4: 10, 5: 12, 6: 10, 7: 14, 8: 12, 9: 11, 10: 14, 11: 10, 12: 10},
+    "core_cpi_yoy":  {1: 13, 2: 11, 3: 11, 4: 10, 5: 12, 6: 10, 7: 14, 8: 12, 9: 11, 10: 14, 11: 10, 12: 10},
+    "ppi_yoy":       {1: 14, 2: 12, 3: 12, 4: 14, 5: 13, 6: 11, 7: 15, 8: 13, 9: 10, 10: 15, 11: 13, 12: 15},
+    "core_ppi_yoy":  {1: 14, 2: 12, 3: 12, 4: 14, 5: 13, 6: 11, 7: 15, 8: 13, 9: 10, 10: 15, 11: 13, 12: 15},
+    "nfp":                 {1: 9, 2: 6, 3: 6, 4: 3, 5: 8, 6: 5, 7: 2, 8: 7, 9: 4, 10: 2, 11: 6, 12: 4},
+    "unemployment":        {1: 9, 2: 6, 3: 6, 4: 3, 5: 8, 6: 5, 7: 2, 8: 7, 9: 4, 10: 2, 11: 6, 12: 4},
+    "avg_hourly_earnings": {1: 9, 2: 6, 3: 6, 4: 3, 5: 8, 6: 5, 7: 2, 8: 7, 9: 4, 10: 2, 11: 6, 12: 4},
+    "retail_sales":  {1: 15, 2: 17, 3: 16, 4: 16, 5: 14, 6: 17, 7: 16, 8: 14, 9: 16, 10: 15, 11: 17, 12: 16},
+    "pce":           {1: 29, 2: 26, 3: 27, 4: 30, 5: 28, 6: 25, 7: 30, 8: 26, 9: 30, 10: 29, 11: 25, 12: 23},
+    "core_pce":      {1: 29, 2: 26, 3: 27, 4: 30, 5: 28, 6: 25, 7: 30, 8: 26, 9: 30, 10: 29, 11: 25, 12: 23},
+    "gdp":           {4: 30, 7: 30, 10: 29},  # advance estimate only, one per quarter
+}
+
+
+def real_schedule_date(event_type: str, year: int, month: int) -> date | None:
+    day = REAL_SCHEDULE_2026.get(event_type, {}).get(month) if year == 2026 else None
+    return date(year, month, day) if day else None
+
+
 EXPECTED_WEEKDAY = {"cpi_yoy": 2, "core_cpi_yoy": 2, "ppi_yoy": 3, "core_ppi_yoy": 3,
                     "nfp": 4, "unemployment": 4, "avg_hourly_earnings": 4}  # Mon=0 ... Sun=6
 
@@ -117,12 +147,19 @@ def parse_bls_page(url: str, types: list[str]) -> list[dict[str, Any]]:
             continue
         if release_date < TODAY - timedelta(days=5) or release_date > HORIZON:
             continue
-        # Reject any row whose weekday doesn't match this release's known,
-        # essentially-invariant publication day. A schedule/links/footnote table
-        # elsewhere on the page can otherwise produce an unrelated date that
-        # LOOKS like a valid row (this is exactly how a Tuesday got matched as a
-        # "CPI" release, which is always a Wednesday).
-        if any(EXPECTED_WEEKDAY.get(t) is not None and release_date.weekday() != EXPECTED_WEEKDAY[t] for t in types):
+        # Reject any row whose date doesn't plausibly match this release's real,
+        # officially published day (within a few days, to allow for a holiday
+        # shift). A schedule/links/footnote table elsewhere on the page can
+        # otherwise produce an unrelated date that LOOKS like a valid row (this
+        # is exactly how a Tuesday got matched as a "CPI" release). Falls back
+        # to the old weekday heuristic only for years the real table doesn't
+        # cover yet (e.g. 2027+).
+        def plausible(t: str) -> bool:
+            real = real_schedule_date(t, release_date.year, release_date.month)
+            if real:
+                return abs((release_date - real).days) <= 4
+            return EXPECTED_WEEKDAY.get(t) is None or release_date.weekday() == EXPECTED_WEEKDAY[t]
+        if any(not plausible(t) for t in types):
             continue
         ref_cell = cells[0]
         try:
@@ -236,63 +273,55 @@ def months_ahead(n: int) -> list[tuple[int, int]]:
 
 
 def estimated_schedule() -> list[dict[str, Any]]:
-    """Rule-based APPROXIMATE future schedule used only as a safety net when the
-    official scrape for a release fails. Each release's typical publication
-    pattern (from the historical BLS/BEA/Census calendars) is encoded as an
-    nth-weekday-of-month rule. These are flagged estimated=True so the merge
-    step in main() always prefers a real scraped date over an estimate, and so
-    the frontend can label them if desired. This guarantees the calendar keeps
-    showing upcoming high-impact events even if every scraper breaks at once.
-
-    Patterns (US Eastern, typical):
-      CPI            ~2nd Wednesday, 8:30 AM         (release month = data month+1)
-      PPI            ~2nd Thursday, 8:30 AM
-      NFP/Unemp/AHE  1st Friday, 8:30 AM
-      Retail Sales   ~mid-month (3rd Tuesday), 8:30 AM
-      PCE / Core PCE ~last business Friday, 8:30 AM  (approximated as 4th Friday)
-      GDP advance    ~end of Jan/Apr/Jul/Oct (4th Thursday), 8:30 AM
+    """Safety-net future schedule used when the official scrape for a release
+    fails or hasn't found an upcoming date yet. For 2026, dates come from the
+    real, officially published OMB/OIRA release calendar (see REAL_SCHEDULE_2026
+    above) — not a guessed pattern. For months beyond that table's coverage
+    (2027+, until next year's official calendar is added), this falls back to
+    a rough nth-weekday-of-month approximation as a last resort.
     """
     events: list[dict[str, Any]] = []
 
     def add(event_type: str, d: date | None, hh: int, mm: int, period: str):
-        # Lower bound is 7 days out, not yesterday: a rule-based monthly date that
-        # lands within the next week is almost always THIS month's release, which
-        # has already occurred (the estimate merely recomputed it). Including it
-        # would show a bogus "releasing today/this week" card (e.g. 2026-07-21
-        # retail sales). Estimates only need to cover genuinely-future months.
+        # Lower bound is 7 days out, not yesterday: a date that lands within the
+        # next week is almost always THIS month's release, which has already
+        # occurred. Estimates only need to cover genuinely-future months.
         if not d or d < TODAY + timedelta(days=7) or d > HORIZON:
             return
         ev = make_event(event_type, datetime.combine(d, time(hh, mm), ET), period)
         ev["estimated"] = True
         events.append(ev)
 
-    for y, m in months_ahead(5):
+    def resolve(event_type: str, year: int, month: int, fallback: date | None) -> date | None:
+        return real_schedule_date(event_type, year, month) or fallback
+
+    for y, m in months_ahead(6):
         data_month = period_previous_month(f"{date(y, m, 1):%B %Y}")
-        # CPI / core CPI — 2nd Wednesday
-        cpi = nth_weekday(y, m, 2, 2)
+        # CPI / core CPI
+        cpi = resolve("cpi_yoy", y, m, nth_weekday(y, m, 2, 2))
         add("cpi_yoy", cpi, 8, 30, data_month)
-        add("core_cpi_yoy", cpi, 8, 30, data_month)
-        # PPI / core PPI — 2nd Thursday
-        ppi = nth_weekday(y, m, 3, 2)
+        add("core_cpi_yoy", resolve("core_cpi_yoy", y, m, cpi), 8, 30, data_month)
+        # PPI / core PPI
+        ppi = resolve("ppi_yoy", y, m, nth_weekday(y, m, 3, 2))
         add("ppi_yoy", ppi, 8, 30, data_month)
-        add("core_ppi_yoy", ppi, 8, 30, data_month)
-        # NFP / Unemployment / AHE — 1st Friday
-        nfp = nth_weekday(y, m, 4, 1)
+        add("core_ppi_yoy", resolve("core_ppi_yoy", y, m, ppi), 8, 30, data_month)
+        # NFP / Unemployment / AHE
+        nfp = resolve("nfp", y, m, nth_weekday(y, m, 4, 1))
         add("nfp", nfp, 8, 30, data_month)
-        add("unemployment", nfp, 8, 30, data_month)
-        add("avg_hourly_earnings", nfp, 8, 30, data_month)
-        # Retail Sales — 3rd Tuesday (approx)
-        add("retail_sales", nth_weekday(y, m, 1, 3), 8, 30, data_month)
-        # PCE / core PCE — 4th Friday (approx last business Friday)
-        pce = nth_weekday(y, m, 4, 4)
+        add("unemployment", resolve("unemployment", y, m, nfp), 8, 30, data_month)
+        add("avg_hourly_earnings", resolve("avg_hourly_earnings", y, m, nfp), 8, 30, data_month)
+        # Retail Sales
+        add("retail_sales", resolve("retail_sales", y, m, nth_weekday(y, m, 1, 3)), 8, 30, data_month)
+        # PCE / core PCE
+        pce = resolve("pce", y, m, nth_weekday(y, m, 4, 4))
         add("pce", pce, 8, 30, data_month)
-        add("core_pce", pce, 8, 30, data_month)
-        # GDP advance — quarterly, end of Jan/Apr/Jul/Oct (4th Thursday)
+        add("core_pce", resolve("core_pce", y, m, pce), 8, 30, data_month)
+        # GDP advance — quarterly
         if m in (1, 4, 7, 10):
-            q = (m - 1) // 3  # previous quarter
+            q = (m - 1) // 3
             qy = y if q >= 1 else y - 1
             q = q if q >= 1 else 4
-            add("gdp", nth_weekday(y, m, 3, 4), 8, 30, f"{qy}-Q{q}")
+            add("gdp", resolve("gdp", y, m, nth_weekday(y, m, 3, 4)), 8, 30, f"{qy}-Q{q}")
 
     # FOMC meetings are published a year ahead and almost never move, so the
     # confirmed schedule is safe to hardcode as a fallback (decision day = 2nd
@@ -423,23 +452,27 @@ def main() -> None:
             key = (old.get("type", ""), old.get("releasePeriod", ""), old.get("datetime", "")[:10])
             dedup.setdefault("|".join(key), old)
 
-    # Universal weekday guard, applied last and to every event regardless of
-    # source (scraper, estimate, or self-healing carry-forward): CPI/core CPI
-    # always release on a Wednesday, PPI/core PPI on a Thursday, NFP/unemployment/
-    # avg hourly earnings on a Friday. This is the final backstop — even a bug in
-    # some path I haven't anticipated cannot put a wrong-weekday event on the
-    # calendar, because anything violating this invariant is dropped right here.
+    # Universal real-schedule guard, applied last and to every event regardless
+    # of source (scraper, estimate, or self-healing carry-forward): each event's
+    # date must be within a plausible window of the real, officially published
+    # release day for its type/month (small tolerance for a possible holiday
+    # shift). This is the final backstop — even a bug in some path I haven't
+    # anticipated cannot put a wrong-date event on the calendar, because
+    # anything violating the real schedule is dropped right here.
     for key in list(dedup.keys()):
         ev = dedup[key]
-        expected = EXPECTED_WEEKDAY.get(str(ev.get("type", "")))
-        if expected is None:
+        etype = str(ev.get("type", ""))
+        if etype not in REAL_SCHEDULE_2026:
             continue
         try:
-            actual_weekday = datetime.fromisoformat(str(ev.get("datetime"))).astimezone(ET).weekday()
+            ev_date = datetime.fromisoformat(str(ev.get("datetime"))).astimezone(ET).date()
         except Exception:
             del dedup[key]
             continue
-        if actual_weekday != expected:
+        real = real_schedule_date(etype, ev_date.year, ev_date.month)
+        if real is None:
+            continue  # table doesn't cover this year/month (e.g. 2027+); nothing to check against
+        if abs((ev_date - real).days) > 4:
             del dedup[key]
 
     # Authoritative FOMC decision-day whitelist. The scraper's regex can match
