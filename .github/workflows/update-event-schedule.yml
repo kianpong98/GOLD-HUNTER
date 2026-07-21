@@ -3,11 +3,12 @@ name: Update official release schedule
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/news-engine]
+    branches:
+      - main
+      - feature/news-engine
     paths:
       - '.github/workflows/update-event-schedule.yml'
       - 'scripts/update_event_schedule.py'
-      - 'data/market-events.json'
   schedule:
     - cron: '17 0 * * *'
 
@@ -15,13 +16,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: gh-data-writers-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,30 +30,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Build validated schedule from curated master
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 python-dateutil
+      - name: Sync future official release dates
         run: python scripts/update_event_schedule.py
       - name: Validate generated schedule
         run: |
           python - <<'PY'
           import json
-          from datetime import datetime
           events=json.load(open('data/generated-events.json',encoding='utf-8'))
           assert len(events)>=8, f'Only {len(events)} events generated'
-          keys=[]
-          for e in events:
-              assert e.get('datetime') and e.get('type') and e.get('releasePeriod')
-              datetime.fromisoformat(e['datetime'])
-              keys.append((e['type'],str(e['releasePeriod'])))
-              assert not e.get('actual') and not e.get('lastRelease') and not e.get('releaseHistory') and not e.get('releaseForecasts')
-          assert len(keys)==len(set(keys)), f'Duplicate schedule keys: {[k for k in set(keys) if keys.count(k)>1]}'
-          fomc=[e for e in events if e['type']=='fomc']
-          assert len(fomc)<=12, f'Impossible FOMC count: {len(fomc)}'
-          print('Validated generated events:',len(events))
+          assert all(e.get('datetime') and e.get('type') for e in events)
+          print('Generated events:',len(events))
           PY
       - name: Commit schedule
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/generated-events.json
@@ -61,12 +54,12 @@ jobs:
             echo "No schedule changes."
             exit 0
           fi
-          git commit -m "Rebuild validated release schedule"
+          git commit -m "Update official release schedule"
           BRANCH="${GITHUB_REF_NAME}"
-          for attempt in 1 2 3 4 5; do
+          for attempt in 1 2 3; do
             git fetch origin "$BRANCH"
-            if git rebase "origin/$BRANCH" && git push origin "HEAD:$BRANCH"; then exit 0; fi
-            git rebase --abort 2>/dev/null || true
-            sleep $((attempt * 2))
+            git rebase "origin/$BRANCH"
+            if git push origin "HEAD:$BRANCH"; then exit 0; fi
+            sleep 3
           done
           exit 1

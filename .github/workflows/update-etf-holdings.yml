@@ -10,12 +10,13 @@ on:
       - '.github/workflows/update-etf-holdings.yml'
       - 'scripts/update_etf_holdings.py'
   schedule:
-    # SPDR's own archive publishes each trading day's holdings with roughly a
-    # one-day lag, so Tue-Sat (not Mon-Fri) is what actually lines up with
-    # official new data being available: Tuesday's run picks up Monday's
-    # number, ... Saturday's run picks up Friday's number (previously this
-    # stopped at Friday, so Friday's figure sat unclaimed all weekend).
-    - cron: '30 23 * * 2-6'
+    # Runs at 07:00 Malaysia time, Tuesday through Saturday.
+    # Malaysia is UTC+8, so 07:00 MYT = 23:00 UTC on the PREVIOUS calendar day.
+    # Therefore MYT Tue-Sat 07:00 maps to UTC Mon-Fri 23:00 (day-of-week -1).
+    # SPDR publishes each trading day's holdings with ~1 day lag, so a Malaysia
+    # Tue-Sat morning run lines up with Monday-Friday official data becoming
+    # available (Sat morning MYT picks up Friday's number).
+    - cron: '0 23 * * 1-5'
 
 permissions:
   contents: write

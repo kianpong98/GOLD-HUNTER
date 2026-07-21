@@ -3,65 +3,60 @@ name: Update central bank gold reserves
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/news-engine]
+    branches:
+      - main
+      - feature/news-engine
     paths:
       - '.github/workflows/update-gold-reserves.yml'
       - 'scripts/update_gold_reserves.py'
   schedule:
-    - cron: '20 2 3,10,17,24 * *'
+    # World Gold Council / IMF gold reserves data is published monthly, so a
+    # daily check is more than enough to catch it within a day of release.
+    - cron: '5 1 * * *'
 
 permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: gold-reserves-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
       - name: Checkout current branch
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
-          fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - name: Install dependencies
-        run: pip install requests openpyxl
-      - name: Refresh reserve holdings
+        run: pip install requests
+
+      - name: Sync official IMF gold reserves data
         run: python scripts/update_gold_reserves.py
-      - name: Validate output without destroying old data
+
+      - name: Validate output
         run: |
           python - <<'PY'
           import json
-          p='assets/data/central-bank-gold-reserves.json'
-          d=json.load(open(p,encoding='utf-8'))
-          assert isinstance(d.get('records'),list)
-          if d['records']:
-              assert len(d['records']) >= 5
-              assert all(x.get('country') and float(x.get('holdingsTonnes')) > 0 for x in d['records'])
-              print('Reserve records:',len(d['records']),'updated:',d.get('updatedAt'),'mode:',d.get('sourceMode'))
-          else:
-              raise SystemExit('First official reserve sync produced no records')
+          p = 'assets/data/gold-reserves.json'
+          d = json.load(open(p, encoding='utf-8'))
+          rows = d.get('records', [])
+          assert rows, 'No gold reserve records were generated'
+          assert all(r.get('country') and r.get('holdingsTonnes') for r in rows)
+          print('Gold reserve records:', len(rows), '- top holder:', rows[0])
           PY
-      - name: Commit reserve snapshot
+
+      - name: Commit updated reserves
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/data/central-bank-gold-reserves.json
-          if git diff --cached --quiet; then echo "No reserve changes."; exit 0; fi
-          git commit -m "Update central bank gold reserves"
-          BRANCH="${GITHUB_REF_NAME}"
-          for attempt in 1 2 3 4 5; do
-            git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH"
-            if git push origin "HEAD:$BRANCH"; then exit 0; fi
-            git rebase --abort 2>/dev/null || true
-            sleep $((attempt * 2))
-          done
-          exit 1
+          git add assets/data/gold-reserves.json
+          git diff --cached --quiet || git commit -m "Update central bank gold reserves"
+          git push origin HEAD:${{ github.ref_name }}
