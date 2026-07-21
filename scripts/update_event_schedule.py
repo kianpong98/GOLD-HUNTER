@@ -244,7 +244,12 @@ def estimated_schedule() -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
 
     def add(event_type: str, d: date | None, hh: int, mm: int, period: str):
-        if not d or d < TODAY - timedelta(days=1) or d > HORIZON:
+        # Lower bound is 7 days out, not yesterday: a rule-based monthly date that
+        # lands within the next week is almost always THIS month's release, which
+        # has already occurred (the estimate merely recomputed it). Including it
+        # would show a bogus "releasing today/this week" card (e.g. 2026-07-21
+        # retail sales). Estimates only need to cover genuinely-future months.
+        if not d or d < TODAY + timedelta(days=7) or d > HORIZON:
             return
         ev = make_event(event_type, datetime.combine(d, time(hh, mm), ET), period)
         ev["estimated"] = True
@@ -383,15 +388,26 @@ def main() -> None:
         key = "|".join((est.get("type", ""), est.get("releasePeriod", ""), est.get("datetime", "")[:10]))
         dedup.setdefault(key, est)
 
-    # Self-healing: if any source failed this run, do NOT let the calendar lose
-    # events it previously had. Carry forward every still-relevant event from the
-    # old file that we did not regenerate this time. This is why future events
-    # (e.g. weekly jobless claims) could silently disappear — one failed/skipped
-    # run replaced the file with a thinner set. Forecast/actual entered via admin
-    # is preserved because we copy the whole old record untouched.
+    # Self-healing: if a source failed this run, don't lose events the calendar
+    # previously had — but ONLY carry forward old rows we can trust. A stale file
+    # may contain bad-date numeric rows (e.g. a CPI mis-dated to a random weekday);
+    # reviving those is exactly how 2026-07-21 CPI/PPI kept coming back. So an old
+    # numeric macro row is carried forward only if the freshly-built schedule
+    # already contains that metric for the same reporting period (meaning it's a
+    # real release we just want to enrich), never as a brand-new date. Weekly
+    # jobless claims and irregular fed speeches are rule-based/authoritative and
+    # always safe to preserve.
     if errors:
+        built_type_periods = {(e.get("type", ""), e.get("releasePeriod", "")) for e in dedup.values()}
         for old in existing:
             if not new_time_ok(old.get("datetime")):
+                continue
+            otype = str(old.get("type", ""))
+            safe = (
+                otype in ("jobless_claims", "fed_speech")
+                or (otype, str(old.get("releasePeriod", ""))) in built_type_periods
+            )
+            if not safe:
                 continue
             key = (old.get("type", ""), old.get("releasePeriod", ""), old.get("datetime", "")[:10])
             dedup.setdefault("|".join(key), old)
