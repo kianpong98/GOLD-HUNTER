@@ -93,6 +93,10 @@ def make_event(event_type: str, dt_et: datetime, release_period: str = "", suffi
     }
 
 
+EXPECTED_WEEKDAY = {"cpi_yoy": 2, "core_cpi_yoy": 2, "ppi_yoy": 3, "core_ppi_yoy": 3,
+                    "nfp": 4, "unemployment": 4, "avg_hourly_earnings": 4}  # Mon=0 ... Sun=6
+
+
 def parse_bls_page(url: str, types: list[str]) -> list[dict[str, Any]]:
     soup = BeautifulSoup(get(url), "html.parser")
     events: list[dict[str, Any]] = []
@@ -112,6 +116,13 @@ def parse_bls_page(url: str, types: list[str]) -> list[dict[str, Any]]:
         except Exception:
             continue
         if release_date < TODAY - timedelta(days=5) or release_date > HORIZON:
+            continue
+        # Reject any row whose weekday doesn't match this release's known,
+        # essentially-invariant publication day. A schedule/links/footnote table
+        # elsewhere on the page can otherwise produce an unrelated date that
+        # LOOKS like a valid row (this is exactly how a Tuesday got matched as a
+        # "CPI" release, which is always a Wednesday).
+        if any(EXPECTED_WEEKDAY.get(t) is not None and release_date.weekday() != EXPECTED_WEEKDAY[t] for t in types):
             continue
         ref_cell = cells[0]
         try:
@@ -411,6 +422,25 @@ def main() -> None:
                 continue
             key = (old.get("type", ""), old.get("releasePeriod", ""), old.get("datetime", "")[:10])
             dedup.setdefault("|".join(key), old)
+
+    # Universal weekday guard, applied last and to every event regardless of
+    # source (scraper, estimate, or self-healing carry-forward): CPI/core CPI
+    # always release on a Wednesday, PPI/core PPI on a Thursday, NFP/unemployment/
+    # avg hourly earnings on a Friday. This is the final backstop — even a bug in
+    # some path I haven't anticipated cannot put a wrong-weekday event on the
+    # calendar, because anything violating this invariant is dropped right here.
+    for key in list(dedup.keys()):
+        ev = dedup[key]
+        expected = EXPECTED_WEEKDAY.get(str(ev.get("type", "")))
+        if expected is None:
+            continue
+        try:
+            actual_weekday = datetime.fromisoformat(str(ev.get("datetime"))).astimezone(ET).weekday()
+        except Exception:
+            del dedup[key]
+            continue
+        if actual_weekday != expected:
+            del dedup[key]
 
     # Authoritative FOMC decision-day whitelist. The scraper's regex can match
     # unrelated "Month D-D" strings elsewhere on the Fed page (e.g. statistical
