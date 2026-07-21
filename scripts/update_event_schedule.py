@@ -396,23 +396,74 @@ def main() -> None:
             key = (old.get("type", ""), old.get("releasePeriod", ""), old.get("datetime", "")[:10])
             dedup.setdefault("|".join(key), old)
 
-    # FOMC decisions and minutes recur ~8x/year and are not tied to a monthly
-    # reporting period, so a real scraped entry and an estimated one can describe
-    # the SAME announcement while carrying slightly different releasePeriod strings
-    # (e.g. the 1st vs 2nd day of the two-day meeting). Collapse them by the actual
-    # announcement date so the calendar never shows the same FOMC twice. A real
-    # (non-estimated) entry wins and keeps any admin-entered forecast.
+    # Authoritative FOMC decision-day whitelist. The scraper's regex can match
+    # unrelated "Month D-D" strings elsewhere on the Fed page (e.g. statistical
+    # release date lists), producing bogus consecutive-day FOMC rows like
+    # 26/27/28/29 July. Only keep FOMC rows that fall on a real known decision
+    # day (announcement = 2nd meeting day), and FOMC minutes ~21 days later.
+    FOMC_DECISION_DAYS = {
+        date(2026, 1, 28), date(2026, 3, 18), date(2026, 4, 29), date(2026, 6, 17),
+        date(2026, 7, 29), date(2026, 9, 16), date(2026, 10, 28), date(2026, 12, 9),
+        date(2027, 1, 27), date(2027, 3, 17), date(2027, 4, 28), date(2027, 6, 16),
+    }
+    def is_valid_fomc(ev: dict[str, Any]) -> bool:
+        try:
+            d = datetime.fromisoformat(str(ev.get("datetime"))).astimezone(ET).date()
+        except Exception:
+            return False
+        if ev.get("type") == "fomc":
+            return any(abs((d - dd).days) <= 1 for dd in FOMC_DECISION_DAYS)
+        # fomc_minutes: ~3 weeks after a decision day
+        return any(14 <= (d - dd).days <= 28 for dd in FOMC_DECISION_DAYS)
+
+    for key in list(dedup.keys()):
+        ev = dedup[key]
+        if ev.get("type") in ("fomc", "fomc_minutes") and not is_valid_fomc(ev):
+            del dedup[key]
+
+    # Collapse FOMC/minutes by the canonical US-Eastern decision day. Two entries
+    # for the SAME meeting can arrive with different stored timezones (e.g. one as
+    # 2026-07-29T14:00 ET and another already converted to 2026-07-30T02:00 MYT),
+    # which look like different calendar dates. Map each to the nearest known
+    # decision day so they merge into exactly one row per meeting.
+    def canonical_meeting_day(ev: dict[str, Any]):
+        try:
+            d = datetime.fromisoformat(str(ev.get("datetime"))).astimezone(ET).date()
+        except Exception:
+            return None
+        if ev.get("type") == "fomc":
+            near = [dd for dd in FOMC_DECISION_DAYS if abs((d - dd).days) <= 1]
+            return min(near, key=lambda dd: abs((d - dd).days)) if near else d
+        near = [dd for dd in FOMC_DECISION_DAYS if 14 <= (d - dd).days <= 28]
+        return (min(near, key=lambda dd: (d - dd).days), "minutes") if near else d
+
     collapsed: dict[str, dict[str, Any]] = {}
     passthrough: list[dict[str, Any]] = []
     for ev in dedup.values():
         if ev.get("type") in ("fomc", "fomc_minutes"):
-            ckey = f"{ev.get('type')}|{ev.get('datetime','')[:10]}"
+            ckey = f"{ev.get('type')}|{canonical_meeting_day(ev)}"
             prev = collapsed.get(ckey)
             if prev is None:
                 collapsed[ckey] = ev
             else:
-                keep = prev if not prev.get("estimated") else ev
-                drop = ev if keep is prev else prev
+                # Prefer the entry that (a) is non-estimated, but above all (b) has
+                # the correct announcement time. A stale file can carry the same
+                # meeting with a wrong datetime; the estimated fallback is always
+                # generated at the correct 2pm-ET / 02:00-next-day-MYT instant, so
+                # when times disagree, trust whichever matches the canonical day.
+                def good_time(x):
+                    try:
+                        dt = datetime.fromisoformat(str(x.get("datetime"))).astimezone(ET)
+                    except Exception:
+                        return False
+                    return dt.hour == 14  # 2:00 PM ET announcement
+                if good_time(ev) and not good_time(prev):
+                    keep, drop = ev, prev
+                elif good_time(prev) and not good_time(ev):
+                    keep, drop = prev, ev
+                else:
+                    keep = prev if not prev.get("estimated") else ev
+                    drop = ev if keep is prev else prev
                 if not keep.get("forecast") and drop.get("forecast"):
                     keep["forecast"] = drop.get("forecast")
                 collapsed[ckey] = keep
@@ -420,6 +471,33 @@ def main() -> None:
             passthrough.append(ev)
 
     result = sorted(list(collapsed.values()) + passthrough, key=lambda e: e.get("datetime", ""))
+
+    # Authoritative FOMC rebuild: no matter what the scrapers, old file, or KV
+    # produced, the final FOMC/minutes rows are regenerated from the trusted
+    # decision-day whitelist with correct announcement times (2pm ET = 02:00
+    # next-day MYT) and periods. Any admin-entered forecast is carried over by
+    # matching decision day. This is the hard guarantee that garbage like the
+    # 26/27/28/29-July duplicates can never appear on the calendar again.
+    forecast_by_day: dict[date, str] = {}
+    for ev in result:
+        if ev.get("type") == "fomc" and ev.get("forecast"):
+            cd = canonical_meeting_day(ev)
+            if isinstance(cd, date):
+                forecast_by_day[cd] = ev["forecast"]
+    result = [e for e in result if e.get("type") not in ("fomc", "fomc_minutes")]
+    for dday in sorted(FOMC_DECISION_DAYS):
+        if not (TODAY - timedelta(days=1) <= dday <= HORIZON):
+            continue
+        fev = make_event("fomc", datetime.combine(dday, time(14, 0), ET), dday.isoformat())
+        carried = forecast_by_day.get(dday) or next((v for k, v in forecast_by_day.items() if abs((k - dday).days) <= 1), "")
+        if carried:
+            fev["forecast"] = carried
+        result.append(fev)
+        mins = dday + timedelta(days=21)
+        if TODAY - timedelta(days=1) <= mins <= HORIZON:
+            result.append(make_event("fomc_minutes", datetime.combine(mins, time(14, 0), ET), "", suffix=dday.isoformat()))
+    result.sort(key=lambda e: e.get("datetime", ""))
+
     if not result:
         raise SystemExit(f"No events generated; preserving old file. Errors: {errors}")
     OUT.parent.mkdir(parents=True, exist_ok=True)
