@@ -175,11 +175,22 @@ function mediaMarkup(item,alt,thumb=false){
   }
   return `<img alt="${alt}" loading="lazy" decoding="async" src="${item.src}">`;
 }
+const videoAutoplayObserver=new IntersectionObserver(entries=>{
+  entries.forEach(entry=>{
+    const video=entry.target;
+    if(entry.isIntersecting){
+      prepareLazyVideo(video);
+      video.play().catch(()=>{});
+    }else{
+      video.pause();
+      video.currentTime=0;
+    }
+  });
+},{threshold:0.35});
 function attachVideoHover(el){
   const video=el.querySelector('video');
   if(!video) return;
-  el.addEventListener('mouseenter',()=>{prepareLazyVideo(video); video.play().catch(()=>{});});
-  el.addEventListener('mouseleave',()=>{video.pause(); video.currentTime=0;});
+  videoAutoplayObserver.observe(video);
 }
 function createResultTile(item,index){
   const article=document.createElement('article');
