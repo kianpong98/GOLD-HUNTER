@@ -311,15 +311,34 @@ async function fetchStaticOfficial(request){
   }
 }
 
-async function fetchStaticEvents(request){
-  try{
-    const url=new URL('/data/generated-events.json',new URL(request.url).origin);
-    url.searchParams.set('v',String(Date.now()));
-    const response=await fetch(url.toString(),{headers:{accept:'application/json','cache-control':'no-cache'},cache:'no-store',cf:{cacheTtl:0,cacheEverything:false}});
-    if(!response.ok)throw new Error(`Static schedule ${response.status}`);
-    const data=await response.json();
-    return Array.isArray(data)?data:[];
-  }catch{return[];}
+async function fetchStaticEvents(request,env){
+  // Primary: read the committed schedule directly through the Pages ASSETS
+  // binding. This avoids a self-referential HTTP fetch to our own origin, which
+  // on Cloudflare Pages can intermittently fail/timeout and silently fall back
+  // to the tiny built-in SEED_EVENTS — the exact reason future scheduled events
+  // (jobless claims, CPI, etc.) were missing from /api/market-events while the
+  // raw /data/generated-events.json file was already correct.
+  if(env&&env.ASSETS){
+    try{
+      const res=await env.ASSETS.fetch(new URL('/data/generated-events.json',new URL(request.url).origin).toString());
+      if(res&&res.ok){
+        const data=await res.json();
+        if(Array.isArray(data)&&data.length)return data;
+      }
+    }catch{/* fall through to HTTP */}
+  }
+  // Backup: original origin fetch, with one retry for transient edge errors.
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const url=new URL('/data/generated-events.json',new URL(request.url).origin);
+      url.searchParams.set('v',String(Date.now()));
+      const response=await fetch(url.toString(),{headers:{accept:'application/json','cache-control':'no-cache'},cache:'no-store',cf:{cacheTtl:0,cacheEverything:false}});
+      if(!response.ok)throw new Error(`Static schedule ${response.status}`);
+      const data=await response.json();
+      if(Array.isArray(data))return data;
+    }catch{if(attempt===0)continue;}
+  }
+  return[];
 }
 
 const headers={
@@ -497,7 +516,7 @@ function sanitizeEvents(input){
   })).filter(e=>e.name&&e.datetime&&e.impact>=4&&!REMOVED_TYPES.has(e.type)));
 }
 async function readStored(env,request){
-  const generated=await fetchStaticEvents(request);
+  const generated=await fetchStaticEvents(request,env);
   let stored=[];
   if(env.GH_MARKET_DATA){
     const value=await env.GH_MARKET_DATA.get(EVENTS_KEY,{type:'json'});
