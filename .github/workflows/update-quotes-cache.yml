@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -34,9 +35,28 @@ jobs:
       - name: Update delayed quote cache
         run: python scripts/update_quotes.py
       - name: Commit quote cache
+        shell: bash
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/quotes.json
-          git diff --cached --quiet || git commit -m "Update quote cache"
-          git push origin HEAD:${{ github.ref_name }}
+          if git diff --cached --quiet; then
+            echo "No quote changes."
+            exit 0
+          fi
+          git commit -m "Update quote cache"
+          BRANCH="${GITHUB_REF_NAME}"
+          # Retry against concurrent pushes from other scheduled workflows that
+          # commit to the same branch (avoids "rejected ... fetch first").
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH" || git rebase --abort
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            sleep $((attempt * 3))
+          done
+          echo "Failed to push after retries."
+          exit 1

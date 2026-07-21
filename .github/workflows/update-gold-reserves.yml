@@ -1,18 +1,15 @@
 name: Update central bank gold reserves
 
 on:
+  # Manual-trigger only. The IMF dataservices.imf.org endpoint is currently
+  # unreachable from GitHub-hosted runners (DNS "Name or service not known"),
+  # so the daily schedule is disabled to stop it failing every day. Central
+  # bank gold reserves are monthly data and the committed seed file already
+  # populates the widget. To refresh: run this workflow manually once the IMF
+  # endpoint works again, or update assets/data/gold-reserves.json by hand.
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - feature/news-engine
-    paths:
-      - '.github/workflows/update-gold-reserves.yml'
-      - 'scripts/update_gold_reserves.py'
-  schedule:
-    # World Gold Council / IMF gold reserves data is published monthly, so a
-    # daily check is more than enough to catch it within a day of release.
-    - cron: '5 1 * * *'
+  # schedule:
+  #   - cron: '5 1 * * *'   # re-enable when the IMF endpoint is reachable
 
 permissions:
   contents: write
@@ -29,6 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -54,9 +52,26 @@ jobs:
           PY
 
       - name: Commit updated reserves
+        shell: bash
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/data/gold-reserves.json
-          git diff --cached --quiet || git commit -m "Update central bank gold reserves"
-          git push origin HEAD:${{ github.ref_name }}
+          if git diff --cached --quiet; then
+            echo "No reserves changes."
+            exit 0
+          fi
+          git commit -m "Update central bank gold reserves"
+          BRANCH="${GITHUB_REF_NAME}"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH" || git rebase --abort
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            sleep $((attempt * 3))
+          done
+          echo "Failed to push after retries."
+          exit 1
