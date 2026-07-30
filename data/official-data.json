@@ -1,6 +1,6 @@
 {
   "schemaVersion": 4,
-  "updatedAt": "2026-07-30T15:34:14.285145+00:00",
+  "updatedAt": "2026-07-30T18:04:29.443227+00:00",
   "metrics": {
     "jobless_claims": {
       "actual": "197K",
@@ -623,11 +623,17 @@
       ]
     },
     "pce": {
-      "actual": "4.1%",
-      "previous": "3.8%",
-      "period": "2026-05",
-      "observationDate": "2026-05-01",
+      "actual": "3.7%",
+      "previous": "4.1%",
+      "period": "2026-06",
+      "observationDate": "2026-06-01",
       "history": [
+        {
+          "period": "2026-06",
+          "observationDate": "2026-06-01",
+          "actual": "3.7%",
+          "previous": "4.1%"
+        },
         {
           "period": "2026-05",
           "observationDate": "2026-05-01",
@@ -681,22 +687,22 @@
           "observationDate": "2025-09-01",
           "actual": "2.8%",
           "previous": "2.7%"
-        },
-        {
-          "period": "2025-08",
-          "observationDate": "2025-08-01",
-          "actual": "2.7%",
-          "previous": "2.6%"
         }
       ],
       "source": "FRED (official-source series)"
     },
     "core_pce": {
-      "actual": "3.4%",
-      "previous": "3.3%",
-      "period": "2026-05",
-      "observationDate": "2026-05-01",
+      "actual": "3.3%",
+      "previous": "3.4%",
+      "period": "2026-06",
+      "observationDate": "2026-06-01",
       "history": [
+        {
+          "period": "2026-06",
+          "observationDate": "2026-06-01",
+          "actual": "3.3%",
+          "previous": "3.4%"
+        },
         {
           "period": "2026-05",
           "observationDate": "2026-05-01",
@@ -749,12 +755,6 @@
           "period": "2025-09",
           "observationDate": "2025-09-01",
           "actual": "2.8%",
-          "previous": "2.9%"
-        },
-        {
-          "period": "2025-08",
-          "observationDate": "2025-08-01",
-          "actual": "2.9%",
           "previous": "2.9%"
         }
       ],
