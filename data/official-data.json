@@ -1,18 +1,24 @@
 {
   "schemaVersion": 4,
-  "updatedAt": "2026-07-23T13:15:27.978705+00:00",
+  "updatedAt": "2026-07-30T15:34:14.285145+00:00",
   "metrics": {
     "jobless_claims": {
-      "actual": "187K",
-      "previous": "209K",
-      "period": "2026-07-18",
-      "observationDate": "2026-07-18",
+      "actual": "197K",
+      "previous": "188K",
+      "period": "2026-07-25",
+      "observationDate": "2026-07-25",
       "source": "FRED (official-source series)",
       "history": [
         {
+          "period": "2026-07-25",
+          "observationDate": "2026-07-25",
+          "actual": "197K",
+          "previous": "188K"
+        },
+        {
           "period": "2026-07-18",
           "observationDate": "2026-07-18",
-          "actual": "187K",
+          "actual": "188K",
           "previous": "209K"
         },
         {
@@ -62,12 +68,6 @@
           "observationDate": "2026-05-23",
           "actual": "212K",
           "previous": "210K"
-        },
-        {
-          "period": "2026-05-16",
-          "observationDate": "2026-05-16",
-          "actual": "210K",
-          "previous": "212K"
         }
       ]
     },
@@ -141,12 +141,18 @@
       ]
     },
     "gdp": {
-      "actual": "2.1%",
-      "previous": "0.5%",
-      "period": "2026-Q1",
-      "observationDate": "2026-01-01",
+      "actual": "1.5%",
+      "previous": "2.1%",
+      "period": "2026-Q2",
+      "observationDate": "2026-04-01",
       "source": "FRED (official-source series)",
       "history": [
+        {
+          "period": "2026-Q2",
+          "observationDate": "2026-04-01",
+          "actual": "1.5%",
+          "previous": "2.1%"
+        },
         {
           "period": "2026-Q1",
           "observationDate": "2026-01-01",
@@ -200,12 +206,6 @@
           "observationDate": "2024-01-01",
           "actual": "0.8%",
           "previous": "3.4%"
-        },
-        {
-          "period": "2023-Q4",
-          "observationDate": "2023-10-01",
-          "actual": "3.4%",
-          "previous": "4.7%"
         }
       ]
     },
