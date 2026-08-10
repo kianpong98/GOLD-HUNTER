@@ -1,11 +1,11 @@
 [
   {
-    "id": "cpi-yoy-2026-08-09",
+    "id": "cpi-yoy-2026-08-10",
     "type": "cpi_yoy",
     "releasePeriod": "2026-08",
     "name": "Consumer Price Index",
     "nameZh": "消费者物价指数",
-    "datetime": "2026-08-09T20:30:00+08:00",
+    "datetime": "2026-08-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -15,12 +15,12 @@
     "whyZh": "衡量美国整体通胀，通常会明显影响美元与黄金。"
   },
   {
-    "id": "core-cpi-yoy-2026-08-09",
+    "id": "core-cpi-yoy-2026-08-10",
     "type": "core_cpi_yoy",
     "releasePeriod": "2026-08",
     "name": "Core Consumer Price Index",
     "nameZh": "核心消费者物价指数",
-    "datetime": "2026-08-09T20:30:00+08:00",
+    "datetime": "2026-08-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -30,12 +30,12 @@
     "whyZh": "剔除食品与能源，更能反映基础通胀趋势。"
   },
   {
-    "id": "ppi-yoy-2026-08-09",
+    "id": "ppi-yoy-2026-08-10",
     "type": "ppi_yoy",
     "releasePeriod": "2026-08",
     "name": "Producer Price Index",
     "nameZh": "生产者物价指数",
-    "datetime": "2026-08-09T20:30:00+08:00",
+    "datetime": "2026-08-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -45,12 +45,12 @@
     "whyZh": "反映生产端通胀压力，可影响市场对利率的预期。"
   },
   {
-    "id": "core-ppi-yoy-2026-08-09",
+    "id": "core-ppi-yoy-2026-08-10",
     "type": "core_ppi_yoy",
     "releasePeriod": "2026-08",
     "name": "Core Producer Price Index",
     "nameZh": "核心生产者物价指数",
-    "datetime": "2026-08-09T20:30:00+08:00",
+    "datetime": "2026-08-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -60,12 +60,12 @@
     "whyZh": "剔除波动较大的项目，用于观察持续性生产通胀。"
   },
   {
-    "id": "nfp-2026-08-09",
+    "id": "nfp-2026-08-10",
     "type": "nfp",
     "releasePeriod": "2026-08",
     "name": "Nonfarm Payrolls",
     "nameZh": "非农就业人数",
-    "datetime": "2026-08-09T20:30:00+08:00",
+    "datetime": "2026-08-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -75,12 +75,12 @@
     "whyZh": "反映美国就业增长，公布时黄金通常波动较大。"
   },
   {
-    "id": "unemployment-2026-08-09",
+    "id": "unemployment-2026-08-10",
     "type": "unemployment",
     "releasePeriod": "2026-08",
     "name": "Unemployment Rate",
     "nameZh": "失业率",
-    "datetime": "2026-08-09T20:30:00+08:00",
+    "datetime": "2026-08-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -90,12 +90,12 @@
     "whyZh": "反映劳动力市场强弱，并影响利率预期。"
   },
   {
-    "id": "avg-hourly-earnings-2026-08-09",
+    "id": "avg-hourly-earnings-2026-08-10",
     "type": "avg_hourly_earnings",
     "releasePeriod": "2026-08",
     "name": "Average Hourly Earnings MoM",
     "nameZh": "平均每小时工资月率",
-    "datetime": "2026-08-09T20:30:00+08:00",
+    "datetime": "2026-08-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -240,12 +240,12 @@
     "whyZh": "反映就业市场短期变化，可能影响美元与黄金。"
   },
   {
-    "id": "cpi-yoy-2026-09-09",
+    "id": "cpi-yoy-2026-09-10",
     "type": "cpi_yoy",
     "releasePeriod": "2026-09",
     "name": "Consumer Price Index",
     "nameZh": "消费者物价指数",
-    "datetime": "2026-09-09T20:30:00+08:00",
+    "datetime": "2026-09-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -255,12 +255,12 @@
     "whyZh": "衡量美国整体通胀，通常会明显影响美元与黄金。"
   },
   {
-    "id": "core-cpi-yoy-2026-09-09",
+    "id": "core-cpi-yoy-2026-09-10",
     "type": "core_cpi_yoy",
     "releasePeriod": "2026-09",
     "name": "Core Consumer Price Index",
     "nameZh": "核心消费者物价指数",
-    "datetime": "2026-09-09T20:30:00+08:00",
+    "datetime": "2026-09-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -270,12 +270,12 @@
     "whyZh": "剔除食品与能源，更能反映基础通胀趋势。"
   },
   {
-    "id": "ppi-yoy-2026-09-09",
+    "id": "ppi-yoy-2026-09-10",
     "type": "ppi_yoy",
     "releasePeriod": "2026-09",
     "name": "Producer Price Index",
     "nameZh": "生产者物价指数",
-    "datetime": "2026-09-09T20:30:00+08:00",
+    "datetime": "2026-09-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -285,12 +285,12 @@
     "whyZh": "反映生产端通胀压力，可影响市场对利率的预期。"
   },
   {
-    "id": "core-ppi-yoy-2026-09-09",
+    "id": "core-ppi-yoy-2026-09-10",
     "type": "core_ppi_yoy",
     "releasePeriod": "2026-09",
     "name": "Core Producer Price Index",
     "nameZh": "核心生产者物价指数",
-    "datetime": "2026-09-09T20:30:00+08:00",
+    "datetime": "2026-09-10T20:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -465,6 +465,36 @@
     "whyZh": "反映就业市场短期变化，可能影响美元与黄金。"
   },
   {
+    "id": "cpi-yoy-2026-10-10",
+    "type": "cpi_yoy",
+    "releasePeriod": "2026-10",
+    "name": "Consumer Price Index",
+    "nameZh": "消费者物价指数",
+    "datetime": "2026-10-10T20:30:00+08:00",
+    "forecast": "",
+    "previous": "",
+    "actual": "",
+    "sourceName": "U.S. Bureau of Labor Statistics",
+    "sourceUrl": "https://www.bls.gov/schedule/news_release/cpi.htm",
+    "impact": 5,
+    "whyZh": "衡量美国整体通胀，通常会明显影响美元与黄金。"
+  },
+  {
+    "id": "core-cpi-yoy-2026-10-10",
+    "type": "core_cpi_yoy",
+    "releasePeriod": "2026-10",
+    "name": "Core Consumer Price Index",
+    "nameZh": "核心消费者物价指数",
+    "datetime": "2026-10-10T20:30:00+08:00",
+    "forecast": "",
+    "previous": "",
+    "actual": "",
+    "sourceName": "U.S. Bureau of Labor Statistics",
+    "sourceUrl": "https://www.bls.gov/schedule/news_release/cpi.htm",
+    "impact": 5,
+    "whyZh": "剔除食品与能源，更能反映基础通胀趋势。"
+  },
+  {
     "id": "retail-sales-2026-10-15",
     "type": "retail_sales",
     "releasePeriod": "2026-09",
@@ -615,12 +645,12 @@
     "whyZh": "反映就业市场短期变化，可能影响美元与黄金。"
   },
   {
-    "id": "cpi-yoy-2026-11-09",
+    "id": "cpi-yoy-2026-11-10",
     "type": "cpi_yoy",
     "releasePeriod": "2026-11",
     "name": "Consumer Price Index",
     "nameZh": "消费者物价指数",
-    "datetime": "2026-11-09T21:30:00+08:00",
+    "datetime": "2026-11-10T21:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -630,12 +660,12 @@
     "whyZh": "衡量美国整体通胀，通常会明显影响美元与黄金。"
   },
   {
-    "id": "core-cpi-yoy-2026-11-09",
+    "id": "core-cpi-yoy-2026-11-10",
     "type": "core_cpi_yoy",
     "releasePeriod": "2026-11",
     "name": "Core Consumer Price Index",
     "nameZh": "核心消费者物价指数",
-    "datetime": "2026-11-09T21:30:00+08:00",
+    "datetime": "2026-11-10T21:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -645,12 +675,12 @@
     "whyZh": "剔除食品与能源，更能反映基础通胀趋势。"
   },
   {
-    "id": "ppi-yoy-2026-11-09",
+    "id": "ppi-yoy-2026-11-10",
     "type": "ppi_yoy",
     "releasePeriod": "2026-11",
     "name": "Producer Price Index",
     "nameZh": "生产者物价指数",
-    "datetime": "2026-11-09T21:30:00+08:00",
+    "datetime": "2026-11-10T21:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -660,12 +690,12 @@
     "whyZh": "反映生产端通胀压力，可影响市场对利率的预期。"
   },
   {
-    "id": "core-ppi-yoy-2026-11-09",
+    "id": "core-ppi-yoy-2026-11-10",
     "type": "core_ppi_yoy",
     "releasePeriod": "2026-11",
     "name": "Core Producer Price Index",
     "nameZh": "核心生产者物价指数",
-    "datetime": "2026-11-09T21:30:00+08:00",
+    "datetime": "2026-11-10T21:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -675,12 +705,12 @@
     "whyZh": "剔除波动较大的项目，用于观察持续性生产通胀。"
   },
   {
-    "id": "nfp-2026-11-09",
+    "id": "nfp-2026-11-10",
     "type": "nfp",
     "releasePeriod": "2026-11",
     "name": "Nonfarm Payrolls",
     "nameZh": "非农就业人数",
-    "datetime": "2026-11-09T21:30:00+08:00",
+    "datetime": "2026-11-10T21:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -690,12 +720,12 @@
     "whyZh": "反映美国就业增长，公布时黄金通常波动较大。"
   },
   {
-    "id": "unemployment-2026-11-09",
+    "id": "unemployment-2026-11-10",
     "type": "unemployment",
     "releasePeriod": "2026-11",
     "name": "Unemployment Rate",
     "nameZh": "失业率",
-    "datetime": "2026-11-09T21:30:00+08:00",
+    "datetime": "2026-11-10T21:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
@@ -705,12 +735,12 @@
     "whyZh": "反映劳动力市场强弱，并影响利率预期。"
   },
   {
-    "id": "avg-hourly-earnings-2026-11-09",
+    "id": "avg-hourly-earnings-2026-11-10",
     "type": "avg_hourly_earnings",
     "releasePeriod": "2026-11",
     "name": "Average Hourly Earnings MoM",
     "nameZh": "平均每小时工资月率",
-    "datetime": "2026-11-09T21:30:00+08:00",
+    "datetime": "2026-11-10T21:30:00+08:00",
     "forecast": "",
     "previous": "",
     "actual": "",
