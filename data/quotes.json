@@ -1,16 +1,16 @@
 {
-  "updatedAt": "2026-08-14T17:39:34.542970+00:00",
+  "updatedAt": "2026-08-14T18:30:39.976484+00:00",
   "gold": {
-    "price": 4436.7,
-    "changePct": 0.36874490996290343,
-    "timestamp": "2026-08-14T17:29:34+00:00",
+    "price": 4436.3,
+    "changePct": 0.3596959551171963,
+    "timestamp": "2026-08-14T18:20:32+00:00",
     "source": "Yahoo Finance GC=F",
     "delayed": true
   },
   "dxy": {
-    "price": 99.674,
-    "changePct": -0.29010443759752713,
-    "timestamp": "2026-08-14T17:29:33+00:00",
+    "price": 99.672,
+    "changePct": -0.29210515785683006,
+    "timestamp": "2026-08-14T18:20:38+00:00",
     "source": "Yahoo Finance DX-Y.NYB",
     "delayed": true
   },
