@@ -1,6 +1,6 @@
 {
   "schemaVersion": 4,
-  "updatedAt": "2026-08-17T19:48:05.195137+00:00",
+  "updatedAt": "2026-08-17T20:09:30.496210+00:00",
   "metrics": {
     "jobless_claims": {
       "actual": "209K",
@@ -210,69 +210,59 @@
       ]
     },
     "cpi_yoy": {
-      "actual": "3.3%",
+      "actual": "3.4%",
       "previous": "3.5%",
       "period": "2026-07",
       "observationDate": "2026-07-01",
-      "source": "FRED official fallback (primary BLS unavailable)",
+      "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
           "period": "2026-07",
-          "observationDate": "2026-07-01",
-          "actual": "3.3%",
+          "actual": "3.4%",
           "previous": "3.5%"
         },
         {
           "period": "2026-06",
-          "observationDate": "2026-06-01",
           "actual": "3.5%",
           "previous": "4.2%"
         },
         {
           "period": "2026-05",
-          "observationDate": "2026-05-01",
           "actual": "4.2%",
           "previous": "3.8%"
         },
         {
           "period": "2026-04",
-          "observationDate": "2026-04-01",
           "actual": "3.8%",
           "previous": "3.3%"
         },
         {
           "period": "2026-03",
-          "observationDate": "2026-03-01",
           "actual": "3.3%",
           "previous": "2.4%"
         },
         {
           "period": "2026-02",
-          "observationDate": "2026-02-01",
           "actual": "2.4%",
           "previous": "2.4%"
         },
         {
           "period": "2026-01",
-          "observationDate": "2026-01-01",
           "actual": "2.4%",
           "previous": "2.7%"
         },
         {
           "period": "2025-12",
-          "observationDate": "2025-12-01",
           "actual": "2.7%",
           "previous": "2.7%"
         },
         {
           "period": "2025-11",
-          "observationDate": "2025-11-01",
           "actual": "2.7%",
-          "previous": "3%"
+          "previous": ""
         },
         {
           "period": "2025-09",
-          "observationDate": "2025-09-01",
           "actual": "3%",
           "previous": "2.9%"
         }
@@ -283,65 +273,55 @@
       "previous": "2.6%",
       "period": "2026-07",
       "observationDate": "2026-07-01",
-      "source": "FRED official fallback (primary BLS unavailable)",
+      "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
           "period": "2026-07",
-          "observationDate": "2026-07-01",
           "actual": "2.5%",
           "previous": "2.6%"
         },
         {
           "period": "2026-06",
-          "observationDate": "2026-06-01",
           "actual": "2.6%",
-          "previous": "2.8%"
+          "previous": "2.9%"
         },
         {
           "period": "2026-05",
-          "observationDate": "2026-05-01",
-          "actual": "2.8%",
-          "previous": "2.7%"
+          "actual": "2.9%",
+          "previous": "2.8%"
         },
         {
           "period": "2026-04",
-          "observationDate": "2026-04-01",
-          "actual": "2.7%",
+          "actual": "2.8%",
           "previous": "2.6%"
         },
         {
           "period": "2026-03",
-          "observationDate": "2026-03-01",
           "actual": "2.6%",
           "previous": "2.5%"
         },
         {
           "period": "2026-02",
-          "observationDate": "2026-02-01",
           "actual": "2.5%",
           "previous": "2.5%"
         },
         {
           "period": "2026-01",
-          "observationDate": "2026-01-01",
           "actual": "2.5%",
           "previous": "2.6%"
         },
         {
           "period": "2025-12",
-          "observationDate": "2025-12-01",
           "actual": "2.6%",
           "previous": "2.6%"
         },
         {
           "period": "2025-11",
-          "observationDate": "2025-11-01",
           "actual": "2.6%",
-          "previous": "3%"
+          "previous": ""
         },
         {
           "period": "2025-09",
-          "observationDate": "2025-09-01",
           "actual": "3%",
           "previous": "3.1%"
         }
@@ -411,66 +391,56 @@
       "previous": "5%",
       "period": "2026-07",
       "observationDate": "2026-07-01",
-      "source": "FRED official fallback (primary BLS unavailable)",
+      "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
           "period": "2026-07",
-          "observationDate": "2026-07-01",
           "actual": "4.7%",
           "previous": "5%"
         },
         {
           "period": "2026-06",
-          "observationDate": "2026-06-01",
           "actual": "5%",
           "previous": "5%"
         },
         {
           "period": "2026-05",
-          "observationDate": "2026-05-01",
           "actual": "5%",
           "previous": "4.4%"
         },
         {
           "period": "2026-04",
-          "observationDate": "2026-04-01",
           "actual": "4.4%",
           "previous": "3.6%"
         },
         {
           "period": "2026-03",
-          "observationDate": "2026-03-01",
           "actual": "3.6%",
           "previous": "3.5%"
         },
         {
           "period": "2026-02",
-          "observationDate": "2026-02-01",
           "actual": "3.5%",
           "previous": "3.5%"
         },
         {
           "period": "2026-01",
-          "observationDate": "2026-01-01",
           "actual": "3.5%",
           "previous": "3.4%"
         },
         {
           "period": "2025-12",
-          "observationDate": "2025-12-01",
           "actual": "3.4%",
           "previous": "3.6%"
         },
         {
           "period": "2025-11",
-          "observationDate": "2025-11-01",
           "actual": "3.6%",
-          "previous": "3.4%"
+          "previous": "3.5%"
         },
         {
           "period": "2025-10",
-          "observationDate": "2025-10-01",
-          "actual": "3.4%",
+          "actual": "3.5%",
           "previous": "3%"
         }
       ]
@@ -480,65 +450,55 @@
       "previous": "20K",
       "period": "2026-07",
       "observationDate": "2026-07-01",
-      "source": "FRED official fallback (primary BLS unavailable)",
+      "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
           "period": "2026-07",
-          "observationDate": "2026-07-01",
           "actual": "-23K",
           "previous": "20K"
         },
         {
           "period": "2026-06",
-          "observationDate": "2026-06-01",
           "actual": "20K",
           "previous": "63K"
         },
         {
           "period": "2026-05",
-          "observationDate": "2026-05-01",
           "actual": "63K",
           "previous": "148K"
         },
         {
           "period": "2026-04",
-          "observationDate": "2026-04-01",
           "actual": "148K",
           "previous": "214K"
         },
         {
           "period": "2026-03",
-          "observationDate": "2026-03-01",
           "actual": "214K",
           "previous": "-156K"
         },
         {
           "period": "2026-02",
-          "observationDate": "2026-02-01",
           "actual": "-156K",
           "previous": "160K"
         },
         {
           "period": "2026-01",
-          "observationDate": "2026-01-01",
           "actual": "160K",
           "previous": "-17K"
         },
         {
           "period": "2025-12",
-          "observationDate": "2025-12-01",
           "actual": "-17K",
           "previous": "41K"
         },
         {
           "period": "2025-11",
-          "observationDate": "2025-11-01",
           "actual": "41K",
           "previous": "-140K"
         },
         {
           "period": "2025-10",
-          "observationDate": "2025-10-01",
           "actual": "-140K",
           "previous": "76K"
         }
@@ -547,9 +507,9 @@
     "unemployment": {
       "actual": "4.1%",
       "previous": "4.2%",
-      "period": "2026-07-01",
+      "period": "2026-07",
       "observationDate": "2026-07-01",
-      "source": "FRED official fallback (primary BLS unavailable)",
+      "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
           "period": "2026-07-01",
@@ -613,65 +573,55 @@
       "previous": "0.3%",
       "period": "2026-07",
       "observationDate": "2026-07-01",
-      "source": "FRED official fallback (primary BLS unavailable)",
+      "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
           "period": "2026-07",
-          "observationDate": "2026-07-01",
           "actual": "0.1%",
           "previous": "0.3%"
         },
         {
           "period": "2026-06",
-          "observationDate": "2026-06-01",
           "actual": "0.3%",
           "previous": "0.2%"
         },
         {
           "period": "2026-05",
-          "observationDate": "2026-05-01",
           "actual": "0.2%",
           "previous": "0.2%"
         },
         {
           "period": "2026-04",
-          "observationDate": "2026-04-01",
           "actual": "0.2%",
           "previous": "0.2%"
         },
         {
           "period": "2026-03",
-          "observationDate": "2026-03-01",
           "actual": "0.2%",
           "previous": "0.3%"
         },
         {
           "period": "2026-02",
-          "observationDate": "2026-02-01",
           "actual": "0.3%",
           "previous": "0.4%"
         },
         {
           "period": "2026-01",
-          "observationDate": "2026-01-01",
           "actual": "0.4%",
           "previous": "0.1%"
         },
         {
           "period": "2025-12",
-          "observationDate": "2025-12-01",
           "actual": "0.1%",
           "previous": "0.4%"
         },
         {
           "period": "2025-11",
-          "observationDate": "2025-11-01",
           "actual": "0.4%",
           "previous": "0.4%"
         },
         {
           "period": "2025-10",
-          "observationDate": "2025-10-01",
           "actual": "0.4%",
           "previous": "0.2%"
         }
@@ -885,9 +835,7 @@
       "source": "FRED (official-source series)"
     }
   },
-  "errors": {
-    "primary:ppi_yoy": "BLS returned no usable observations; bulk: BLS status: ['Request could not be serviced, as the daily threshold for total number of requests allocated to the user with registration key  has been reached.']"
-  },
+  "errors": {},
   "coverage": {
     "avg_hourly_earnings": true,
     "core_cpi_yoy": true,
