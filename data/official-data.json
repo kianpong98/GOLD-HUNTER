@@ -1,18 +1,24 @@
 {
   "schemaVersion": 4,
-  "updatedAt": "2026-08-27T13:07:58.479450+00:00",
+  "updatedAt": "2026-09-03T13:29:58.029155+00:00",
   "metrics": {
     "jobless_claims": {
-      "actual": "203K",
-      "previous": "207K",
-      "period": "2026-08-22",
-      "observationDate": "2026-08-22",
+      "actual": "206K",
+      "previous": "204K",
+      "period": "2026-08-29",
+      "observationDate": "2026-08-29",
       "source": "FRED (official-source series)",
       "history": [
         {
+          "period": "2026-08-29",
+          "observationDate": "2026-08-29",
+          "actual": "206K",
+          "previous": "204K"
+        },
+        {
           "period": "2026-08-22",
           "observationDate": "2026-08-22",
-          "actual": "203K",
+          "actual": "204K",
           "previous": "207K"
         },
         {
@@ -62,12 +68,6 @@
           "observationDate": "2026-06-27",
           "actual": "217K",
           "previous": "216K"
-        },
-        {
-          "period": "2026-06-20",
-          "observationDate": "2026-06-20",
-          "actual": "216K",
-          "previous": "227K"
         }
       ]
     },
