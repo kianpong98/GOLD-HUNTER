@@ -1,6 +1,6 @@
 {
   "schemaVersion": 4,
-  "updatedAt": "2026-09-09T17:45:54.790147+00:00",
+  "updatedAt": "2026-09-10T13:49:51.841742+00:00",
   "metrics": {
     "jobless_claims": {
       "actual": "206K",
@@ -328,20 +328,25 @@
       ]
     },
     "ppi_yoy": {
-      "actual": "4.7%",
-      "previous": "5.5%",
-      "period": "2026-07",
+      "actual": "5.4%",
+      "previous": "4.8%",
+      "period": "2026-08",
       "observationDate": "2026-05",
       "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
+          "period": "2026-08",
+          "actual": "5.4%",
+          "previous": "4.8%"
+        },
+        {
           "period": "2026-07",
-          "actual": "4.7%",
-          "previous": "5.5%"
+          "actual": "4.8%",
+          "previous": "5.6%"
         },
         {
           "period": "2026-06",
-          "actual": "5.5%",
+          "actual": "5.6%",
           "previous": "5.9%"
         },
         {
@@ -378,21 +383,21 @@
           "period": "2025-11",
           "actual": "3.1%",
           "previous": "2.8%"
-        },
-        {
-          "period": "2025-10",
-          "actual": "2.8%",
-          "previous": "3%"
         }
       ]
     },
     "core_ppi_yoy": {
       "actual": "4.7%",
-      "previous": "5%",
-      "period": "2026-07",
+      "previous": "4.7%",
+      "period": "2026-08",
       "observationDate": "2026-07-01",
       "source": "U.S. Bureau of Labor Statistics",
       "history": [
+        {
+          "period": "2026-08",
+          "actual": "4.7%",
+          "previous": "4.7%"
+        },
         {
           "period": "2026-07",
           "actual": "4.7%",
@@ -437,11 +442,6 @@
           "period": "2025-11",
           "actual": "3.6%",
           "previous": "3.5%"
-        },
-        {
-          "period": "2025-10",
-          "actual": "3.5%",
-          "previous": "3%"
         }
       ]
     },
