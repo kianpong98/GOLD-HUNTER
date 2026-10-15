@@ -1,18 +1,24 @@
 {
   "schemaVersion": 4,
-  "updatedAt": "2026-10-14T17:31:43.226897+00:00",
+  "updatedAt": "2026-10-15T17:00:51.449688+00:00",
   "metrics": {
     "jobless_claims": {
-      "actual": "197K",
-      "previous": "199K",
-      "period": "2026-10-03",
-      "observationDate": "2026-10-03",
+      "actual": "199K",
+      "previous": "198K",
+      "period": "2026-10-10",
+      "observationDate": "2026-10-10",
       "source": "FRED (official-source series)",
       "history": [
         {
+          "period": "2026-10-10",
+          "observationDate": "2026-10-10",
+          "actual": "199K",
+          "previous": "198K"
+        },
+        {
           "period": "2026-10-03",
           "observationDate": "2026-10-03",
-          "actual": "197K",
+          "actual": "198K",
           "previous": "199K"
         },
         {
@@ -62,12 +68,6 @@
           "observationDate": "2026-08-08",
           "actual": "212K",
           "previous": "200K"
-        },
-        {
-          "period": "2026-08-01",
-          "observationDate": "2026-08-01",
-          "actual": "200K",
-          "previous": "198K"
         }
       ]
     },
@@ -328,20 +328,25 @@
       ]
     },
     "ppi_yoy": {
-      "actual": "5.4%",
-      "previous": "4.8%",
-      "period": "2026-08",
+      "actual": "6.3%",
+      "previous": "5.6%",
+      "period": "2026-09",
       "observationDate": "2026-05",
       "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
+          "period": "2026-09",
+          "actual": "6.3%",
+          "previous": "5.6%"
+        },
+        {
           "period": "2026-08",
-          "actual": "5.4%",
-          "previous": "4.8%"
+          "actual": "5.6%",
+          "previous": "4.9%"
         },
         {
           "period": "2026-07",
-          "actual": "4.8%",
+          "actual": "4.9%",
           "previous": "5.6%"
         },
         {
@@ -378,29 +383,29 @@
           "period": "2025-12",
           "actual": "3.1%",
           "previous": "3.1%"
-        },
-        {
-          "period": "2025-11",
-          "actual": "3.1%",
-          "previous": "2.8%"
         }
       ]
     },
     "core_ppi_yoy": {
-      "actual": "4.7%",
-      "previous": "4.7%",
-      "period": "2026-08",
+      "actual": "5%",
+      "previous": "4.8%",
+      "period": "2026-09",
       "observationDate": "2026-08-01",
       "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
+          "period": "2026-09",
+          "actual": "5%",
+          "previous": "4.8%"
+        },
+        {
           "period": "2026-08",
-          "actual": "4.7%",
-          "previous": "4.7%"
+          "actual": "4.8%",
+          "previous": "4.9%"
         },
         {
           "period": "2026-07",
-          "actual": "4.7%",
+          "actual": "4.9%",
           "previous": "5%"
         },
         {
@@ -437,11 +442,6 @@
           "period": "2025-12",
           "actual": "3.4%",
           "previous": "3.6%"
-        },
-        {
-          "period": "2025-11",
-          "actual": "3.6%",
-          "previous": "3.5%"
         }
       ]
     },
@@ -766,21 +766,27 @@
       "source": "FRED (official-source series)"
     },
     "retail_sales": {
-      "actual": "1.1%",
-      "previous": "-0.5%",
-      "period": "2026-08",
-      "observationDate": "2026-08-01",
+      "actual": "0.8%",
+      "previous": "1.3%",
+      "period": "2026-09",
+      "observationDate": "2026-09-01",
       "history": [
+        {
+          "period": "2026-09",
+          "observationDate": "2026-09-01",
+          "actual": "0.8%",
+          "previous": "1.3%"
+        },
         {
           "period": "2026-08",
           "observationDate": "2026-08-01",
-          "actual": "1.1%",
-          "previous": "-0.5%"
+          "actual": "1.3%",
+          "previous": "-0.4%"
         },
         {
           "period": "2026-07",
           "observationDate": "2026-07-01",
-          "actual": "-0.5%",
+          "actual": "-0.4%",
           "previous": "0.2%"
         },
         {
@@ -824,12 +830,6 @@
           "observationDate": "2025-12-01",
           "actual": "0.1%",
           "previous": "0.7%"
-        },
-        {
-          "period": "2025-11",
-          "observationDate": "2025-11-01",
-          "actual": "0.7%",
-          "previous": "-0.1%"
         }
       ],
       "source": "FRED (official-source series)"
