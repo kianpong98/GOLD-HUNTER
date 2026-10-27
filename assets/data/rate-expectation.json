@@ -17,7 +17,7 @@
     }
   ],
   "updatedAt": "2026-07-14T00:00:00Z",
-  "lastCheckedAt": "2026-10-26T16:56:41.049312Z",
+  "lastCheckedAt": "2026-10-27T00:48:00.917716Z",
   "officialDataChangedAt": "2026-07-14T00:00:00Z",
   "source": "CME FedWatch",
   "sourceUrl": "https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html",
@@ -33,7 +33,7 @@
   "githubChecked": true,
   "githubSynced": true,
   "officialFetchSucceeded": false,
-  "lastOfficialFetchError": "official public page: fetch_with_requests: attempt 1: HTTP 403, bytes=602; attempt 2: HTTP 403, bytes=602; attempt 3: ReadTimeout: HTTPSConnectionPool(host='www.cmegroup.com', port=443): Read timed out. (read timeout=20); attempt 4: HTTP 403, bytes=602 | fetch_with_curl: attempt 1: CalledProcessError: curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403; attempt 2: CalledProcessError: curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403; attempt 3: CalledProcessError: curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403",
+  "lastOfficialFetchError": "official public page: fetch_with_requests: attempt 1: HTTP 403, bytes=602; attempt 2: HTTP 403, bytes=602; attempt 3: HTTP 403, bytes=602; attempt 4: HTTP 403, bytes=602 | fetch_with_curl: attempt 1: CalledProcessError: curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403; attempt 2: CalledProcessError: curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403; attempt 3: CalledProcessError: curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403 curl: (22) The requested URL returned error: 403",
   "kvWrite": false,
   "engineVersion": "fedwatch-official-first-manual-fallback-3.0"
 }
