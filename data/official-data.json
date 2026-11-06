@@ -1,6 +1,6 @@
 {
   "schemaVersion": 4,
-  "updatedAt": "2026-11-05T17:28:34.872297+00:00",
+  "updatedAt": "2026-11-06T17:29:14.084985+00:00",
   "metrics": {
     "jobless_claims": {
       "actual": "189K",
@@ -446,20 +446,25 @@
       ]
     },
     "nfp": {
-      "actual": "29K",
-      "previous": "133K",
-      "period": "2026-09",
+      "actual": "165K",
+      "previous": "60K",
+      "period": "2026-10",
       "observationDate": "2026-09-01",
       "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
+          "period": "2026-10",
+          "actual": "165K",
+          "previous": "60K"
+        },
+        {
           "period": "2026-09",
-          "actual": "29K",
-          "previous": "133K"
+          "actual": "60K",
+          "previous": "186K"
         },
         {
           "period": "2026-08",
-          "actual": "133K",
+          "actual": "186K",
           "previous": "-10K"
         },
         {
@@ -496,21 +501,21 @@
           "period": "2026-01",
           "actual": "160K",
           "previous": "-17K"
-        },
-        {
-          "period": "2025-12",
-          "actual": "-17K",
-          "previous": "41K"
         }
       ]
     },
     "unemployment": {
-      "actual": "4.2%",
-      "previous": "4.1%",
-      "period": "2026-09",
+      "actual": "4.1%",
+      "previous": "4.2%",
+      "period": "2026-10",
       "observationDate": "2026-09-01",
       "source": "U.S. Bureau of Labor Statistics",
       "history": [
+        {
+          "period": "2026-10",
+          "actual": "4.1%",
+          "previous": "4.2%"
+        },
         {
           "period": "2026-09-01",
           "observationDate": "2026-09-01",
@@ -560,24 +565,24 @@
           "observationDate": "2026-05-01",
           "actual": "4.3%",
           "previous": "4.3%"
-        },
-        {
-          "period": "2026-05",
-          "actual": "4.3%",
-          "previous": "4.3%"
         }
       ]
     },
     "avg_hourly_earnings": {
-      "actual": "0.1%",
+      "actual": "0.4%",
       "previous": "0.3%",
-      "period": "2026-09",
+      "period": "2026-10",
       "observationDate": "2026-09-01",
       "source": "U.S. Bureau of Labor Statistics",
       "history": [
         {
+          "period": "2026-10",
+          "actual": "0.4%",
+          "previous": "0.3%"
+        },
+        {
           "period": "2026-09",
-          "actual": "0.1%",
+          "actual": "0.3%",
           "previous": "0.3%"
         },
         {
@@ -619,11 +624,6 @@
           "period": "2026-01",
           "actual": "0.4%",
           "previous": "0.1%"
-        },
-        {
-          "period": "2025-12",
-          "actual": "0.1%",
-          "previous": "0.4%"
         }
       ]
     },
