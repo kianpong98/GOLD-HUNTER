@@ -3,18 +3,14 @@
   "source": "SPDR Gold Shares official historical archive",
   "sourceUrl": "https://www.spdrgoldshares.com/usa/gld/",
   "archiveUrl": "https://api.spdrgoldshares.com/api/v1/historical-archive?exchange=NYSE&lang=en&product=gld",
-  "updatedAt": "2026-11-10T04:29:36.491491+00:00",
-  "dataUpdatedAt": "2026-11-10T04:29:36.491491+00:00",
-  "checkedAt": "2026-11-10T04:29:36.491491+00:00",
-  "lastSuccessfulConnectionAt": "2026-11-10T04:29:36.491491+00:00",
-  "officialDate": "2026-11-09",
-  "latestHoldings": 1042.51,
-  "dailyChange": 1.14,
+  "updatedAt": "2026-11-11T02:33:07.786725+00:00",
+  "dataUpdatedAt": "2026-11-11T02:33:07.786725+00:00",
+  "checkedAt": "2026-11-11T02:33:07.786725+00:00",
+  "lastSuccessfulConnectionAt": "2026-11-11T02:33:07.786725+00:00",
+  "officialDate": "2026-11-10",
+  "latestHoldings": 1042.22,
+  "dailyChange": -0.29,
   "records": [
-    {
-      "date": "2026-09-29",
-      "holdings": 1057.41
-    },
     {
       "date": "2026-09-30",
       "holdings": 1055.7
@@ -130,6 +126,10 @@
     {
       "date": "2026-11-09",
       "holdings": 1042.51
+    },
+    {
+      "date": "2026-11-10",
+      "holdings": 1042.22
     }
   ]
 }
