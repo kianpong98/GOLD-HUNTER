@@ -1,6 +1,6 @@
 {
   "schemaVersion": 4,
-  "updatedAt": "2026-11-13T17:41:58.074946+00:00",
+  "updatedAt": "2026-11-17T21:15:54.207564+00:00",
   "metrics": {
     "jobless_claims": {
       "actual": "200K",
@@ -766,21 +766,27 @@
       "source": "FRED (official-source series)"
     },
     "retail_sales": {
-      "actual": "0.8%",
-      "previous": "1.3%",
-      "period": "2026-09",
-      "observationDate": "2026-09-01",
+      "actual": "0.2%",
+      "previous": "0.8%",
+      "period": "2026-10",
+      "observationDate": "2026-10-01",
       "history": [
+        {
+          "period": "2026-10",
+          "observationDate": "2026-10-01",
+          "actual": "0.2%",
+          "previous": "0.8%"
+        },
         {
           "period": "2026-09",
           "observationDate": "2026-09-01",
           "actual": "0.8%",
-          "previous": "1.3%"
+          "previous": "1.5%"
         },
         {
           "period": "2026-08",
           "observationDate": "2026-08-01",
-          "actual": "1.3%",
+          "actual": "1.5%",
           "previous": "-0.4%"
         },
         {
@@ -824,12 +830,6 @@
           "observationDate": "2026-01-01",
           "actual": "-0.6%",
           "previous": "0.1%"
-        },
-        {
-          "period": "2025-12",
-          "observationDate": "2025-12-01",
-          "actual": "0.1%",
-          "previous": "0.7%"
         }
       ],
       "source": "FRED (official-source series)"
